@@ -90,8 +90,7 @@
             return <span ref={containerRef} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}></span>;
         };
 
-        const CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝", "其他"];
-        const MAIN_CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝"];
+        const CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝"];
         
         // 初始預設類型
         const DEFAULT_MERCH_TYPES = [
@@ -125,13 +124,20 @@
                     multiSelect: {
                         type: true,
                         character: false,
-                        date: false
-                    }
+                        date: false,
+                        series: false // 新增系列多選
+                    },
+                    defaultPreorderCurrency: 'NT$' // 新增預設幣值
                 };
                 if (savedSettings) {
                     const parsed = JSON.parse(savedSettings);
                     if (!parsed.visibleCharacters) parsed.visibleCharacters = CHARACTERS;
                     if (!parsed.multiSelect) parsed.multiSelect = defaults.multiSelect;
+                    // 確保 series 多選設定存在
+                    if (parsed.multiSelect && typeof parsed.multiSelect.series === 'undefined') {
+                         parsed.multiSelect.series = false;
+                    }
+                    if (!parsed.defaultPreorderCurrency) parsed.defaultPreorderCurrency = 'NT$';
                     return parsed;
                 }
                 return defaults;
@@ -148,6 +154,7 @@
             const [selectedTypeFilters, setSelectedTypeFilters] = useState([]); 
             const [selectedCharFilters, setSelectedCharFilters] = useState([]); 
             const [selectedDateFilters, setSelectedDateFilters] = useState([]);
+            const [selectedSeriesFilters, setSelectedSeriesFilters] = useState([]); // 新增系列篩選狀態
 
             const [dateSortOrder, setDateSortOrder] = useState('desc'); 
             
@@ -179,6 +186,7 @@
                 setSelectedTypeFilters([]);
                 setSelectedCharFilters([]);
                 setSelectedDateFilters([]);
+                setSelectedSeriesFilters([]);
             }, [collectionGroupingMode, groupingMode]);
 
             // --- 1. 初始化與 Auth ---
@@ -462,16 +470,13 @@
             const toggleCharacterVisibility = (char) => {
                 setAppSettings(prev => {
                     const current = prev.visibleCharacters;
-                    if (char === "其他") {
-                         // "我全都要" logic: toggle main 5 characters
-                         const allMainSelected = MAIN_CHARACTERS.every(c => current.includes(c));
+                    if (char === "ALL") {
+                        // "我全都要" logic
+                         const allMainSelected = CHARACTERS.every(c => current.includes(c));
                          if (allMainSelected) {
-                             // Unselect all main characters
-                             return { ...prev, visibleCharacters: current.filter(c => !MAIN_CHARACTERS.includes(c)) };
+                             return { ...prev, visibleCharacters: [] }; // Unselect all
                          } else {
-                             // Select all main characters
-                             const uniqueChars = new Set([...current, ...MAIN_CHARACTERS]);
-                             return { ...prev, visibleCharacters: Array.from(uniqueChars) };
+                             return { ...prev, visibleCharacters: [...CHARACTERS] }; // Select all
                          }
                     } else {
                         if (current.includes(char)) {
@@ -508,7 +513,8 @@
                     note: '', 
                     quantity: 1,
                     isPreorder: false, 
-                    shippingDate: '' 
+                    shippingDate: '',
+                    currency: appSettings.defaultPreorderCurrency // 新增：預購預設幣值
                 };
                 
                 if (mode === 'catalog' && item) { 
@@ -522,7 +528,8 @@
                             ...item, 
                             quantity: 1,
                             isPreorder: item.isPreorder || false,
-                            shippingDate: item.shippingDate || ''
+                            shippingDate: item.shippingDate || '',
+                            currency: item.currency || 'NT$' // 相容舊資料
                         }); 
                     }
                     else if (template) { 
@@ -533,7 +540,8 @@
                             quantity: 1, 
                             id: Date.now().toString(),
                             isPreorder: false,
-                            shippingDate: ''
+                            shippingDate: '',
+                            currency: appSettings.defaultPreorderCurrency
                         }); 
                     }
                     else { 
@@ -559,6 +567,7 @@
                     delete itemToSave.note;
                     delete itemToSave.isPreorder;
                     delete itemToSave.shippingDate;
+                    delete itemToSave.currency;
                     await saveToCatalog(itemToSave);
                 } else {
                     const qty = Math.max(1, parseInt(formData.quantity) || 1);
@@ -627,7 +636,7 @@
                 }
             };
 
-            const getFilteredList = (list, mode, typeFilters, charFilters, dateFilters) => {
+            const getFilteredList = (list, mode, typeFilters, charFilters, dateFilters, seriesFilters) => {
                 // 1. 全域角色過濾 (Settings)
                 let processed = list.filter(i => appSettings.visibleCharacters.includes(i.character));
 
@@ -641,6 +650,10 @@
                 if (mode === 'date' && dateFilters.length > 0) {
                     processed = processed.filter(i => dateFilters.includes(i.date));
                 }
+                // 新增系列過濾
+                if (mode === 'series' && seriesFilters.length > 0) {
+                    processed = processed.filter(i => seriesFilters.includes(i.series));
+                }
 
                 return processed;
             };
@@ -649,6 +662,8 @@
             const stats = useMemo(() => {
                 const visibleItems = items.filter(i => appSettings.visibleCharacters.includes(i.character));
                 const totalCount = visibleItems.length;
+                // 入手價計算 (如果是預購且幣值為 r，暫不匯率轉換，視為數值加總，或您可改為僅計算 NT$)
+                // 這裡簡單做：只加總數值，若要精確可再改
                 const totalSpent = visibleItems.reduce((acc, item) => acc + Number(item.acquiredPrice || 0), 0);
                 const byChar = visibleItems.reduce((acc, item) => { acc[item.character] = (acc[item.character] || 0) + 1; return acc; }, {});
                 return { totalCount, totalSpent, byChar };
@@ -659,39 +674,36 @@
                 return appSettings.customTypes.filter(t => types.has(t)).concat(Array.from(types).filter(t => !appSettings.customTypes.includes(t)));
             }, [items, appSettings.customTypes]);
 
-            // Extract dates for filter bar in Date mode
             const availableDates = useMemo(() => {
                 const dates = new Set(items.map(i => i.date).filter(Boolean));
-                // Sort dates desc
                 return Array.from(dates).sort((a, b) => new Date(b) - new Date(a));
             }, [items]);
 
-            const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters, dateFilters) => {
-                // 先過濾
-                const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters);
+            // 新增可用系列計算
+            const availableSeries = useMemo(() => {
+                // 從 items 或 catalogItems 中提取所有系列？通常圖鑑的系列比較完整
+                const source = activeTab === 'collection' ? items : catalogItems;
+                const series = new Set(source.map(i => i.series).filter(Boolean));
+                return Array.from(series).sort();
+            }, [items, catalogItems, activeTab]);
 
-                // 如果是 type, character, date 模式，不分組，直接回傳全部 (因為介面改為上方篩選列)
-                if (mode === 'none' || mode === 'type' || mode === 'character' || mode === 'date') {
+            const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters, dateFilters, seriesFilters) => {
+                // 先過濾
+                const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters, seriesFilters);
+
+                // 如果是 type, character, date, series 模式，不分組，直接回傳全部 (因為介面改為上方篩選列)
+                if (mode === 'none' || mode === 'type' || mode === 'character' || mode === 'date' || mode === 'series') {
                     return { '全部': processedList };
                 }
                 
-                // series 模式保持分組
-                const grouped = processedList.reduce((acc, item) => {
-                    let key = '';
-                    if (mode === 'series') key = item.series || '其他系列';
-                    
-                    if (!acc[key]) acc[key] = [];
-                    acc[key].push(item);
-                    return acc;
-                }, {});
-
-                return grouped;
+                // 預留其他分組模式
+                return { '全部': processedList };
             };
 
             const groupedData = useMemo(() => ({
-                collection: getGroupedData(items, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters),
-                catalog: getGroupedData(catalogItems, groupingMode, 'desc', selectedTypeFilters, selectedCharFilters, [])
-            }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, appSettings.visibleCharacters]);
+                collection: getGroupedData(items, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters),
+                catalog: getGroupedData(catalogItems, groupingMode, 'desc', selectedTypeFilters, selectedCharFilters, [], selectedSeriesFilters)
+            }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters, appSettings.visibleCharacters]);
 
             // Grid Style Helper
             const gridStyle = {
@@ -727,7 +739,7 @@
                 const consolidated = useMemo(() => {
                     const map = new Map();
                     stack.instances.forEach(inst => {
-                        const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}`;
+                        const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}-${inst.currency}`;
                         if (!map.has(key)) map.set(key, { ...inst, count: 1 }); else map.get(key).count++;
                     });
                     return Array.from(map.values());
@@ -760,16 +772,20 @@
                                                 }
                                             </div>
                                             <div className="flex items-baseline gap-1">
-                                                <span className="font-bold text-base text-slate-800">NT$ {inst.acquiredPrice}</span>
-                                                {inst.officialPrice && <span className="text-[10px] text-gray-400">(原{inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}
+                                                {/* 入手價顯示，根據幣值顯示不同後綴 */}
+                                                <span className="font-bold text-base text-slate-800">
+                                                    {inst.currency === 'r' ? `${inst.acquiredPrice}r` : `NT$ ${inst.acquiredPrice}`}
+                                                </span>
+                                                {/* 原價顯示更加清晰：加粗，顏色加深 */}
+                                                {inst.officialPrice && <span className="text-[11px] text-gray-500 font-medium ml-1">(原{inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">x{inst.count}</span>}
-                                            <div className="flex gap-1">
-                                                <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1 border rounded hover:text-blue-600"><Icon name="Edit3" size={10}/></button>
-                                                <button onClick={(e)=>{e.stopPropagation(); deleteFromCollection(inst.id);}} className="p-1 border rounded hover:text-red-500"><Icon name="Trash2" size={10}/></button>
-                                            </div>
+                                        
+                                        {/* 編輯/刪除按鈕區塊 (右側) */}
+                                        <div className="flex items-center gap-1 ml-auto pl-2 border-l border-gray-100">
+                                            {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">x{inst.count}</span>}
+                                            <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all"><Icon name="Edit3" size={12}/></button>
+                                            <button onClick={(e)=>{e.stopPropagation(); deleteFromCollection(inst.id);}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-red-500 hover:border-red-300 shadow-sm transition-all"><Icon name="Trash2" size={12}/></button>
                                         </div>
                                     </div>
                                 ))}
@@ -814,10 +830,10 @@
                             <button onClick={()=>setIsSettingsOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button>
                         </div>
                         
-                        <div className="flex gap-2 border-b pb-2">
-                            {['layout', 'filter', 'types', 'filters_config', 'data'].map(t => (
-                                <button key={t} onClick={()=>setSettingsTab(t)} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${settingsTab===t ? 'bg-slate-900 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-                                    {t==='layout' ? '版面' : t==='filter' ? '推角顯示' : t==='types' ? '類型' : t==='filters_config' ? '篩選設定' : '資料'}
+                        <div className="flex gap-2 border-b pb-2 overflow-x-auto">
+                            {['layout', 'filter', 'filters_config', 'types', 'data'].map(t => (
+                                <button key={t} onClick={()=>setSettingsTab(t)} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${settingsTab===t ? 'bg-slate-900 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                                    {t==='layout' ? '版面' : t==='filter' ? '推角顯示' : t==='filters_config' ? '篩選設定' : t==='types' ? '類型' : '資料'}
                                 </button>
                             ))}
                         </div>
@@ -834,18 +850,33 @@
                                         ))}
                                     </div>
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">預購預設幣值</label>
+                                    <div className="flex gap-2">
+                                        {['NT$', 'r'].map(curr => (
+                                            <button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultPreorderCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.defaultPreorderCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                                {curr}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         )}
 
                         {settingsTab === 'filter' && (
                             <div className="space-y-4">
-                                <p className="text-sm text-gray-500">勾選要顯示的角色，未勾選的角色的週邊將完全隱藏。</p>
+                                <div className="flex justify-between items-center">
+                                    <p className="text-sm text-gray-500">勾選角色以顯示週邊。</p>
+                                    <button 
+                                        onClick={() => toggleCharacterVisibility('ALL')}
+                                        className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700"
+                                    >
+                                        我全都要
+                                    </button>
+                                </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     {CHARACTERS.map(char => {
-                                        const isAllMain = MAIN_CHARACTERS.every(c => appSettings.visibleCharacters.includes(c));
-                                        const label = char === "其他" ? "我全都要" : char;
-                                        const isChecked = char === "其他" ? isAllMain : appSettings.visibleCharacters.includes(char);
-
+                                        const isChecked = appSettings.visibleCharacters.includes(char);
                                         return (
                                             <label key={char} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
                                                 <input 
@@ -854,7 +885,7 @@
                                                     checked={isChecked}
                                                     onChange={() => toggleCharacterVisibility(char)}
                                                 />
-                                                <span className={`text-sm font-medium ${CHARACTER_THEMES[char].text}`}>{label}</span>
+                                                <span className={`text-sm font-medium ${CHARACTER_THEMES[char].text}`}>{char}</span>
                                             </label>
                                         );
                                     })}
@@ -866,6 +897,15 @@
                             <div className="space-y-4">
                                 <p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p>
                                 <div className="space-y-3">
+                                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-5 h-5 text-blue-600 rounded"
+                                            checked={appSettings.multiSelect.series}
+                                            onChange={() => toggleMultiSelect('series')}
+                                        />
+                                        <span className="text-sm font-medium">依系列 - 多選</span>
+                                    </label>
                                     <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
                                         <input 
                                             type="checkbox" 
@@ -985,6 +1025,9 @@
                                     </div>
                                 </div>
                                 
+                                {collectionGroupingMode === 'series' && (
+                                    <FilterBar options={availableSeries} selected={selectedSeriesFilters} toggle={(val)=>toggleFilter(selectedSeriesFilters, setSelectedSeriesFilters, val, appSettings.multiSelect.series)} multi={appSettings.multiSelect.series} />
+                                )}
                                 {collectionGroupingMode === 'type' && (
                                     <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />
                                 )}
@@ -998,7 +1041,7 @@
                                 <div className="space-y-8">
                                     {Object.entries(groupedData.collection).map(([gName, gItems]) => {
                                         const stacks = getStackedItems(gItems, collectionGroupingMode);
-                                        return <div key={gName} className="animate-in fade-in">{collectionGroupingMode!=='none' && collectionGroupingMode!=='type' && collectionGroupingMode!=='character' && collectionGroupingMode!=='date' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}<div style={gridStyle}>{stacks.map((s,i)=><StackCard key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'}/>)}</div></div>;
+                                        return <div key={gName} className="animate-in fade-in">{collectionGroupingMode!=='none' && collectionGroupingMode!=='type' && collectionGroupingMode!=='character' && collectionGroupingMode!=='date' && collectionGroupingMode!=='series' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}<div style={gridStyle}>{stacks.map((s,i)=><StackCard key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'}/>)}</div></div>;
                                     })}
                                     {items.length===0 && <div className="text-center py-20 text-gray-400 border-2 border-dashed rounded-3xl">尚無收藏</div>}
                                 </div>
@@ -1013,8 +1056,11 @@
                                         {[{id:'none',l:'全部'},{id:'series',l:'依系列'},{id:'type',l:'依類型'},{id:'character',l:'依角色'}].map(m=><button key={m.id} onClick={()=>setGroupingMode(m.id)} className={`px-3 py-1.5 text-xs border rounded-lg ${groupingMode===m.id?'bg-slate-900 text-white':'bg-white text-gray-500'}`}>{m.l}</button>)}
                                     </div>
                                 </div>
+                                {groupingMode === 'series' && (
+                                    <FilterBar options={availableSeries} selected={selectedSeriesFilters} toggle={(val)=>toggleFilter(selectedSeriesFilters, setSelectedSeriesFilters, val, appSettings.multiSelect.series)} multi={appSettings.multiSelect.series} />
+                                )}
                                 {groupingMode === 'type' && (
-                                    <FilterBar options={appSettings.customTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />
+                                    <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />
                                 )}
                                 {groupingMode === 'character' && (
                                     <FilterBar options={appSettings.visibleCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />
@@ -1022,7 +1068,7 @@
                                 <div className="space-y-8">
                                     {Object.entries(groupedData.catalog).map(([gName, gItems]) => (
                                         <div key={gName} className="animate-in fade-in">
-                                            {groupingMode!=='none' && groupingMode!=='type' && groupingMode!=='character' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}
+                                            {groupingMode!=='none' && groupingMode!=='type' && groupingMode!=='character' && groupingMode!=='series' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}
                                             <div style={gridStyle}>{gItems.map((item,i)=><CatalogCard key={item.id} item={item} index={i} isDraggable={groupingMode==='none'}/>)}</div>
                                         </div>
                                     ))}
@@ -1070,7 +1116,22 @@
                                             <label htmlFor="isPreorder" className="text-sm font-bold text-gray-700">預購商品</label>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <input type="number" className="border p-2 rounded" placeholder="入手價格 (NT$)" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
+                                            {/* 預購狀態下顯示幣值選擇 */}
+                                            <div className="relative">
+                                                <input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
+                                                {formData.isPreorder && (
+                                                    <select 
+                                                        className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0"
+                                                        value={formData.currency || appSettings.defaultPreorderCurrency}
+                                                        onChange={e=>setFormData({...formData, currency: e.target.value})}
+                                                    >
+                                                        <option value="NT$">NT$</option>
+                                                        <option value="r">r</option>
+                                                    </select>
+                                                )}
+                                                {!formData.isPreorder && <span className="absolute right-3 top-2 text-gray-500 text-sm">NT$</span>}
+                                            </div>
+
                                             {formData.isPreorder ? (
                                                 <div className="relative">
                                                     <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span>

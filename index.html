@@ -91,6 +91,7 @@
         };
 
         const CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝", "其他"];
+        const MAIN_CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝"];
         
         // 初始預設類型
         const DEFAULT_MERCH_TYPES = [
@@ -120,12 +121,17 @@
                 const defaults = {
                     layoutCols: 4, 
                     customTypes: DEFAULT_MERCH_TYPES,
-                    visibleCharacters: CHARACTERS // 預設全選
+                    visibleCharacters: CHARACTERS, // 預設全選
+                    multiSelect: {
+                        type: true,
+                        character: false,
+                        date: false
+                    }
                 };
                 if (savedSettings) {
                     const parsed = JSON.parse(savedSettings);
-                    // 確保新欄位存在
                     if (!parsed.visibleCharacters) parsed.visibleCharacters = CHARACTERS;
+                    if (!parsed.multiSelect) parsed.multiSelect = defaults.multiSelect;
                     return parsed;
                 }
                 return defaults;
@@ -141,6 +147,7 @@
             // 改為陣列以支援多選
             const [selectedTypeFilters, setSelectedTypeFilters] = useState([]); 
             const [selectedCharFilters, setSelectedCharFilters] = useState([]); 
+            const [selectedDateFilters, setSelectedDateFilters] = useState([]);
 
             const [dateSortOrder, setDateSortOrder] = useState('desc'); 
             
@@ -171,6 +178,7 @@
             useEffect(() => {
                 setSelectedTypeFilters([]);
                 setSelectedCharFilters([]);
+                setSelectedDateFilters([]);
             }, [collectionGroupingMode, groupingMode]);
 
             // --- 1. 初始化與 Auth ---
@@ -432,7 +440,7 @@
                 if (isFirebaseInitialized && user && !user.isAnonymous) {
                     const batch = writeBatch(db);
                     const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
-                    newFlatList.forEach((item, idx) => batch.update(doc(db, path, item.id), { order: index }));
+                    newFlatList.forEach((item, idx) => batch.update(doc(db, path, item.id), { order: idx }));
                     try { await batch.commit(); } catch (err) { console.error(err); }
                 }
             };
@@ -449,15 +457,40 @@
                     setAppSettings(prev => ({...prev, customTypes: prev.customTypes.filter(type => type !== t)}));
                 }
             };
+            
+            // Toggle logic for "All" vs specific char
             const toggleCharacterVisibility = (char) => {
                 setAppSettings(prev => {
                     const current = prev.visibleCharacters;
-                    if (current.includes(char)) {
-                        return { ...prev, visibleCharacters: current.filter(c => c !== char) };
+                    if (char === "其他") {
+                         // "我全都要" logic: toggle main 5 characters
+                         const allMainSelected = MAIN_CHARACTERS.every(c => current.includes(c));
+                         if (allMainSelected) {
+                             // Unselect all main characters
+                             return { ...prev, visibleCharacters: current.filter(c => !MAIN_CHARACTERS.includes(c)) };
+                         } else {
+                             // Select all main characters
+                             const uniqueChars = new Set([...current, ...MAIN_CHARACTERS]);
+                             return { ...prev, visibleCharacters: Array.from(uniqueChars) };
+                         }
                     } else {
-                        return { ...prev, visibleCharacters: [...current, char] };
+                        if (current.includes(char)) {
+                            return { ...prev, visibleCharacters: current.filter(c => c !== char) };
+                        } else {
+                            return { ...prev, visibleCharacters: [...current, char] };
+                        }
                     }
                 });
+            };
+
+            const toggleMultiSelect = (key) => {
+                setAppSettings(prev => ({
+                    ...prev,
+                    multiSelect: {
+                        ...prev.multiSelect,
+                        [key]: !prev.multiSelect[key]
+                    }
+                }));
             };
 
             const openModal = (item = null, template = null, mode = 'collection') => {
@@ -474,8 +507,8 @@
                     image: null, 
                     note: '', 
                     quantity: 1,
-                    isPreorder: false, // 新增
-                    shippingDate: ''   // 新增
+                    isPreorder: false, 
+                    shippingDate: '' 
                 };
                 
                 if (mode === 'catalog' && item) { 
@@ -499,7 +532,6 @@
                             ...template, 
                             quantity: 1, 
                             id: Date.now().toString(),
-                            // 從圖鑑加入時，預設不是預購
                             isPreorder: false,
                             shippingDate: ''
                         }); 
@@ -544,6 +576,14 @@
                 }
                 setIsModalOpen(false);
             };
+            
+            // Enter to save handler
+            const handleKeyDown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSave();
+                }
+            };
 
             // --- Helpers ---
             const getStackedItems = (sourceItems, mode) => {
@@ -565,15 +605,29 @@
             };
 
             // 更新 Filter helpers
-            const toggleFilter = (filterState, setFilterState, value) => {
-                if (filterState.includes(value)) {
-                    setFilterState(prev => prev.filter(v => v !== value));
+            const toggleFilter = (filterState, setFilterState, value, multiSelectEnabled) => {
+                if (value === 'all') {
+                    setFilterState([]);
+                    return;
+                }
+                
+                if (multiSelectEnabled) {
+                    if (filterState.includes(value)) {
+                        setFilterState(prev => prev.filter(v => v !== value));
+                    } else {
+                        setFilterState(prev => [...prev, value]);
+                    }
                 } else {
-                    setFilterState(prev => [...prev, value]);
+                    // Single select mode
+                     if (filterState.includes(value)) {
+                         setFilterState([]); // Toggle off
+                     } else {
+                         setFilterState([value]);
+                     }
                 }
             };
 
-            const getFilteredList = (list, mode, typeFilters, charFilters) => {
+            const getFilteredList = (list, mode, typeFilters, charFilters, dateFilters) => {
                 // 1. 全域角色過濾 (Settings)
                 let processed = list.filter(i => appSettings.visibleCharacters.includes(i.character));
 
@@ -583,6 +637,9 @@
                 }
                 if (mode === 'character' && charFilters.length > 0) {
                     processed = processed.filter(i => charFilters.includes(i.character));
+                }
+                if (mode === 'date' && dateFilters.length > 0) {
+                    processed = processed.filter(i => dateFilters.includes(i.date));
                 }
 
                 return processed;
@@ -602,40 +659,39 @@
                 return appSettings.customTypes.filter(t => types.has(t)).concat(Array.from(types).filter(t => !appSettings.customTypes.includes(t)));
             }, [items, appSettings.customTypes]);
 
-            const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters) => {
-                // 先過濾
-                const processedList = getFilteredList(list, mode, typeFilters, charFilters);
+            // Extract dates for filter bar in Date mode
+            const availableDates = useMemo(() => {
+                const dates = new Set(items.map(i => i.date).filter(Boolean));
+                // Sort dates desc
+                return Array.from(dates).sort((a, b) => new Date(b) - new Date(a));
+            }, [items]);
 
-                // 如果是 type 或 character 模式，我們現在不分組，直接回傳全部 (因為介面改為上方篩選列)
-                if (mode === 'none' || mode === 'type' || mode === 'character') {
+            const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters, dateFilters) => {
+                // 先過濾
+                const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters);
+
+                // 如果是 type, character, date 模式，不分組，直接回傳全部 (因為介面改為上方篩選列)
+                if (mode === 'none' || mode === 'type' || mode === 'character' || mode === 'date') {
                     return { '全部': processedList };
                 }
                 
-                // series 或 date 模式保持分組
+                // series 模式保持分組
                 const grouped = processedList.reduce((acc, item) => {
                     let key = '';
                     if (mode === 'series') key = item.series || '其他系列';
-                    else if (mode === 'date') key = item.date || '未知日期';
                     
                     if (!acc[key]) acc[key] = [];
                     acc[key].push(item);
                     return acc;
                 }, {});
 
-                if (mode === 'date') {
-                    const keys = Object.keys(grouped).sort((a,b) => {
-                        if(a==='未知日期') return 1; if(b==='未知日期') return -1;
-                        return sortOrder==='desc' ? new Date(b)-new Date(a) : new Date(a)-new Date(b);
-                    });
-                    const sorted = {}; keys.forEach(k=>sorted[k]=grouped[k]); return sorted;
-                }
                 return grouped;
             };
 
             const groupedData = useMemo(() => ({
-                collection: getGroupedData(items, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters),
-                catalog: getGroupedData(catalogItems, groupingMode, 'desc', selectedTypeFilters, selectedCharFilters)
-            }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, appSettings.visibleCharacters]);
+                collection: getGroupedData(items, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters),
+                catalog: getGroupedData(catalogItems, groupingMode, 'desc', selectedTypeFilters, selectedCharFilters, [])
+            }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, appSettings.visibleCharacters]);
 
             // Grid Style Helper
             const gridStyle = {
@@ -645,8 +701,14 @@
             };
 
             // --- Components ---
-            const FilterBar = ({ options, selected, toggle }) => (
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide animate-fade-in">
+            const FilterBar = ({ options, selected, toggle, multi }) => (
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide animate-fade-in items-center">
+                    <button 
+                        onClick={() => toggle('all')}
+                        className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border ${selected.length === 0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                    >
+                        {multi ? "全選" : "全部"}
+                    </button>
                     {options.map(opt => (
                         <button 
                             key={opt}
@@ -656,6 +718,7 @@
                             {opt}
                         </button>
                     ))}
+                    {multi && <button onClick={() => toggle('all')} className="px-3 py-1 text-xs rounded-full bg-gray-200 text-gray-600 border border-transparent hover:bg-gray-300 whitespace-nowrap">重置</button>}
                 </div>
             );
 
@@ -718,7 +781,6 @@
 
             const CatalogCard = ({ item, index, isDraggable }) => {
                 const theme = CHARACTER_THEMES[item.character] || CHARACTER_THEMES["其他"];
-                // 原價顯示邏輯
                 const priceDisplay = item.officialPrice ? (isNaN(Number(item.officialPrice)) ? item.officialPrice : `${item.officialPrice}r`) : '?';
                 
                 return (
@@ -753,9 +815,9 @@
                         </div>
                         
                         <div className="flex gap-2 border-b pb-2">
-                            {['layout', 'filter', 'types', 'data'].map(t => (
+                            {['layout', 'filter', 'types', 'filters_config', 'data'].map(t => (
                                 <button key={t} onClick={()=>setSettingsTab(t)} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${settingsTab===t ? 'bg-slate-900 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-                                    {t==='layout' ? '版面' : t==='filter' ? '推角顯示' : t==='types' ? '類型' : '資料'}
+                                    {t==='layout' ? '版面' : t==='filter' ? '推角顯示' : t==='types' ? '類型' : t==='filters_config' ? '篩選設定' : '資料'}
                                 </button>
                             ))}
                         </div>
@@ -779,33 +841,73 @@
                             <div className="space-y-4">
                                 <p className="text-sm text-gray-500">勾選要顯示的角色，未勾選的角色的週邊將完全隱藏。</p>
                                 <div className="grid grid-cols-2 gap-3">
-                                    {CHARACTERS.map(char => (
-                                        <label key={char} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
-                                            <input 
-                                                type="checkbox" 
-                                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                                                checked={appSettings.visibleCharacters.includes(char)}
-                                                onChange={() => toggleCharacterVisibility(char)}
-                                            />
-                                            <span className={`text-sm font-medium ${CHARACTER_THEMES[char].text}`}>{char}</span>
-                                        </label>
-                                    ))}
+                                    {CHARACTERS.map(char => {
+                                        const isAllMain = MAIN_CHARACTERS.every(c => appSettings.visibleCharacters.includes(c));
+                                        const label = char === "其他" ? "我全都要" : char;
+                                        const isChecked = char === "其他" ? isAllMain : appSettings.visibleCharacters.includes(char);
+
+                                        return (
+                                            <label key={char} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                                                    checked={isChecked}
+                                                    onChange={() => toggleCharacterVisibility(char)}
+                                                />
+                                                <span className={`text-sm font-medium ${CHARACTER_THEMES[char].text}`}>{label}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {settingsTab === 'filters_config' && (
+                            <div className="space-y-4">
+                                <p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p>
+                                <div className="space-y-3">
+                                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-5 h-5 text-blue-600 rounded"
+                                            checked={appSettings.multiSelect.type}
+                                            onChange={() => toggleMultiSelect('type')}
+                                        />
+                                        <span className="text-sm font-medium">依類型 - 多選</span>
+                                    </label>
+                                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-5 h-5 text-blue-600 rounded"
+                                            checked={appSettings.multiSelect.character}
+                                            onChange={() => toggleMultiSelect('character')}
+                                        />
+                                        <span className="text-sm font-medium">依角色 - 多選</span>
+                                    </label>
+                                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-5 h-5 text-blue-600 rounded"
+                                            checked={appSettings.multiSelect.date}
+                                            onChange={() => toggleMultiSelect('date')}
+                                        />
+                                        <span className="text-sm font-medium">依收物日 - 多選</span>
+                                    </label>
                                 </div>
                             </div>
                         )}
 
                         {settingsTab === 'types' && (
                             <div className="space-y-4">
-                                {/* ... types management ... */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label>
                                     <div className="flex gap-2">
-                                        <input className="border p-2 rounded flex-1" placeholder="輸入新類型..." value={newTypeInput} onChange={e=>setNewTypeInput(e.target.value)} />
+                                        <input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} />
                                         <button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button>
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">目前類型 (拖曳排序)</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">目前類型列表 (拖曳排序)</label>
                                     <div className="flex flex-wrap gap-2">
                                         {appSettings.customTypes.map((t, index) => (
                                             <span 
@@ -847,7 +949,7 @@
 
             return (
                 <div className="min-h-screen bg-gray-50 pb-24 md:pb-0 md:pl-64">
-                    {/* Sidebar */}
+                    {/* Desktop Sidebar */}
                     <aside className="hidden md:flex fixed left-0 top-0 h-full w-64 bg-slate-900 text-white flex-col shadow-2xl z-30">
                         <div className="p-6 border-b border-slate-800"><h1 className="text-2xl font-bold tracking-wider flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400"><Icon name="Star" className="text-yellow-400" size={24} /> 深空收藏艙</h1></div>
                         <div className="px-4 py-4 flex flex-col gap-2">
@@ -884,16 +986,19 @@
                                 </div>
                                 
                                 {collectionGroupingMode === 'type' && (
-                                    <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val)} />
+                                    <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />
                                 )}
                                 {collectionGroupingMode === 'character' && (
-                                    <FilterBar options={appSettings.visibleCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val)} />
+                                    <FilterBar options={appSettings.visibleCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />
+                                )}
+                                {collectionGroupingMode === 'date' && (
+                                    <FilterBar options={availableDates} selected={selectedDateFilters} toggle={(val)=>toggleFilter(selectedDateFilters, setSelectedDateFilters, val, appSettings.multiSelect.date)} multi={appSettings.multiSelect.date} />
                                 )}
 
                                 <div className="space-y-8">
                                     {Object.entries(groupedData.collection).map(([gName, gItems]) => {
                                         const stacks = getStackedItems(gItems, collectionGroupingMode);
-                                        return <div key={gName} className="animate-in fade-in">{collectionGroupingMode!=='none' && collectionGroupingMode!=='type' && collectionGroupingMode!=='character' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}<div style={gridStyle}>{stacks.map((s,i)=><StackCard key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'}/>)}</div></div>;
+                                        return <div key={gName} className="animate-in fade-in">{collectionGroupingMode!=='none' && collectionGroupingMode!=='type' && collectionGroupingMode!=='character' && collectionGroupingMode!=='date' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}<div style={gridStyle}>{stacks.map((s,i)=><StackCard key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'}/>)}</div></div>;
                                     })}
                                     {items.length===0 && <div className="text-center py-20 text-gray-400 border-2 border-dashed rounded-3xl">尚無收藏</div>}
                                 </div>
@@ -909,10 +1014,10 @@
                                     </div>
                                 </div>
                                 {groupingMode === 'type' && (
-                                    <FilterBar options={appSettings.customTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val)} />
+                                    <FilterBar options={appSettings.customTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />
                                 )}
                                 {groupingMode === 'character' && (
-                                    <FilterBar options={appSettings.visibleCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val)} />
+                                    <FilterBar options={appSettings.visibleCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />
                                 )}
                                 <div className="space-y-8">
                                     {Object.entries(groupedData.catalog).map(([gName, gItems]) => (
@@ -947,15 +1052,15 @@
                                     <button onClick={()=>setIsModalOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button>
                                 </div>
                                 <div onClick={()=>fileInputRef.current.click()} className="w-32 h-32 mx-auto border-2 border-dashed rounded flex items-center justify-center cursor-pointer">{formData.image?<img src={formData.image} className="w-full h-full object-cover"/>:<Icon name="Upload"/>}<input type="file" ref={fileInputRef} className="hidden" onChange={(e)=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=()=>setFormData(p=>({...p,image:r.result}));r.readAsDataURL(f);}}}/></div>
-                                <input className="w-full border p-2 rounded" placeholder="名稱" value={formData.name} onChange={e=>setFormData({...formData,name:e.target.value})}/>
+                                <input className="w-full border p-2 rounded" placeholder="名稱" value={formData.name} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,name:e.target.value})}/>
                                 <div className="grid grid-cols-2 gap-2">
                                     <select className="border p-2 rounded" value={formData.character} onChange={e=>setFormData({...formData,character:e.target.value})}>{CHARACTERS.map(c=><option key={c}>{c}</option>)}</select>
-                                    <input className="border p-2 rounded" placeholder="系列" value={formData.series} onChange={e=>setFormData({...formData,series:e.target.value})}/>
+                                    <input className="border p-2 rounded" placeholder="系列" value={formData.series} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,series:e.target.value})}/>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <input className="border p-2 rounded" list="types-list" placeholder="類型" value={formData.type} onChange={e=>setFormData({...formData,type:e.target.value})}/>
+                                    <input className="border p-2 rounded" list="types-list" placeholder="類型" value={formData.type} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,type:e.target.value})}/>
                                     <datalist id="types-list">{appSettings.customTypes.map(t=><option key={t} value={t}/>)}</datalist>
-                                    <input type="text" className="border p-2 rounded" placeholder="原價" value={formData.officialPrice} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/>
+                                    <input type="text" className="border p-2 rounded" placeholder="原價" value={formData.officialPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/>
                                 </div>
                                 {modalMode === 'collection' && (
                                     <>
@@ -965,20 +1070,20 @@
                                             <label htmlFor="isPreorder" className="text-sm font-bold text-gray-700">預購商品</label>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <input type="number" className="border p-2 rounded" placeholder="入手價格 (NT$)" value={formData.acquiredPrice} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
+                                            <input type="number" className="border p-2 rounded" placeholder="入手價格 (NT$)" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
                                             {formData.isPreorder ? (
                                                 <div className="relative">
                                                     <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span>
-                                                    <input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/>
+                                                    <input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/>
                                                 </div>
                                             ) : (
                                                 <div className="relative">
                                                     <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500">收物日期</span>
-                                                    <input type="date" className="border p-2 rounded w-full" value={formData.date} onChange={e=>setFormData({...formData,date:e.target.value})}/>
+                                                    <input type="date" className="border p-2 rounded w-full" value={formData.date} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,date:e.target.value})}/>
                                                 </div>
                                             )}
                                         </div>
-                                        {!editingItem && <div className="flex items-center gap-2"><label>數量:</label><input type="number" className="border p-1 w-16" value={formData.quantity} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div>}
+                                        {!editingItem && <div className="flex items-center gap-2"><label>數量:</label><input type="number" className="border p-1 w-16" value={formData.quantity} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div>}
                                         <textarea className="w-full border p-2 rounded h-20" placeholder="備註..." value={formData.note} onChange={e=>setFormData({...formData,note:e.target.value})}/>
                                     </>
                                 )}

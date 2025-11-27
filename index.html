@@ -87,6 +87,8 @@
         };
 
         const CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝", "其他"];
+        const MERCH_TYPES = ["徽章", "立牌", "拍立得", "小卡", "相卡", "明信片", "雷射票", "書籤", "透卡", "貼紙", "色紙", "簽名板", "杯墊", "吊飾", "公仔", "娃娃", "其他"];
+
         const CHARACTER_THEMES = {
             "沈星回": { bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200", badge: "bg-yellow-100 text-yellow-800" },
             "黎深": { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200", badge: "bg-slate-100 text-slate-800" },
@@ -239,7 +241,7 @@
                 }
             };
 
-            // --- 匯入功能 (修改：支援文字版原價) ---
+            // --- 匯入功能 ---
             const handleBulkImport = async () => {
                 if (!importJson.trim()) return;
                 try {
@@ -263,12 +265,6 @@
                             keys.forEach((k, i) => { 
                                 if (vals[i]) {
                                     let v = vals[i].trim();
-                                    // 移除強制 parseInt，允許文字
-                                    if (k === 'officialPrice') {
-                                        // 簡單處理：如果看起來像純數字就轉數字，否則保留文字
-                                        // 但為了相容 '滿贈'，我們統一用字串，或保留原樣
-                                        // 這裡不做特別轉換，直接存入
-                                    }
                                     obj[k] = v; 
                                 }
                             });
@@ -287,9 +283,9 @@
                                 id: item.id || `imp_${timestamp}_${count}`,
                                 name: item.name,
                                 character: item.character || '其他',
-                                type: item.type || '未分類',
+                                type: item.type || '其他',
                                 series: item.series || '',
-                                officialPrice: item.officialPrice || '', // 允許文字或空值
+                                officialPrice: item.officialPrice || '', 
                                 image: item.image || null,
                                 order: timestamp + count 
                             };
@@ -479,7 +475,7 @@
                             <div className="flex-1 mt-1 space-y-2 overflow-y-auto max-h-[120px] thin-scrollbar pr-1">
                                 {consolidated.map((inst, idx) => (
                                     <div key={idx} className="bg-gray-50 rounded p-2 text-xs border border-gray-100 flex justify-between items-center">
-                                        <div><span className="text-gray-500 flex gap-1"><Icon name="Calendar" size={10} /> {inst.date}</span><span className="font-bold text-slate-700">{inst.acquiredPrice}r</span></div>
+                                        <div><span className="text-gray-500 flex gap-1"><Icon name="Calendar" size={10} /> {inst.date}</span><span className="font-bold text-slate-700">NT$ {inst.acquiredPrice}</span></div>
                                         <div className="flex items-center gap-2">
                                             {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">x{inst.count}</span>}
                                             <div className="flex gap-1">
@@ -537,7 +533,7 @@
                         <nav className="flex-1 px-4 space-y-2">
                             {['collection','templates','stats'].map(t => <button key={t} onClick={()=>setActiveTab(t)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab===t?'bg-blue-600 text-white':'hover:bg-slate-800 text-slate-300'}`}><Icon name={t==='collection'?'Package':t==='templates'?'ShoppingBag':'User'} size={20}/>{t==='collection'?'我的收藏庫':t==='templates'?'週邊圖鑑 (共用)':'獵人檔案'}</button>)}
                         </nav>
-                        <div className="p-4 bg-slate-800"><p className="text-xs text-slate-400">總花費</p><p className="text-xl font-bold text-green-400">{stats.totalSpent.toLocaleString()}r</p></div>
+                        <div className="p-4 bg-slate-800"><p className="text-xs text-slate-400">總花費</p><p className="text-xl font-bold text-green-400">NT$ {stats.totalSpent.toLocaleString()}</p></div>
                     </aside>
 
                     <div className="md:hidden bg-slate-900 text-white p-4 sticky top-0 z-20 shadow-lg flex justify-between items-center">
@@ -593,7 +589,7 @@
                             <div className="space-y-6 animate-fade-in">
                                 <h2 className="text-2xl font-bold text-gray-800">消費報告</h2>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="bg-slate-900 rounded-2xl p-6 text-white"><p>總花費</p><p className="text-3xl font-bold">{stats.totalSpent.toLocaleString()}r</p></div>
+                                    <div className="bg-slate-900 rounded-2xl p-6 text-white"><p>總花費</p><p className="text-3xl font-bold">NT$ {stats.totalSpent.toLocaleString()}</p></div>
                                     <div className="bg-white rounded-2xl p-6 shadow-sm col-span-2 space-y-2">{Object.entries(stats.byChar).map(([c, count])=><div key={c} className="flex justify-between border-b pb-2"><span>{c}</span><span>{count}</span></div>)}</div>
                                 </div>
                             </div>
@@ -631,9 +627,12 @@
                                     <input className="border p-2 rounded" placeholder="系列" value={formData.series} onChange={e=>setFormData({...formData,series:e.target.value})}/>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <input className="border p-2 rounded" placeholder="類型" value={formData.type} onChange={e=>setFormData({...formData,type:e.target.value})}/>
+                                    <select className="border p-2 rounded" value={formData.type} onChange={e=>setFormData({...formData,type:e.target.value})}>
+                                        <option value="" disabled>選擇類型</option>
+                                        {MERCH_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                    </select>
                                     {/* 官方價格 (圖鑑用) - 文字輸入 */}
-                                    <input type="text" className="border p-2 rounded" placeholder="官方原價 (可填文字)" value={formData.officialPrice} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/>
+                                    <input type="text" className="border p-2 rounded" placeholder="原價 (可填文字)" value={formData.officialPrice} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/>
                                 </div>
 
                                 {modalMode === 'collection' && (

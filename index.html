@@ -1136,9 +1136,33 @@
                                             <p className="text-xs text-gray-500">台幣支出 (NT$)</p>
                                             <p className="text-xl font-bold text-slate-800">{stats.totalNT.toLocaleString()}</p>
                                          </div>
-                                         <div>
-                                            <p className="text-xs text-gray-500">人民幣支出 (r)</p>
-                                            <p className="text-xl font-bold text-slate-800">{stats.totalR.toLocaleString()}</p>
+                                         <div className="relative">
+                                            <div className="flex justify-between items-start">
+                                                <p className="text-xs text-gray-500">人民幣支出 (r)</p>
+                                                <button 
+                                                    onClick={() => setShowRmbDetail(!showRmbDetail)}
+                                                    className="text-[10px] text-blue-500 hover:underline bg-blue-50 px-2 py-0.5 rounded"
+                                                >
+                                                    {showRmbDetail ? "還原" : "換算"}
+                                                </button>
+                                            </div>
+                                            {showRmbDetail ? (
+                                                <div className="animate-fade-in mt-1">
+                                                    <p className="text-sm font-bold text-slate-800">
+                                                        {stats.totalR.toLocaleString()} <span className="text-xs font-normal text-gray-400">r</span>
+                                                    </p>
+                                                    <p className="text-xs text-gray-400 my-0.5">×</p>
+                                                    <p className="text-sm font-bold text-slate-800">
+                                                        {exchangeRate} <span className="text-xs font-normal text-gray-400">匯率</span>
+                                                    </p>
+                                                    <div className="border-t border-gray-200 my-1"></div>
+                                                    <p className="text-sm font-bold text-green-600">
+                                                        = NT$ {Math.round(stats.totalR * exchangeRate).toLocaleString()}
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <p className="text-xl font-bold text-slate-800">{stats.totalR.toLocaleString()}</p>
+                                            )}
                                          </div>
                                     </div>
                                     <div className="bg-white rounded-2xl p-6 shadow-sm col-span-3 space-y-2">

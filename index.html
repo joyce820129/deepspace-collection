@@ -479,7 +479,7 @@
                             <div className="flex-1 mt-1 space-y-2 overflow-y-auto max-h-[120px] thin-scrollbar pr-1">
                                 {consolidated.map((inst, idx) => (
                                     <div key={idx} className="bg-gray-50 rounded p-2 text-xs border border-gray-100 flex justify-between items-center">
-                                        <div><span className="text-gray-500 flex gap-1"><Icon name="Calendar" size={10} /> {inst.date}</span><span className="font-bold text-slate-700">NT$ {inst.acquiredPrice}</span></div>
+                                        <div><span className="text-gray-500 flex gap-1"><Icon name="Calendar" size={10} /> {inst.date}</span><span className="font-bold text-slate-700">{inst.acquiredPrice}r</span></div>
                                         <div className="flex items-center gap-2">
                                             {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">x{inst.count}</span>}
                                             <div className="flex gap-1">
@@ -520,7 +520,7 @@
                             <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${theme.badge}`}>{item.character}</span><span className="text-[10px] text-gray-500 border px-1 rounded">{item.type}</span></div>
                             <h3 className="font-bold text-gray-800 text-sm truncate">{item.name}</h3>
                             {/* 顯示官方價格，支援文字 */}
-                            <p className="text-xs text-gray-500 mt-1">官方價: {isNaN(Number(item.officialPrice)) || item.officialPrice === '' ? item.officialPrice : `NT$ ${item.officialPrice}`}</p>
+                            <p className="text-xs text-gray-500 mt-1">原價: {isNaN(Number(item.officialPrice)) || item.officialPrice === '' ? item.officialPrice : `${item.officialPrice}r`}</p>
                         </div>
                     </div>
                 );
@@ -537,6 +537,7 @@
                         <nav className="flex-1 px-4 space-y-2">
                             {['collection','templates','stats'].map(t => <button key={t} onClick={()=>setActiveTab(t)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab===t?'bg-blue-600 text-white':'hover:bg-slate-800 text-slate-300'}`}><Icon name={t==='collection'?'Package':t==='templates'?'ShoppingBag':'User'} size={20}/>{t==='collection'?'我的收藏庫':t==='templates'?'週邊圖鑑 (共用)':'獵人檔案'}</button>)}
                         </nav>
+                        <div className="p-4 bg-slate-800"><p className="text-xs text-slate-400">總花費</p><p className="text-xl font-bold text-green-400">{stats.totalSpent.toLocaleString()}r</p></div>
                     </aside>
 
                     <div className="md:hidden bg-slate-900 text-white p-4 sticky top-0 z-20 shadow-lg flex justify-between items-center">
@@ -592,7 +593,7 @@
                             <div className="space-y-6 animate-fade-in">
                                 <h2 className="text-2xl font-bold text-gray-800">消費報告</h2>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="bg-slate-900 rounded-2xl p-6 text-white"><p>總花費</p><p className="text-3xl font-bold">NT$ {stats.totalSpent}</p></div>
+                                    <div className="bg-slate-900 rounded-2xl p-6 text-white"><p>總花費</p><p className="text-3xl font-bold">{stats.totalSpent.toLocaleString()}r</p></div>
                                     <div className="bg-white rounded-2xl p-6 shadow-sm col-span-2 space-y-2">{Object.entries(stats.byChar).map(([c, count])=><div key={c} className="flex justify-between border-b pb-2"><span>{c}</span><span>{count}</span></div>)}</div>
                                 </div>
                             </div>

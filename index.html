@@ -221,10 +221,9 @@
                     return;
                 }
                 const path = `artifacts/${GLOBAL_APP_ID}/public/data/catalog`;
-                // Check if we need to preserve existing order or set new
                 let order = newItem.order;
                 if (order === undefined) {
-                    order = Date.now(); // Default for new
+                    order = Date.now(); 
                 }
                 await setDoc(doc(db, path, newItem.id), { ...newItem, order }, { merge: true });
             };
@@ -240,7 +239,7 @@
                 }
             };
 
-            // --- 匯入功能 ---
+            // --- 匯入功能 (修改：支援文字版原價) ---
             const handleBulkImport = async () => {
                 if (!importJson.trim()) return;
                 try {
@@ -264,7 +263,12 @@
                             keys.forEach((k, i) => { 
                                 if (vals[i]) {
                                     let v = vals[i].trim();
-                                    if (k==='officialPrice') v = parseInt(v.replace(/\D/g,'')) || 0;
+                                    // 移除強制 parseInt，允許文字
+                                    if (k === 'officialPrice') {
+                                        // 簡單處理：如果看起來像純數字就轉數字，否則保留文字
+                                        // 但為了相容 '滿贈'，我們統一用字串，或保留原樣
+                                        // 這裡不做特別轉換，直接存入
+                                    }
                                     obj[k] = v; 
                                 }
                             });
@@ -285,7 +289,7 @@
                                 character: item.character || '其他',
                                 type: item.type || '未分類',
                                 series: item.series || '',
-                                officialPrice: item.officialPrice || 0,
+                                officialPrice: item.officialPrice || '', // 允許文字或空值
                                 image: item.image || null,
                                 order: timestamp + count 
                             };
@@ -515,7 +519,8 @@
                         <div className="p-3">
                             <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${theme.badge}`}>{item.character}</span><span className="text-[10px] text-gray-500 border px-1 rounded">{item.type}</span></div>
                             <h3 className="font-bold text-gray-800 text-sm truncate">{item.name}</h3>
-                            <p className="text-xs text-gray-500 mt-1">官方價: NT$ {item.officialPrice}</p>
+                            {/* 顯示官方價格，支援文字 */}
+                            <p className="text-xs text-gray-500 mt-1">官方價: {isNaN(Number(item.officialPrice)) || item.officialPrice === '' ? item.officialPrice : `NT$ ${item.officialPrice}`}</p>
                         </div>
                     </div>
                 );
@@ -626,8 +631,8 @@
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                     <input className="border p-2 rounded" placeholder="類型" value={formData.type} onChange={e=>setFormData({...formData,type:e.target.value})}/>
-                                    {/* 官方價格 (圖鑑用) */}
-                                    <input type="number" className="border p-2 rounded" placeholder="官方原價" value={formData.officialPrice} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/>
+                                    {/* 官方價格 (圖鑑用) - 文字輸入 */}
+                                    <input type="text" className="border p-2 rounded" placeholder="官方原價 (可填文字)" value={formData.officialPrice} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/>
                                 </div>
 
                                 {modalMode === 'collection' && (

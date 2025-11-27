@@ -39,14 +39,14 @@
         // --- 請在此處填入您的 Firebase 設定 ---
         // ==========================================
         const firebaseConfig = {
-          apiKey: "AIzaSyDxpH_rteE6PJq_bMmg3X2CxTs1lrQmhZA",
-          authDomain: "deepspace-collection.firebaseapp.com",
-          projectId: "deepspace-collection",
-          storageBucket: "deepspace-collection.firebasestorage.app",
-          messagingSenderId: "129454784064",
-          appId: "1:129454784064:web:38e7f8ffcf99d9a61ea9a5",
-          measurementId: "G-GCCS7NBT15"
-        };
+  apiKey: "AIzaSyDxpH_rteE6PJq_bMmg3X2CxTs1lrQmhZA",
+  authDomain: "deepspace-collection.firebaseapp.com",
+  projectId: "deepspace-collection",
+  storageBucket: "deepspace-collection.firebasestorage.app",
+  messagingSenderId: "129454784064",
+  appId: "1:129454784064:web:38e7f8ffcf99d9a61ea9a5",
+  measurementId: "G-GCCS7NBT15"
+};
 
         const GLOBAL_APP_ID = "deepspace_shared_v1";
 
@@ -104,7 +104,12 @@
 
         const App = () => {
             const [user, setUser] = useState(null);
-            const [activeTab, setActiveTab] = useState('collection'); 
+            
+            // 修改 1: 初始化時從 LocalStorage 讀取上次的分頁，若無則預設 'collection'
+            const [activeTab, setActiveTab] = useState(() => {
+                return localStorage.getItem('deepspace_active_tab') || 'collection';
+            });
+
             const [groupingMode, setGroupingMode] = useState('none'); 
             const [collectionGroupingMode, setCollectionGroupingMode] = useState('none'); 
             const [dateSortOrder, setDateSortOrder] = useState('desc'); 
@@ -124,6 +129,11 @@
             const dragItem = useRef(null);
             const dragOverItem = useRef(null);
             const fileInputRef = useRef(null);
+
+            // 修改 2: 當 activeTab 改變時，儲存到 LocalStorage
+            useEffect(() => {
+                localStorage.setItem('deepspace_active_tab', activeTab);
+            }, [activeTab]);
 
             // --- 1. 初始化與 Auth ---
             useEffect(() => {
@@ -166,8 +176,6 @@
                     const userColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'items');
                     unsubCollection = onSnapshot(userColl, (snapshot) => {
                         const cloudItems = snapshot.docs.map(doc => doc.data());
-                        // 依 order 排序
-                        cloudItems.sort((a, b) => (a.order || 0) - (b.order || 0));
                         setItems(cloudItems);
                     }, (err) => console.error("Collection sync error:", err));
                 } else {
@@ -200,16 +208,13 @@
 
             // --- 資料寫入 ---
             const saveToCollection = async (newItem) => {
-                // 為新物品加入 order (若未設定)
-                const itemWithOrder = { ...newItem, order: newItem.order || Date.now() };
-
                 if (user && isFirebaseInitialized) {
                     const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
-                    await setDoc(doc(db, path, newItem.id), itemWithOrder);
+                    await setDoc(doc(db, path, newItem.id), newItem);
                 } else {
                     setItems(prev => {
                         const exists = prev.find(i => i.id === newItem.id);
-                        return exists ? prev.map(i => i.id === newItem.id ? itemWithOrder : i) : [...prev, itemWithOrder];
+                        return exists ? prev.map(i => i.id === newItem.id ? newItem : i) : [...prev, newItem];
                     });
                 }
             };
@@ -274,10 +279,6 @@
                             keys.forEach((k, i) => { 
                                 if (vals[i]) {
                                     let v = vals[i].trim();
-                                    // 移除強制 parseInt，允許文字
-                                    if (k === 'officialPrice') {
-                                        // 簡單處理：如果看起來像純數字就轉數字，否則保留文字
-                                    }
                                     obj[k] = v; 
                                 }
                             });
@@ -325,7 +326,6 @@
                 if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) return;
 
                 if (type === 'collection') {
-                    // 1. 本地更新
                     const currentStacks = getStackedItems(items, 'none');
                     const moved = currentStacks[dragItem.current];
                     currentStacks.splice(dragItem.current, 1);
@@ -333,13 +333,10 @@
                     const newFlatList = currentStacks.flatMap(s => s.instances);
                     setItems(newFlatList);
 
-                    // 2. 雲端寫入 (Batch Write 更新 order)
                     if (isFirebaseInitialized && user) {
                         const batch = writeBatch(db);
                         const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
                         
-                        // 為了節省寫入次數，這裡簡單地重寫所有項目的 order
-                        // 在實際產品中可能需要更優化的算法，但個人收藏數量通常可接受
                         newFlatList.forEach((item, index) => {
                             const ref = doc(db, path, item.id);
                             batch.update(ref, { order: index });
@@ -418,7 +415,6 @@
                         await saveToCollection(itemToSave);
                     } else {
                         for (let i = 0; i < qty; i++) {
-                            // 賦予每筆新增資料一個遞增的 order，確保它們排在一起
                             const newItem = { 
                                 ...formData, 
                                 id: timestamp + '-' + i,
@@ -430,7 +426,11 @@
                     }
                 }
                 setIsModalOpen(false);
-                if (modalMode === 'collection' && activeTab === 'templates') setActiveTab('collection');
+                // 修改 3: 移除自動跳轉至 collection 的邏輯，保持在當前分頁
+                // if (modalMode === 'collection' && activeTab === 'templates') setActiveTab('collection');
+                if (modalMode === 'collection' && activeTab === 'templates') {
+                   alert('已加入收藏！');
+                }
             };
 
             // --- Helpers ---
@@ -706,4 +706,3 @@
     </script>
 </body>
 </html>
-

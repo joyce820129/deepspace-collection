@@ -133,7 +133,6 @@
                     const parsed = JSON.parse(savedSettings);
                     if (!parsed.visibleCharacters) parsed.visibleCharacters = CHARACTERS;
                     if (!parsed.multiSelect) parsed.multiSelect = defaults.multiSelect;
-                    // 確保 series 多選設定存在
                     if (parsed.multiSelect && typeof parsed.multiSelect.series === 'undefined') {
                          parsed.multiSelect.series = false;
                     }
@@ -154,9 +153,11 @@
             const [selectedTypeFilters, setSelectedTypeFilters] = useState([]); 
             const [selectedCharFilters, setSelectedCharFilters] = useState([]); 
             const [selectedDateFilters, setSelectedDateFilters] = useState([]);
-            const [selectedSeriesFilters, setSelectedSeriesFilters] = useState([]); // 新增系列篩選狀態
+            const [selectedSeriesFilters, setSelectedSeriesFilters] = useState([]); 
 
             const [dateSortOrder, setDateSortOrder] = useState('desc'); 
+            const [exchangeRate, setExchangeRate] = useState(4.5); // 預設匯率
+            const [exchangeRateTimestamp, setExchangeRateTimestamp] = useState(null); // 匯率更新時間
             
             // 資料狀態
             const [items, setItems] = useState([]); 
@@ -171,6 +172,7 @@
             const [importJson, setImportJson] = useState('');
             const [newTypeInput, setNewTypeInput] = useState(''); 
             const [settingsTab, setSettingsTab] = useState('layout'); 
+            const [showRmbDetail, setShowRmbDetail] = useState(false); // 新增：是否顯示匯率算式
             
             const dragItem = useRef(null);
             const dragOverItem = useRef(null);
@@ -180,6 +182,22 @@
             useEffect(() => {
                 localStorage.setItem('deepspace_active_tab', activeTab);
             }, [activeTab]);
+
+            // 抓取匯率
+            useEffect(() => {
+                fetch('https://api.exchangerate-api.com/v4/latest/CNY')
+                    .then(res => res.json())
+                    .then(data => {
+                        if(data && data.rates && data.rates.TWD) {
+                            setExchangeRate(data.rates.TWD);
+                            // 紀錄時間
+                            const now = new Date();
+                            const formattedTime = `${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+                            setExchangeRateTimestamp(formattedTime);
+                        }
+                    })
+                    .catch(err => console.error("Exchange rate fetch failed", err));
+            }, []);
 
             // 重置篩選器
             useEffect(() => {
@@ -298,7 +316,7 @@
             };
 
             const deleteFromCatalog = async (itemId) => {
-                if (confirm("確定要從共用圖鑑刪除嗎？")) {
+                if (confirm("警告：您正在從「共用圖鑑」中刪除此項目。\n這將會影響所有使用者看到的內容。\n\n確定要刪除嗎？")) {
                     if (isFirebaseInitialized) {
                         const path = `artifacts/${GLOBAL_APP_ID}/public/data/catalog`;
                         await deleteDoc(doc(db, path, itemId));
@@ -448,7 +466,7 @@
                 if (isFirebaseInitialized && user && !user.isAnonymous) {
                     const batch = writeBatch(db);
                     const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
-                    newFlatList.forEach((item, idx) => batch.update(doc(db, path, item.id), { order: idx }));
+                    newFlatList.forEach((item, idx) => batch.update(doc(db, path, item.id), { order: index }));
                     try { await batch.commit(); } catch (err) { console.error(err); }
                 }
             };
@@ -662,12 +680,28 @@
             const stats = useMemo(() => {
                 const visibleItems = items.filter(i => appSettings.visibleCharacters.includes(i.character));
                 const totalCount = visibleItems.length;
-                // 入手價計算 (如果是預購且幣值為 r，暫不匯率轉換，視為數值加總，或您可改為僅計算 NT$)
-                // 這裡簡單做：只加總數值，若要精確可再改
-                const totalSpent = visibleItems.reduce((acc, item) => acc + Number(item.acquiredPrice || 0), 0);
-                const byChar = visibleItems.reduce((acc, item) => { acc[item.character] = (acc[item.character] || 0) + 1; return acc; }, {});
-                return { totalCount, totalSpent, byChar };
-            }, [items, appSettings.visibleCharacters]);
+                
+                let totalNT = 0;
+                let totalR = 0;
+
+                visibleItems.forEach(item => {
+                    const price = Number(item.acquiredPrice || 0);
+                    if (item.currency === 'r') {
+                        totalR += price;
+                    } else {
+                        totalNT += price;
+                    }
+                });
+
+                const grandTotal = totalNT + (totalR * exchangeRate);
+
+                const byChar = visibleItems.reduce((acc, item) => { 
+                    acc[item.character] = (acc[item.character] || 0) + 1; 
+                    return acc; 
+                }, {});
+
+                return { totalCount, totalNT, totalR, grandTotal, byChar };
+            }, [items, appSettings.visibleCharacters, exchangeRate]);
 
             const availableTypes = useMemo(() => {
                 const types = new Set(items.map(i => i.type).filter(Boolean));
@@ -681,7 +715,6 @@
 
             // 新增可用系列計算
             const availableSeries = useMemo(() => {
-                // 從 items 或 catalogItems 中提取所有系列？通常圖鑑的系列比較完整
                 const source = activeTab === 'collection' ? items : catalogItems;
                 const series = new Set(source.map(i => i.series).filter(Boolean));
                 return Array.from(series).sort();
@@ -696,7 +729,6 @@
                     return { '全部': processedList };
                 }
                 
-                // 預留其他分組模式
                 return { '全部': processedList };
             };
 
@@ -746,13 +778,22 @@
                 }, [stack.instances]);
 
                 return (
-                    <div draggable={isDraggable} onDragStart={(e) => handleDragStart(e, index, 'collection')} onDragEnter={(e) => dragOverItem.current = index} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative ${isDraggable ? 'cursor-move' : ''}`}>
+                    <div 
+                        draggable={isDraggable} 
+                        onDragStart={(e) => handleDragStart(e, index, 'collection')} 
+                        onDragEnter={(e) => dragOverItem.current = index} 
+                        onDragEnd={handleDragEnd} 
+                        onDragOver={(e) => e.preventDefault()} 
+                        className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative ${isDraggable ? 'cursor-move' : ''}`}
+                    >
+                        {/* 移動按鈕 */}
                         {isDraggable && (
                             <div className="absolute top-2 left-2 z-20 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 rounded-lg p-1 backdrop-blur-sm">
                                 <button onClick={(e) => {e.stopPropagation(); handleMoveStack(index, -1)}} className="p-1 hover:bg-blue-100 rounded text-blue-600 disabled:opacity-30" disabled={index === 0}><Icon name="ArrowLeft" size={14} /></button>
                                 <button onClick={(e) => {e.stopPropagation(); handleMoveStack(index, 1)}} className="p-1 hover:bg-blue-100 rounded text-blue-600 disabled:opacity-30"><Icon name="ArrowRight" size={14} /></button>
                             </div>
                         )}
+
                         {stack.totalCount > 1 && <div className="absolute top-2 left-2 z-10 bg-slate-900 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">x{stack.totalCount}</div>}
                         <div className={`h-40 w-full relative bg-gray-100 flex items-center justify-center overflow-hidden`}>
                             {stack.image ? <img src={stack.image} className="w-full h-full object-cover pointer-events-none" /> : <Icon name="Image" className={`opacity-20 ${theme.text}`} size={32} />}
@@ -772,16 +813,13 @@
                                                 }
                                             </div>
                                             <div className="flex items-baseline gap-1">
-                                                {/* 入手價顯示，根據幣值顯示不同後綴 */}
                                                 <span className="font-bold text-base text-slate-800">
                                                     {inst.currency === 'r' ? `${inst.acquiredPrice}r` : `NT$ ${inst.acquiredPrice}`}
                                                 </span>
-                                                {/* 原價顯示更加清晰：加粗，顏色加深 */}
                                                 {inst.officialPrice && <span className="text-[11px] text-gray-500 font-medium ml-1">(原{inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}
                                             </div>
                                         </div>
                                         
-                                        {/* 編輯/刪除按鈕區塊 (右側) */}
                                         <div className="flex items-center gap-1 ml-auto pl-2 border-l border-gray-100">
                                             {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">x{inst.count}</span>}
                                             <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all"><Icon name="Edit3" size={12}/></button>
@@ -999,7 +1037,12 @@
                             {['collection','templates','stats'].map(t => <button key={t} onClick={()=>setActiveTab(t)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab===t?'bg-blue-600 text-white':'hover:bg-slate-800 text-slate-300'}`}><Icon name={t==='collection'?'Package':t==='templates'?'ShoppingBag':'User'} size={20}/>{t==='collection'?'我的收藏庫':t==='templates'?'週邊圖鑑':'獵人檔案'}</button>)}
                         </nav>
                         <div className="px-4 pb-2"><button onClick={()=>setIsSettingsOpen(true)} className="w-full border border-slate-700 text-slate-400 text-xs py-1.5 rounded-lg flex items-center justify-center gap-1 hover:bg-slate-800 hover:text-slate-200"><Icon name="Settings" size={14}/> 設定</button></div>
-                        <div className="p-4 bg-slate-800"><p className="text-xs text-slate-400">總花費</p><p className="text-xl font-bold text-green-400">NT$ {stats.totalSpent.toLocaleString()}</p></div>
+                        <div className="p-4 bg-slate-800">
+                            <div className="flex flex-col gap-1">
+                                <p className="text-xs text-slate-400">總估算價值 (NT$)</p>
+                                <p className="text-xl font-bold text-green-400">{Math.round(stats.grandTotal).toLocaleString()}</p>
+                            </div>
+                        </div>
                     </aside>
 
                     {/* Mobile Header */}
@@ -1080,9 +1123,28 @@
                         {activeTab === 'stats' && (
                             <div className="space-y-6 animate-fade-in">
                                 <h2 className="text-2xl font-bold text-gray-800">消費報告</h2>
+                                <p className="text-sm text-gray-500 mb-4 font-medium">
+                                   目前匯率: 1r ≈ {exchangeRate} NT$ {exchangeRateTimestamp && <span className="text-gray-400 text-xs ml-1">(更新於: {exchangeRateTimestamp})</span>}
+                                </p>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="bg-slate-900 rounded-2xl p-6 text-white"><p>總花費</p><p className="text-3xl font-bold">NT$ {stats.totalSpent.toLocaleString()}</p></div>
-                                    <div className="bg-white rounded-2xl p-6 shadow-sm col-span-2 space-y-2">{Object.entries(stats.byChar).map(([c, count])=><div key={c} className="flex justify-between border-b pb-2"><span>{c}</span><span>{count}</span></div>)}</div>
+                                    <div className="bg-slate-900 rounded-2xl p-6 text-white">
+                                        <p className="text-slate-400 text-sm">總估算價值 (NT$)</p>
+                                        <p className="text-3xl font-bold">{Math.round(stats.grandTotal).toLocaleString()}</p>
+                                    </div>
+                                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 grid grid-cols-2 gap-4">
+                                         <div>
+                                            <p className="text-xs text-gray-500">台幣支出 (NT$)</p>
+                                            <p className="text-xl font-bold text-slate-800">{stats.totalNT.toLocaleString()}</p>
+                                         </div>
+                                         <div>
+                                            <p className="text-xs text-gray-500">人民幣支出 (r)</p>
+                                            <p className="text-xl font-bold text-slate-800">{stats.totalR.toLocaleString()}</p>
+                                         </div>
+                                    </div>
+                                    <div className="bg-white rounded-2xl p-6 shadow-sm col-span-3 space-y-2">
+                                        <h3 className="font-bold text-gray-700 mb-4">收藏分布</h3>
+                                        {Object.entries(stats.byChar).map(([c, count])=><div key={c} className="flex justify-between border-b pb-2"><span>{c}</span><span>{count}</span></div>)}
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -1116,7 +1178,6 @@
                                             <label htmlFor="isPreorder" className="text-sm font-bold text-gray-700">預購商品</label>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            {/* 預購狀態下顯示幣值選擇 */}
                                             <div className="relative">
                                                 <input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
                                                 {formData.isPreorder && (

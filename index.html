@@ -94,9 +94,9 @@
         const MERCH_TYPES = ["徽章", "立牌", "拍立得", "小卡", "相卡", "明信片", "鐳射票", "書籤", "透卡", "貼紙", "色紙", "簽名板", "杯墊", "吊飾", "公仔", "娃娃", "卡冊", "其他"];
 
         const CHARACTER_THEMES = {
-            "沈星回": { bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200", badge: "bg-yellow-100 text-yellow-800" },
+            "沈星回": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", badge: "bg-purple-100 text-purple-800" },
             "黎深": { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200", badge: "bg-slate-100 text-slate-800" },
-            "祁煜": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", badge: "bg-purple-100 text-purple-800" },
+            "祁煜": { bg: "bg-pink-50", text: "text-pink-700", border: "border-pink-200", badge: "bg-pink-100 text-pink-800" },
             "秦徹": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", badge: "bg-red-100 text-red-800" },
             "夏以晝": { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", badge: "bg-orange-100 text-orange-800" },
             "其他": { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200", badge: "bg-gray-100 text-gray-800" }
@@ -339,10 +339,14 @@
                     const currentStacks = getStackedItems(items, 'none');
                     const moved = currentStacks[dragItem.current];
                     
+                    // 執行移動
                     currentStacks.splice(dragItem.current, 1);
                     currentStacks.splice(dragOverItem.current, 0, moved);
                     
+                    // 展平回原始陣列
                     const newFlatList = currentStacks.flatMap(s => s.instances);
+                    
+                    // 立即更新本地狀態以獲得即時回饋
                     setItems(newFlatList);
 
                     if (isFirebaseInitialized && user) {
@@ -378,6 +382,7 @@
 
             // 新增：手動移動功能 (上移/下移)
             const handleMoveStack = async (index, direction) => {
+                // 僅支援 collection 'none' 模式
                 const currentStacks = getStackedItems(items, 'none');
                 const newIndex = index + direction;
                 if (newIndex < 0 || newIndex >= currentStacks.length) return;
@@ -459,6 +464,7 @@
                     }
                 }
                 setIsModalOpen(false);
+                // 已移除彈窗
             };
 
             // --- Helpers ---
@@ -530,7 +536,7 @@
                 if (currentMode !== 'none') { e.preventDefault(); return; }
                 
                 dragItem.current = index;
-                dragType.current = type;
+                dragType.current = type; // 設定拖曳類型
                 e.target.classList.add('dragging');
                 e.dataTransfer.effectAllowed = "move";
                 e.dataTransfer.setData('type', type);
@@ -575,7 +581,12 @@
                             <div className="flex-1 mt-1 space-y-2 overflow-y-auto max-h-[120px] thin-scrollbar pr-1">
                                 {consolidated.map((inst, idx) => (
                                     <div key={idx} className="bg-gray-50 rounded p-2 text-xs border border-gray-100 flex justify-between items-center">
-                                        <div><span className="text-gray-500 flex gap-1"><Icon name="Calendar" size={10} /> {inst.date}</span><span className="font-bold text-slate-700">NT$ {inst.acquiredPrice}</span></div>
+                                        <div><span className="text-gray-500 flex gap-1 items-center text-[10px]"><Icon name="Calendar" size={10} /> {inst.date}</span>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="font-bold text-lg text-slate-700">NT$ {inst.acquiredPrice}</span>
+                                                {inst.officialPrice && <span className="text-[10px] text-gray-400">({inst.officialPrice}r)</span>}
+                                            </div>
+                                        </div>
                                         <div className="flex items-center gap-2">
                                             {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">x{inst.count}</span>}
                                             <div className="flex gap-1">
@@ -606,7 +617,7 @@
                             <img src={item.image} alt={item.name} className="w-full h-full object-cover pointer-events-none" />
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                             {/* 加入收藏按鈕 (大) */}
-                            <button onClick={() => openModal(null, item, 'collection')} className="absolute bottom-3 right-3 bg-white text-blue-600 p-2 rounded-full shadow-lg transform translate-y-10 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all z-20" title="加入我的收藏">
+                            <button onClick={() => openModal(null, item, 'collection')} className="absolute bottom-3 right-3 bg-white text-blue-600 p-2 rounded-full shadow-lg transform translate-y-10 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all z-20 w-10 h-10 flex items-center justify-center" title="加入我的收藏">
                                 <Icon name="Plus" size={24} />
                             </button>
                             {/* 管理按鈕 (小) */}
@@ -622,6 +633,7 @@
                         <div className="p-3">
                             <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${theme.badge}`}>{item.character}</span><span className="text-[10px] text-gray-500 border px-1 rounded">{item.type}</span></div>
                             <h3 className="font-bold text-gray-800 text-sm truncate">{item.name}</h3>
+                            {/* 顯示官方價格，支援文字 */}
                             <p className="text-xs text-gray-500 mt-1">原價: {isNaN(Number(item.officialPrice)) || item.officialPrice === '' ? item.officialPrice : `${item.officialPrice}r`}</p>
                         </div>
                     </div>
@@ -754,10 +766,18 @@
                                     <input className="border p-2 rounded" placeholder="系列" value={formData.series} onChange={e=>setFormData({...formData,series:e.target.value})}/>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <select className="border p-2 rounded" value={formData.type} onChange={e=>setFormData({...formData,type:e.target.value})}>
-                                        <option value="" disabled>選擇類型</option>
-                                        {MERCH_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                                    </select>
+                                    {/* 類型：輸入框 + datalist */}
+                                    <input
+                                        className="border p-2 rounded"
+                                        list="merch-types-list"
+                                        placeholder="類型 (可手動輸入)"
+                                        value={formData.type}
+                                        onChange={e=>setFormData({...formData,type:e.target.value})}
+                                    />
+                                    <datalist id="merch-types-list">
+                                        {MERCH_TYPES.map(t => <option key={t} value={t} />)}
+                                    </datalist>
+
                                     <input type="text" className="border p-2 rounded" placeholder="原價 (可填文字)" value={formData.officialPrice} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/>
                                 </div>
 

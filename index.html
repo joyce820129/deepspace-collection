@@ -30,7 +30,7 @@
 
     <script type="text/babel" data-type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         const { useState, useEffect, useMemo, useRef } = React;
@@ -92,6 +92,7 @@
 
         const CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝", "其他"];
         
+        // 初始預設類型
         const DEFAULT_MERCH_TYPES = [
             "徽章", "立牌", "拍立得", "小卡", "相卡", "明信片", "雷射票", "書籤", 
             "透卡", "貼紙", "色紙", "簽名板", "杯墊", "吊飾", "公仔", "娃娃", "卡冊", "其他"
@@ -113,6 +114,7 @@
                 return localStorage.getItem('deepspace_active_tab') || 'collection';
             });
 
+            // --- App Settings State ---
             const [appSettings, setAppSettings] = useState(() => {
                 const savedSettings = localStorage.getItem('deepspace_settings');
                 return savedSettings ? JSON.parse(savedSettings) : {
@@ -130,17 +132,19 @@
             const [typeFilter, setTypeFilter] = useState('all'); 
             const [dateSortOrder, setDateSortOrder] = useState('desc'); 
             
+            // 資料狀態
             const [items, setItems] = useState([]); 
             const [catalogItems, setCatalogItems] = useState([]); 
             
+            // UI 狀態
             const [isModalOpen, setIsModalOpen] = useState(false);
-            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false); 
             const [editingItem, setEditingItem] = useState(null); 
             const [modalMode, setModalMode] = useState('collection');
             const [formData, setFormData] = useState({});
             const [importJson, setImportJson] = useState('');
             const [newTypeInput, setNewTypeInput] = useState(''); 
-            const [settingsTab, setSettingsTab] = useState('layout');
+            const [settingsTab, setSettingsTab] = useState('layout'); 
             
             const dragItem = useRef(null);
             const dragOverItem = useRef(null);
@@ -165,46 +169,37 @@
                     return;
                 }
 
-                // 監聽 Auth 狀態
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-                    // 這裡不再過濾匿名使用者，讓 user 狀態反映真實登入情況 (包含匿名)
-                    // 這樣後續的 Firestore query 才會有有效的 auth context
-                    setUser(currentUser);
-                    
-                    // 如果登出 (currentUser 為 null)，為了讀取公開資料，我們嘗試匿名登入
-                    if (!currentUser) {
-                        signInAnonymously(auth).catch(console.error);
+                    if (currentUser && !currentUser.isAnonymous) {
+                        setUser(currentUser);
+                    } else {
+                        setUser(null);
                     }
                 });
                 
-                // 初始檢查：如果沒有使用者，先登入匿名
                 if (!auth.currentUser) {
-                    signInAnonymously(auth).catch(console.error);
+                    signInAnonymously(auth).catch(e => console.log("Anon login failed", e));
                 }
 
                 return () => unsubscribe();
             }, []);
 
-            // --- 2. 同步資料 (核心邏輯) ---
+            // --- 2. 同步資料 ---
             useEffect(() => {
                 if (!isFirebaseInitialized) return;
                 
-                // 關鍵修正：必須等到 user 有值 (身分確立) 後才發送請求
                 if (!user) return;
 
-                // A. 同步【公開圖鑑】 (所有人可見)
                 const catalogColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'public', 'data', 'catalog');
                 const unsubCatalog = onSnapshot(catalogColl, (snapshot) => {
                     const cloudCatalog = snapshot.docs.map(doc => doc.data());
                     cloudCatalog.sort((a, b) => (a.order || 0) - (b.order || 0));
                     setCatalogItems(cloudCatalog);
-                }, (err) => console.log("Catalog sync waiting... (Check permissions or initialization)"));
+                }, (err) => console.log("Catalog sync waiting..."));
 
-                // B. 同步【我的收藏】 (依是否為 Google 帳號)
                 let unsubCollection = () => {};
 
                 if (!user.isAnonymous) {
-                    // Google 已登入：讀取 Firestore 私有區
                     const userColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'items');
                     unsubCollection = onSnapshot(userColl, (snapshot) => {
                         const cloudItems = snapshot.docs.map(doc => doc.data());
@@ -212,7 +207,6 @@
                         setItems(cloudItems);
                     }, (err) => console.error("Collection sync error:", err));
                 } else {
-                    // 匿名/未登入：讀取 LocalStorage
                     const localItems = localStorage.getItem('deepspace_items_v7_local');
                     if (localItems) setItems(JSON.parse(localItems));
                 }
@@ -220,7 +214,6 @@
                 return () => { unsubCatalog(); unsubCollection(); };
             }, [user]);
 
-            // 當未登入時，收藏變更寫入 LocalStorage
             useEffect(() => {
                 if (!isFirebaseInitialized || (user && user.isAnonymous)) {
                     localStorage.setItem('deepspace_items_v7_local', JSON.stringify(items));
@@ -233,7 +226,6 @@
                 }
             }, [catalogItems]);
 
-            // --- 登入/登出 ---
             const handleLogin = async () => {
                 if (window.location.protocol === 'file:') return alert("請使用 Live Server 或上傳至網頁空間開啟。");
                 if (!isFirebaseInitialized) return alert("請設定 Firebase Config");
@@ -241,7 +233,6 @@
             };
             const handleLogout = () => signOut(auth);
 
-            // --- 資料寫入 ---
             const saveToCollection = async (newItem) => {
                 const itemWithOrder = { ...newItem, order: newItem.order || Date.now() };
                 if (user && !user.isAnonymous && isFirebaseInitialized) {
@@ -272,7 +263,6 @@
                     });
                     return;
                 }
-                // 假設公開圖鑑允許匿名寫入 (視後端規則而定，此處前端允許嘗試)
                 const path = `artifacts/${GLOBAL_APP_ID}/public/data/catalog`;
                 let order = newItem.order || Date.now();
                 await setDoc(doc(db, path, newItem.id), { ...newItem, order }, { merge: true });
@@ -289,7 +279,6 @@
                 }
             };
 
-            // --- Bulk Import ---
             const handleBulkImport = async () => {
                 if (!importJson.trim()) return;
                 try {
@@ -352,20 +341,30 @@
 
             // --- Drag & Drop ---
             const handleDragStart = (e, index, type) => {
-                const currentMode = type === 'collection' ? collectionGroupingMode : groupingMode;
-                if (currentMode !== 'none') { e.preventDefault(); return; }
+                // type 可能是 'settings-type'，所以這裡不應該直接 return
+                const currentMode = type === 'collection' ? collectionGroupingMode : (type === 'catalog' ? groupingMode : 'none');
+                
+                // 只有非設定類型的拖曳才需要檢查分組模式
+                if (type !== 'settings-type' && currentMode !== 'none') { 
+                    e.preventDefault(); 
+                    return; 
+                }
+                
                 dragItem.current = index;
                 dragType.current = type;
                 e.target.classList.add('dragging');
                 e.dataTransfer.effectAllowed = "move";
                 e.dataTransfer.setData('type', type);
             };
+
             const handleDragEnd = async (e) => {
                 e.target.classList.remove('dragging');
                 const type = dragType.current;
+                
                 if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) {
                     dragItem.current = null; dragOverItem.current = null; return;
                 }
+
                 if (type === 'collection') {
                     const currentStacks = getStackedItems(items, 'none');
                     const moved = currentStacks[dragItem.current];
@@ -373,8 +372,6 @@
                     currentStacks.splice(dragOverItem.current, 0, moved);
                     const newFlatList = currentStacks.flatMap(s => s.instances);
                     setItems(newFlatList);
-                    
-                    // 只在 Google 登入時寫入雲端排序
                     if (isFirebaseInitialized && user && !user.isAnonymous) {
                         const batch = writeBatch(db);
                         const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
@@ -396,8 +393,18 @@
                         newOrderList.splice(dragOverItem.current, 0, movedItem);
                         setCatalogItems(newOrderList);
                     }
+                } else if (type === 'settings-type') {
+                    // 處理類型排序
+                    const newTypes = [...appSettings.customTypes];
+                    const movedType = newTypes[dragItem.current];
+                    newTypes.splice(dragItem.current, 1);
+                    newTypes.splice(dragOverItem.current, 0, movedType);
+                    setAppSettings(prev => ({ ...prev, customTypes: newTypes }));
                 }
-                dragItem.current = null; dragOverItem.current = null; dragType.current = null;
+                
+                dragItem.current = null;
+                dragOverItem.current = null;
+                dragType.current = null;
             };
 
             const handleMoveStack = async (index, direction) => {
@@ -409,8 +416,6 @@
                 currentStacks.splice(newIndex, 0, moved);
                 const newFlatList = currentStacks.flatMap(s => s.instances);
                 setItems(newFlatList);
-                
-                // 只在 Google 登入時寫入雲端排序
                 if (isFirebaseInitialized && user && !user.isAnonymous) {
                     const batch = writeBatch(db);
                     const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
@@ -447,7 +452,6 @@
             const handleSave = async () => {
                 if (!formData.name) return alert("請輸入名稱");
                 const timestamp = Date.now();
-                // 如果是新類型，自動加入設定
                 if (formData.type && !appSettings.customTypes.includes(formData.type)) {
                     setAppSettings(prev => ({...prev, customTypes: [...prev.customTypes, formData.type]}));
                 }
@@ -499,7 +503,20 @@
                 return { totalCount, totalSpent, byChar };
             }, [items]);
 
-            const availableTypes = useMemo(() => ['all', ...appSettings.customTypes], [appSettings.customTypes]);
+            // 修改: 根據收藏庫內容動態過濾可用類型
+            const availableTypes = useMemo(() => {
+                // 1. 找出所有 collection 中有出現的 type
+                const existingTypes = new Set(items.map(i => i.type).filter(Boolean));
+                
+                // 2. 只保留在 customTypes 中且有庫存的，或者是不在 customTypes 但有庫存的
+                // 這裡我們按照 customTypes 的順序來排序
+                const visibleTypes = appSettings.customTypes.filter(t => existingTypes.has(t));
+                
+                // 3. 處理那些有庫存但不在設定列表中的類型 (防止資料遺失)
+                const extraTypes = Array.from(existingTypes).filter(t => !appSettings.customTypes.includes(t));
+                
+                return ['all', ...visibleTypes, ...extraTypes];
+            }, [items, appSettings.customTypes]);
 
             const getGroupedData = (list, mode, sortOrder, filterVal = 'all') => {
                 let processedList = list;
@@ -602,88 +619,17 @@
                                 <button onClick={() => deleteFromCatalog(item.id)} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-red-600 shadow-sm"><Icon name="Trash2" size={14} /></button>
                             </div>
                         </div>
-                        <div className="p-3">
+                        <div className="p-3 relative">
                             <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${theme.badge}`}>{item.character}</span><span className="text-[10px] text-gray-500 border px-1 rounded">{item.type}</span></div>
                             <h3 className="font-bold text-gray-800 text-sm truncate">{item.name}</h3>
-                            <p className="text-sm font-bold text-red-500 mt-1">原價: {item.officialPrice ? `${item.officialPrice}r` : '?'}</p>
+                            {/* 原價顯示修改：右下角，黑色，放大 */}
+                            <div className="flex justify-end mt-2">
+                                <span className="text-xl font-bold text-black">{item.officialPrice ? `${item.officialPrice}r` : ''}</span>
+                            </div>
                         </div>
                     </div>
                 );
             };
-
-            // --- Settings Modal ---
-            const SettingsModal = () => (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center border-b pb-3">
-                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icon name="Settings" /> 設定</h3>
-                            <button onClick={()=>setIsSettingsOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button>
-                        </div>
-                        
-                        <div className="flex gap-2 border-b pb-2">
-                            {['layout', 'types', 'data'].map(t => (
-                                <button key={t} onClick={()=>setSettingsTab(t)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${settingsTab===t ? 'bg-slate-900 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-                                    {t==='layout' ? '版面' : t==='types' ? '類型管理' : '資料'}
-                                </button>
-                            ))}
-                        </div>
-
-                        {settingsTab === 'layout' && (
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">每行顯示數量 (Grid Columns)</label>
-                                    <div className="flex gap-2">
-                                        {[2,3,4,5].map(cols => (
-                                            <button key={cols} onClick={()=>setAppSettings(prev=>({...prev, layoutCols: cols}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.layoutCols===cols ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-                                                {cols}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {settingsTab === 'types' && (
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label>
-                                    <div className="flex gap-2">
-                                        <input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onChange={e=>setNewTypeInput(e.target.value)} />
-                                        <button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">目前類型列表 (點擊刪除)</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {appSettings.customTypes.map(t => (
-                                            <span key={t} className="px-3 py-1 bg-gray-100 rounded-full text-xs flex items-center gap-1 group">
-                                                {t}
-                                                <button onClick={()=>handleDeleteType(t)} className="text-gray-400 hover:text-red-500"><Icon name="X" size={12}/></button>
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {settingsTab === 'data' && (
-                            <div className="space-y-4">
-                                <div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800">
-                                    <p className="font-bold mb-1">批次匯入：</p>
-                                    <p>貼上 Excel (含標題) 或 JSON。匯入後將存入共用圖鑑。</p>
-                                </div>
-                                <textarea className="w-full h-32 p-3 border rounded-xl text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea>
-                                <div className="flex gap-2">
-                                    <button onClick={handleBulkImport} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">匯入</button>
-                                    <button onClick={handleExportCatalog} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded hover:bg-gray-50">匯出</button>
-                                </div>
-                                <hr />
-                                <button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-2 rounded hover:bg-red-50 text-sm">⚠️ 清空本地快取資料</button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
 
             return (
                 <div className="min-h-screen bg-gray-50 pb-24 md:pb-0 md:pl-64">
@@ -692,11 +638,14 @@
                         <div className="p-6 border-b border-slate-800"><h1 className="text-2xl font-bold tracking-wider flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400"><Icon name="Star" className="text-yellow-400" size={24} /> 深空收藏艙</h1></div>
                         <div className="px-4 py-4 flex flex-col gap-2">
                             {user && !user.isAnonymous ? <div className="bg-slate-800 rounded-xl p-3 flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">{user.photoURL?<img src={user.photoURL} className="w-full h-full rounded-full"/>:user.email[0].toUpperCase()}</div><div className="flex-1 min-w-0"><p className="text-sm font-bold truncate">{user.displayName||'獵人'}</p><p className="text-xs text-slate-400">已連線</p></div><button onClick={handleLogout}><Icon name="LogOut" size={16}/></button></div> : <button onClick={handleLogin} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl flex items-center justify-center gap-2"><Icon name="LogIn" size={18}/> Google 登入</button>}
-                            <button onClick={()=>setIsSettingsOpen(true)} className="w-full border border-slate-700 text-slate-300 py-2 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800"><Icon name="Settings" size={16}/> 設定與管理</button>
                         </div>
                         <nav className="flex-1 px-4 space-y-2">
                             {['collection','templates','stats'].map(t => <button key={t} onClick={()=>setActiveTab(t)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab===t?'bg-blue-600 text-white':'hover:bg-slate-800 text-slate-300'}`}><Icon name={t==='collection'?'Package':t==='templates'?'ShoppingBag':'User'} size={20}/>{t==='collection'?'我的收藏庫':t==='templates'?'週邊圖鑑':'獵人檔案'}</button>)}
                         </nav>
+                        {/* 設定按鈕移至此處 */}
+                        <div className="px-4 pb-2">
+                             <button onClick={()=>setIsSettingsOpen(true)} className="w-full border border-slate-700 text-slate-400 text-xs py-1.5 rounded-lg flex items-center justify-center gap-1 hover:bg-slate-800 hover:text-slate-200"><Icon name="Settings" size={14}/> 設定</button>
+                        </div>
                         <div className="p-4 bg-slate-800"><p className="text-xs text-slate-400">總花費</p><p className="text-xl font-bold text-green-400">NT$ {stats.totalSpent.toLocaleString()}</p></div>
                     </aside>
 
@@ -710,6 +659,7 @@
                     </div>
 
                     <main className="p-4 md:p-8 max-w-6xl mx-auto">
+                        {/* ... existing collection view ... */}
                         {activeTab === 'collection' && (
                             <div className="space-y-6 animate-fade-in">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -741,6 +691,7 @@
                             </div>
                         )}
 
+                        {/* ... existing templates view ... */}
                         {activeTab === 'templates' && (
                             <div className="space-y-6 animate-fade-in">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -779,8 +730,87 @@
                         )}
                     </main>
 
-                    {/* Modals */}
-                    {isSettingsOpen && <SettingsModal />}
+                    {/* Integrated Settings Modal */}
+                    {isSettingsOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                            <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-center border-b pb-3">
+                                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icon name="Settings" /> 設定</h3>
+                                    <button onClick={()=>setIsSettingsOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button>
+                                </div>
+                                
+                                <div className="flex gap-2 border-b pb-2">
+                                    {['layout', 'types', 'data'].map(t => (
+                                        <button key={t} onClick={()=>setSettingsTab(t)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${settingsTab===t ? 'bg-slate-900 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                                            {t==='layout' ? '版面' : t==='types' ? '類型管理' : '資料'}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {settingsTab === 'layout' && (
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">每行顯示數量 (Grid Columns)</label>
+                                            <div className="flex gap-2">
+                                                {[2,3,4,5].map(cols => (
+                                                    <button key={cols} onClick={()=>setAppSettings(prev=>({...prev, layoutCols: cols}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.layoutCols===cols ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                                        {cols}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {settingsTab === 'types' && (
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label>
+                                            <div className="flex gap-2">
+                                                <input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onChange={e=>setNewTypeInput(e.target.value)} />
+                                                <button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">目前類型列表 (可拖曳排序，點擊刪除)</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {appSettings.customTypes.map((t, index) => (
+                                                    <span 
+                                                        key={t} 
+                                                        className="px-3 py-1 bg-gray-100 rounded-full text-xs flex items-center gap-1 group cursor-grab active:cursor-grabbing"
+                                                        draggable
+                                                        onDragStart={(e) => handleDragStart(e, index, 'settings-type')}
+                                                        onDragEnter={(e) => dragOverItem.current = index}
+                                                        onDragEnd={handleDragEnd}
+                                                        onDragOver={(e) => e.preventDefault()}
+                                                    >
+                                                        {t}
+                                                        <button onClick={()=>handleDeleteType(t)} className="text-gray-400 hover:text-red-500"><Icon name="X" size={12}/></button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {settingsTab === 'data' && (
+                                    <div className="space-y-4">
+                                        <div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800">
+                                            <p className="font-bold mb-1">批次匯入：</p>
+                                            <p>貼上 Excel (含標題) 或 JSON。匯入後將存入共用圖鑑。</p>
+                                        </div>
+                                        <textarea className="w-full h-32 p-3 border rounded-xl text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea>
+                                        <div className="flex gap-2">
+                                            <button onClick={handleBulkImport} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">匯入</button>
+                                            <button onClick={handleExportCatalog} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded hover:bg-gray-50">匯出</button>
+                                        </div>
+                                        <hr />
+                                        <button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-2 rounded hover:bg-red-50 text-sm">⚠️ 清空本地快取資料</button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {isModalOpen && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

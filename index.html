@@ -105,24 +105,24 @@
         const App = () => {
             const [user, setUser] = useState(null);
             
-            // 修改 1: 初始化時從 LocalStorage 讀取上次的分頁，若無則預設 'collection'
             const [activeTab, setActiveTab] = useState(() => {
                 return localStorage.getItem('deepspace_active_tab') || 'collection';
             });
 
             const [groupingMode, setGroupingMode] = useState('none'); 
             const [collectionGroupingMode, setCollectionGroupingMode] = useState('none'); 
+            const [typeFilter, setTypeFilter] = useState('all'); // 新增：類型篩選
             const [dateSortOrder, setDateSortOrder] = useState('desc'); 
             
             // 資料狀態
-            const [items, setItems] = useState([]); // 我的收藏 (私有)
-            const [catalogItems, setCatalogItems] = useState([]); // 週邊圖鑑 (公開)
+            const [items, setItems] = useState([]); 
+            const [catalogItems, setCatalogItems] = useState([]); 
             
             // UI 狀態
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isDataModalOpen, setIsDataModalOpen] = useState(false);
             const [editingItem, setEditingItem] = useState(null); 
-            const [modalMode, setModalMode] = useState('collection'); // 'collection' | 'catalog'
+            const [modalMode, setModalMode] = useState('collection');
             const [formData, setFormData] = useState({});
             const [importJson, setImportJson] = useState('');
             
@@ -130,10 +130,14 @@
             const dragOverItem = useRef(null);
             const fileInputRef = useRef(null);
 
-            // 修改 2: 當 activeTab 改變時，儲存到 LocalStorage
             useEffect(() => {
                 localStorage.setItem('deepspace_active_tab', activeTab);
             }, [activeTab]);
+
+            // 當分組模式改變時，重置類型篩選
+            useEffect(() => {
+                setTypeFilter('all');
+            }, [collectionGroupingMode]);
 
             // --- 1. 初始化與 Auth ---
             useEffect(() => {
@@ -176,6 +180,7 @@
                     const userColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'items');
                     unsubCollection = onSnapshot(userColl, (snapshot) => {
                         const cloudItems = snapshot.docs.map(doc => doc.data());
+                        cloudItems.sort((a, b) => (a.order || 0) - (b.order || 0));
                         setItems(cloudItems);
                     }, (err) => console.error("Collection sync error:", err));
                 } else {
@@ -336,17 +341,11 @@
                     if (isFirebaseInitialized && user) {
                         const batch = writeBatch(db);
                         const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
-                        
                         newFlatList.forEach((item, index) => {
                             const ref = doc(db, path, item.id);
                             batch.update(ref, { order: index });
                         });
-                        
-                        try {
-                            await batch.commit();
-                        } catch (err) {
-                            console.error("Batch order update failed", err);
-                        }
+                        try { await batch.commit(); } catch (err) { console.error(err); }
                     }
                 } else if (type === 'catalog') {
                     if (!isFirebaseInitialized) {
@@ -365,6 +364,31 @@
                     setCatalogItems(newOrderList);
                 }
                 dragItem.current = null; dragOverItem.current = null;
+            };
+
+            // 新增：手動移動功能 (上移/下移)
+            const handleMoveStack = async (index, direction) => {
+                // 僅支援 collection 'none' 模式
+                const currentStacks = getStackedItems(items, 'none');
+                const newIndex = index + direction;
+                if (newIndex < 0 || newIndex >= currentStacks.length) return;
+
+                const moved = currentStacks[index];
+                currentStacks.splice(index, 1);
+                currentStacks.splice(newIndex, 0, moved);
+                
+                const newFlatList = currentStacks.flatMap(s => s.instances);
+                setItems(newFlatList);
+
+                if (isFirebaseInitialized && user) {
+                    const batch = writeBatch(db);
+                    const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
+                    newFlatList.forEach((item, idx) => {
+                        const ref = doc(db, path, item.id);
+                        batch.update(ref, { order: idx });
+                    });
+                    try { await batch.commit(); } catch (err) { console.error(err); }
+                }
             };
 
             // --- Modal Actions ---
@@ -426,8 +450,6 @@
                     }
                 }
                 setIsModalOpen(false);
-                // 修改 3: 移除自動跳轉至 collection 的邏輯，保持在當前分頁
-                // if (modalMode === 'collection' && activeTab === 'templates') setActiveTab('collection');
                 if (modalMode === 'collection' && activeTab === 'templates') {
                    alert('已加入收藏！');
                 }
@@ -459,9 +481,21 @@
                 return { totalCount, totalSpent, byChar };
             }, [items]);
 
+            // 取得目前所有的類型 (用於過濾)
+            const availableTypes = useMemo(() => {
+                const types = new Set(items.map(i => i.type).filter(Boolean));
+                return ['all', ...Array.from(types)];
+            }, [items]);
+
             const getGroupedData = (list, mode, sortOrder) => {
-                if (mode === 'none') return { '全部': list };
-                const grouped = list.reduce((acc, item) => {
+                let processedList = list;
+                // 應用類型篩選
+                if (mode === 'type' && typeFilter !== 'all') {
+                    processedList = list.filter(i => i.type === typeFilter);
+                }
+
+                if (mode === 'none') return { '全部': processedList };
+                const grouped = processedList.reduce((acc, item) => {
                     let key = '';
                     if (mode === 'series') key = item.series || '其他系列';
                     else if (mode === 'type') key = item.type || '其他類型';
@@ -484,7 +518,7 @@
             const groupedData = useMemo(() => ({
                 collection: getGroupedData(items, collectionGroupingMode, dateSortOrder),
                 catalog: getGroupedData(catalogItems, groupingMode, 'desc')
-            }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder]);
+            }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, typeFilter]);
 
             // --- Component UI (Cards) ---
             const StackCard = ({ stack, index, isDraggable }) => {
@@ -500,6 +534,14 @@
 
                 return (
                     <div draggable={isDraggable} onDragStart={(e) => handleDragStart(e, index, 'collection')} onDragEnter={(e) => dragOverItem.current = index} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative ${isDraggable ? 'cursor-move' : ''}`}>
+                        {/* 移動按鈕 (僅在 none 模式且滑鼠懸停時顯示，手機版則一直顯示或點擊顯示) */}
+                        {isDraggable && (
+                            <div className="absolute top-2 left-2 z-20 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 rounded-lg p-1 backdrop-blur-sm">
+                                <button onClick={(e) => {e.stopPropagation(); handleMoveStack(index, -1)}} className="p-1 hover:bg-blue-100 rounded text-blue-600 disabled:opacity-30" disabled={index === 0}><Icon name="ArrowLeft" size={14} /></button>
+                                <button onClick={(e) => {e.stopPropagation(); handleMoveStack(index, 1)}} className="p-1 hover:bg-blue-100 rounded text-blue-600 disabled:opacity-30"><Icon name="ArrowRight" size={14} /></button>
+                            </div>
+                        )}
+
                         {stack.totalCount > 1 && <div className="absolute top-2 left-2 z-10 bg-slate-900 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">x{stack.totalCount}</div>}
                         <div className={`h-40 w-full relative bg-gray-100 flex items-center justify-center overflow-hidden`}>
                             {stack.image ? <img src={stack.image} className="w-full h-full object-cover pointer-events-none" /> : <Icon name="Image" className={`opacity-20 ${theme.text}`} size={32} />}
@@ -589,6 +631,22 @@
                                         {[{id:'none',l:'全部'},{id:'series',l:'依系列'},{id:'type',l:'依類型'},{id:'character',l:'依角色'},{id:'date',l:'依收物日'}].map(m=><button key={m.id} onClick={()=>setCollectionGroupingMode(m.id)} className={`px-3 py-1.5 text-xs border rounded-lg whitespace-nowrap ${collectionGroupingMode===m.id?'bg-slate-900 text-white':'bg-white text-gray-500'}`}>{m.l}</button>)}
                                     </div>
                                 </div>
+                                
+                                {/* 類型篩選器 (僅在 依類型 模式下顯示) */}
+                                {collectionGroupingMode === 'type' && (
+                                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide animate-fade-in">
+                                        {availableTypes.map(t => (
+                                            <button 
+                                                key={t}
+                                                onClick={() => setTypeFilter(t)}
+                                                className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors ${typeFilter === t ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-transparent hover:bg-gray-200'}`}
+                                            >
+                                                {t === 'all' ? '所有類型' : t}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
                                 <div className="space-y-8">
                                     {Object.entries(groupedData.collection).map(([gName, gItems]) => {
                                         const stacks = getStackedItems(gItems, collectionGroupingMode);
@@ -635,7 +693,10 @@
                     {isDataModalOpen && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                             <div className="bg-white rounded-3xl w-full max-w-2xl p-6 space-y-4">
-                                <div className="flex justify-between"><h3 className="font-bold">匯入公開圖鑑</h3><button onClick={()=>setIsDataModalOpen(false)}><Icon name="X"/></button></div>
+                                <div className="flex justify-between items-center">
+                                    <h3 className="font-bold">匯入公開圖鑑</h3>
+                                    <button onClick={()=>setIsDataModalOpen(false)}><Icon name="X"/></button>
+                                </div>
                                 <p className="text-sm text-gray-500">貼上 Excel (含標題 name, character...) 或 JSON。注意：匯入後所有人可見。</p>
                                 <textarea className="w-full h-40 border rounded p-2 text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea>
                                 <button onClick={handleBulkImport} className="w-full bg-blue-600 text-white py-2 rounded">確認匯入</button>

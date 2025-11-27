@@ -31,7 +31,7 @@
     <script type="text/babel" data-type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         const { useState, useEffect, useMemo, useRef } = React;
 
@@ -44,9 +44,6 @@
             // ...
         };
 
-        // --- 全域設定 ---
-        // 使用固定的 App ID 確保所有使用者連線到同一個公開圖鑑
-        // 這意味著所有使用此 HTML 的人都會讀取同一份公開圖鑑資料
         const GLOBAL_APP_ID = "deepspace_shared_v1";
 
         // --- 初始化 Firebase ---
@@ -114,6 +111,7 @@
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isDataModalOpen, setIsDataModalOpen] = useState(false);
             const [editingItem, setEditingItem] = useState(null); 
+            const [modalMode, setModalMode] = useState('collection'); // 'collection' | 'catalog'
             const [formData, setFormData] = useState({});
             const [importJson, setImportJson] = useState('');
             
@@ -124,7 +122,6 @@
             // --- 1. 初始化與 Auth ---
             useEffect(() => {
                 if (!isFirebaseInitialized) {
-                    // 若無 Firebase，全讀 LocalStorage
                     const localItems = localStorage.getItem('deepspace_items_v7_local');
                     if (localItems) setItems(JSON.parse(localItems));
                     const localCatalog = localStorage.getItem('deepspace_catalog_v7_local');
@@ -132,18 +129,14 @@
                     return;
                 }
 
-                // 監聽 Auth 狀態
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
                     if (currentUser && !currentUser.isAnonymous) {
-                        // Google 登入
                         setUser(currentUser);
                     } else {
-                        // 未登入或匿名
                         setUser(null);
                     }
                 });
                 
-                // 嘗試匿名登入以讀取公開圖鑑 (若未登入)
                 if (!auth.currentUser) {
                     signInAnonymously(auth).catch(e => console.log("Anon login failed", e));
                 }
@@ -151,54 +144,38 @@
                 return () => unsubscribe();
             }, []);
 
-            // --- 2. 同步資料 (核心邏輯) ---
+            // --- 2. 同步資料 ---
             useEffect(() => {
                 if (!isFirebaseInitialized) return;
 
-                // A. 同步【公開圖鑑】 (所有人可見)
-                // 路徑: artifacts/{GLOBAL_APP_ID}/public/data/catalog
                 const catalogColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'public', 'data', 'catalog');
-                
                 const unsubCatalog = onSnapshot(catalogColl, (snapshot) => {
                     const cloudCatalog = snapshot.docs.map(doc => doc.data());
-                    // 依照 order 欄位排序 (若有)
                     cloudCatalog.sort((a, b) => (a.order || 0) - (b.order || 0));
                     setCatalogItems(cloudCatalog);
-                }, (err) => {
-                    // 忽略權限錯誤(可能剛登入尚未取得token)
-                    console.log("Catalog sync waiting...");
-                });
+                }, (err) => console.log("Catalog sync waiting..."));
 
-                // B. 同步【我的收藏】 (依是否登入)
                 let unsubCollection = () => {};
-
                 if (user) {
-                    // 已登入：讀取 Firestore 私有區
                     const userColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'items');
                     unsubCollection = onSnapshot(userColl, (snapshot) => {
                         const cloudItems = snapshot.docs.map(doc => doc.data());
                         setItems(cloudItems);
                     }, (err) => console.error("Collection sync error:", err));
                 } else {
-                    // 未登入：讀取 LocalStorage
                     const localItems = localStorage.getItem('deepspace_items_v7_local');
                     if (localItems) setItems(JSON.parse(localItems));
                 }
 
-                return () => {
-                    unsubCatalog();
-                    unsubCollection();
-                };
+                return () => { unsubCatalog(); unsubCollection(); };
             }, [user]);
 
-            // 當未登入時，收藏變更寫入 LocalStorage
             useEffect(() => {
                 if (!isFirebaseInitialized || !user) {
                     localStorage.setItem('deepspace_items_v7_local', JSON.stringify(items));
                 }
             }, [items, user]);
 
-            // 當沒有 Firebase 時，圖鑑變更寫入 LocalStorage (測試用)
             useEffect(() => {
                 if (!isFirebaseInitialized) {
                     localStorage.setItem('deepspace_catalog_v7_local', JSON.stringify(catalogItems));
@@ -213,9 +190,7 @@
             };
             const handleLogout = () => signOut(auth);
 
-            // --- 資料寫入 (區分 公開/私有) ---
-            
-            // 寫入收藏 (私有)
+            // --- 資料寫入 ---
             const saveToCollection = async (newItem) => {
                 if (user && isFirebaseInitialized) {
                     const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
@@ -237,34 +212,47 @@
                 }
             };
 
-            // 寫入圖鑑 (公開) - 用於匯入或手動新增圖鑑
-            const saveToCatalog = async (newItem, orderIndex) => {
+            const saveToCatalog = async (newItem) => {
                 if (!isFirebaseInitialized) {
-                    setCatalogItems(prev => [...prev, newItem]);
-                    return; // 無 Firebase 只能存本地 State (暫時)
+                    setCatalogItems(prev => {
+                        const exists = prev.find(i => i.id === newItem.id);
+                        return exists ? prev.map(i => i.id === newItem.id ? newItem : i) : [...prev, newItem];
+                    });
+                    return;
                 }
                 const path = `artifacts/${GLOBAL_APP_ID}/public/data/catalog`;
-                // 加上 order 欄位以便排序
-                const itemWithOrder = { ...newItem, order: orderIndex !== undefined ? orderIndex : Date.now() };
-                await setDoc(doc(db, path, newItem.id), itemWithOrder);
+                // Check if we need to preserve existing order or set new
+                let order = newItem.order;
+                if (order === undefined) {
+                    order = Date.now(); // Default for new
+                }
+                await setDoc(doc(db, path, newItem.id), { ...newItem, order }, { merge: true });
             };
 
-            // --- 匯入功能 (寫入公開圖鑑) ---
+            const deleteFromCatalog = async (itemId) => {
+                if (confirm("警告：您正在從「共用圖鑑」中刪除此項目。\n這將會影響所有使用者看到的內容。\n\n確定要刪除嗎？")) {
+                    if (isFirebaseInitialized) {
+                        const path = `artifacts/${GLOBAL_APP_ID}/public/data/catalog`;
+                        await deleteDoc(doc(db, path, itemId));
+                    } else {
+                        setCatalogItems(prev => prev.filter(i => i.id !== itemId));
+                    }
+                }
+            };
+
+            // --- 匯入功能 ---
             const handleBulkImport = async () => {
                 if (!importJson.trim()) return;
                 try {
                     let parsedData = [];
                     const text = importJson.trim();
-                    // 簡單 JSON/CSV 解析 (同上版)
                     if (text.startsWith('[')) {
                         parsedData = JSON.parse(text);
                     } else {
-                        // CSV 解析邏輯
                         const rows = text.split('\n').map(r=>r.trim()).filter(r=>r);
                         const header = rows[0].toLowerCase();
                         const sep = header.includes('\t') ? '\t' : ',';
                         const cols = rows[0].split(sep).map(s=>s.trim());
-                        // 對照表
                         const mapKey = { 'name': 'name', '名稱': 'name', 'character': 'character', '角色': 'character', 'type': 'type', '類型': 'type', 'series': 'series', '系列': 'series', 'officialprice': 'officialPrice', '原價': 'officialPrice', 'image': 'image', '圖片': 'image' };
                         const keys = cols.map(c => mapKey[c.toLowerCase()] || c);
                         
@@ -286,7 +274,6 @@
 
                     if (parsedData.length === 0) throw new Error("無有效資料");
 
-                    // 寫入 Public Firestore
                     let count = 0;
                     const timestamp = Date.now();
                     
@@ -300,13 +287,12 @@
                                 series: item.series || '',
                                 officialPrice: item.officialPrice || 0,
                                 image: item.image || null,
-                                order: timestamp + count // 保持匯入順序
+                                order: timestamp + count 
                             };
-                            await saveToCatalog(newItem, timestamp + count);
+                            await saveToCatalog(newItem);
                             count++;
                         }
                     } else {
-                        // 本地預覽模式
                         const newItems = parsedData.map((item, i) => ({...item, id: `local_${i}`, order: i}));
                         setCatalogItems(prev => [...prev, ...newItems]);
                     }
@@ -320,24 +306,18 @@
                 }
             };
 
-            // --- 拖曳邏輯 ---
-            // 收藏庫：本地/私有排序 (因為個人可以自訂順序)
-            // 圖鑑：公開排序 (改變會影響所有人)
             const handleDragEnd = async (e) => {
                 e.target.classList.remove('dragging');
                 const type = e.dataTransfer.getData('type');
                 if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) return;
 
                 if (type === 'collection') {
-                    // 私有收藏排序 (僅本地更新 View，若要存雲端需加 order 欄位)
-                    // 這裡簡化為更新 items state
                     const currentStacks = getStackedItems(items, 'none');
                     const moved = currentStacks[dragItem.current];
                     currentStacks.splice(dragItem.current, 1);
                     currentStacks.splice(dragOverItem.current, 0, moved);
                     setItems(currentStacks.flatMap(s => s.instances));
                 } else if (type === 'catalog') {
-                    // 公開圖鑑排序 -> 寫入雲端
                     if (!isFirebaseInitialized) {
                         const _items = [...catalogItems];
                         const moved = _items[dragItem.current];
@@ -346,65 +326,79 @@
                         setCatalogItems(_items);
                         return;
                     }
-
-                    // 為了避免大量寫入，我們只交換這兩個 item 的 order，或者重算所有 order
-                    // 簡單做法：在前端重排，然後更新所有受影響的 order
+                    alert("提示：公開圖鑑的排序變更目前僅在本地暫時生效。");
                     const newOrderList = [...catalogItems];
                     const movedItem = newOrderList[dragItem.current];
                     newOrderList.splice(dragItem.current, 1);
                     newOrderList.splice(dragOverItem.current, 0, movedItem);
-                    
-                    // Optimistic update
                     setCatalogItems(newOrderList);
-
-                    // 寫回 Firestore (更新所有 items 的 order 欄位)
-                    // 注意：這會消耗大量寫入額度。
-                    // 優化：只更新受影響的。但為了簡單，我們假設圖鑑不大。
-                    // 這裡僅示範：
-                    /* const batch = writeBatch(db);
-                    newOrderList.forEach((item, idx) => {
-                        const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, item.id);
-                        batch.update(ref, { order: idx });
-                    });
-                    await batch.commit();
-                    */
-                   // 由於不想太複雜，我們暫時只做本地 View 的排序演示。若需共用排序，需啟用上方 batch update。
-                   alert("提示：公開圖鑑的排序變更目前僅在本地暫時生效，重新整理後會恢復原狀 (為了節省資料庫寫入額度)。\n若需永久儲存排序，需開啟 Batch Write 功能。");
                 }
                 dragItem.current = null; dragOverItem.current = null;
             };
 
-            // --- 儲存按鈕 (Modal) ---
+            // --- Modal Actions ---
+            const openModal = (item = null, template = null, mode = 'collection') => {
+                setModalMode(mode);
+                const defaultData = {
+                    id: Date.now().toString(),
+                    name: '', character: '沈星回', type: '徽章', series: '',
+                    officialPrice: '', acquiredPrice: '', date: new Date().toISOString().split('T')[0],
+                    image: null, note: '', quantity: 1
+                };
+                
+                if (mode === 'catalog' && item) {
+                    // 編輯圖鑑
+                    setEditingItem(item);
+                    setFormData({ ...item });
+                } else if (mode === 'collection') {
+                    // 收藏操作
+                    if (item) {
+                        setEditingItem(item);
+                        setFormData({ ...item, quantity: 1 });
+                    } else if (template) {
+                        setEditingItem(null);
+                        setFormData({ ...defaultData, ...template, quantity: 1, id: Date.now().toString() });
+                    } else {
+                        setEditingItem(null);
+                        setFormData(defaultData);
+                    }
+                }
+                setIsModalOpen(true);
+            };
+
             const handleSave = async () => {
                 if (!formData.name) return alert("請輸入名稱");
                 
-                // 判斷是 "新增到收藏" 還是 "編輯"
-                // 這裡的 Modal 邏輯比較複雜：
-                // 1. 如果是從圖鑑點 +，是新增到收藏
-                // 2. 如果是點收藏裡的編輯，是更新收藏
-                // 3. (新功能) 如果是手動新增圖鑑資料？目前 UI 只有匯入。
-                // 預設 Modal 都是操作 "收藏 (Collection)"
-                
-                const qty = Math.max(1, parseInt(formData.quantity) || 1);
-                
-                if (editingItem) {
-                    // 編輯現有收藏
+                if (modalMode === 'catalog') {
+                    // 儲存到圖鑑
                     const itemToSave = { ...formData };
+                    // 移除與圖鑑無關的欄位 (收藏用)
                     delete itemToSave.quantity;
-                    await saveToCollection(itemToSave);
+                    delete itemToSave.acquiredPrice;
+                    delete itemToSave.date;
+                    delete itemToSave.note;
+                    
+                    await saveToCatalog(itemToSave);
                 } else {
-                    // 新增到收藏
-                    for (let i = 0; i < qty; i++) {
-                        const newItem = { ...formData, id: Date.now().toString() + '-' + i };
-                        delete newItem.quantity;
-                        await saveToCollection(newItem);
+                    // 儲存到收藏
+                    const qty = Math.max(1, parseInt(formData.quantity) || 1);
+                    if (editingItem) {
+                        const itemToSave = { ...formData };
+                        delete itemToSave.quantity;
+                        await saveToCollection(itemToSave);
+                    } else {
+                        for (let i = 0; i < qty; i++) {
+                            const newItem = { ...formData, id: Date.now().toString() + '-' + i };
+                            delete newItem.quantity;
+                            await saveToCollection(newItem);
+                        }
                     }
                 }
                 setIsModalOpen(false);
-                if (activeTab === 'templates') setActiveTab('collection'); // 跳轉看結果
+                if (modalMode === 'collection' && activeTab === 'templates') setActiveTab('collection');
             };
 
-            // --- 輔助函式 ---
+            // --- Helpers ---
             const getStackedItems = (sourceItems, mode) => {
                 const map = new Map();
                 const stacks = [];
@@ -430,7 +424,6 @@
                 return { totalCount, totalSpent, byChar };
             }, [items]);
 
-            // Grouping Logic
             const getGroupedData = (list, mode, sortOrder) => {
                 if (mode === 'none') return { '全部': list };
                 const grouped = list.reduce((acc, item) => {
@@ -486,7 +479,7 @@
                                         <div className="flex items-center gap-2">
                                             {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">x{inst.count}</span>}
                                             <div className="flex gap-1">
-                                                <button onClick={(e)=>{e.stopPropagation(); openModal(inst);}} className="p-1 border rounded hover:text-blue-600"><Icon name="Edit3" size={10}/></button>
+                                                <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1 border rounded hover:text-blue-600"><Icon name="Edit3" size={10}/></button>
                                                 <button onClick={(e)=>{e.stopPropagation(); deleteFromCollection(inst.id);}} className="p-1 border rounded hover:text-red-500"><Icon name="Trash2" size={10}/></button>
                                             </div>
                                         </div>
@@ -504,7 +497,20 @@
                     <div draggable={isDraggable} onDragStart={(e) => handleDragStart(e, index, 'catalog')} onDragEnter={(e) => dragOverItem.current = index} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group relative ${isDraggable ? 'cursor-move' : ''}`}>
                         <div className="aspect-square bg-gray-50 relative overflow-hidden">
                             <img src={item.image} alt={item.name} className="w-full h-full object-cover pointer-events-none" />
-                            <button onClick={() => openModal(null, item)} className="absolute bottom-3 right-3 bg-white text-blue-600 p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all z-10"><Icon name="Plus" size={24} /></button>
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                            {/* 加入收藏按鈕 (大) */}
+                            <button onClick={() => openModal(null, item, 'collection')} className="absolute bottom-3 right-3 bg-white text-blue-600 p-2 rounded-full shadow-lg transform translate-y-10 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all z-20" title="加入我的收藏">
+                                <Icon name="Plus" size={24} />
+                            </button>
+                            {/* 管理按鈕 (小) */}
+                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                <button onClick={() => openModal(item, null, 'catalog')} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-blue-600 shadow-sm" title="編輯圖鑑資料">
+                                    <Icon name="Edit3" size={14} />
+                                </button>
+                                <button onClick={() => deleteFromCatalog(item.id)} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-red-600 shadow-sm" title="從圖鑑刪除">
+                                    <Icon name="Trash2" size={14} />
+                                </button>
+                            </div>
                         </div>
                         <div className="p-3">
                             <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${theme.badge}`}>{item.character}</span><span className="text-[10px] text-gray-500 border px-1 rounded">{item.type}</span></div>
@@ -524,7 +530,7 @@
                             {user ? <div className="bg-slate-800 rounded-xl p-3 flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">{user.photoURL?<img src={user.photoURL} className="w-full h-full rounded-full"/>:user.email[0].toUpperCase()}</div><div className="flex-1 min-w-0"><p className="text-sm font-bold truncate">{user.displayName||'獵人'}</p><p className="text-xs text-slate-400">已連線私有庫</p></div><button onClick={handleLogout}><Icon name="LogOut" size={16}/></button></div> : <button onClick={handleLogin} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl flex items-center justify-center gap-2"><Icon name="LogIn" size={18}/> Google 登入</button>}
                         </div>
                         <nav className="flex-1 px-4 space-y-2">
-                            {['collection','templates','stats'].map(t => <button key={t} onClick={()=>setActiveTab(t)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab===t?'bg-blue-600 text-white':'hover:bg-slate-800 text-slate-300'}`}><Icon name={t==='collection'?'Package':t==='templates'?'ShoppingBag':'User'} size={20}/>{t==='collection'?'我的收藏庫':t==='templates'?'週邊圖鑑':'獵人檔案'}</button>)}
+                            {['collection','templates','stats'].map(t => <button key={t} onClick={()=>setActiveTab(t)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab===t?'bg-blue-600 text-white':'hover:bg-slate-800 text-slate-300'}`}><Icon name={t==='collection'?'Package':t==='templates'?'ShoppingBag':'User'} size={20}/>{t==='collection'?'我的收藏庫':t==='templates'?'週邊圖鑑 (共用)':'獵人檔案'}</button>)}
                         </nav>
                     </aside>
 
@@ -539,7 +545,7 @@
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                     <div className="flex-1 flex items-center gap-4">
                                         <h2 className="text-2xl font-bold text-gray-800">我的收藏庫 <span className="text-xs font-normal text-gray-400 ml-2">{user ? '(雲端私有)' : '(本機暫存)'}</span></h2>
-                                        <button onClick={()=>openModal()} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-md"><Icon name="Plus" size={16}/> 新增</button>
+                                        <button onClick={()=>openModal(null, null, 'collection')} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-md"><Icon name="Plus" size={16}/> 新增</button>
                                     </div>
                                     <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                                         {collectionGroupingMode==='date' && <button onClick={()=>setDateSortOrder(p=>p==='desc'?'asc':'desc')} className="px-3 py-1.5 text-xs border rounded-lg bg-white text-blue-600 flex gap-1"><Icon name={dateSortOrder==='desc'?'ArrowDownNarrowWide':'ArrowUpNarrowWide'} size={14}/> {dateSortOrder==='desc'?'從新到舊':'從舊到新'}</button>}
@@ -603,19 +609,42 @@
                     {isModalOpen && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                             <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-                                <h3 className="font-bold">{editingItem?'編輯收藏':'加入收藏'}</h3>
+                                <h3 className="font-bold">
+                                    {modalMode === 'catalog' 
+                                        ? (editingItem ? '編輯公開圖鑑' : '新增公開圖鑑') 
+                                        : (editingItem ? '編輯我的收藏' : '加入我的收藏')
+                                    }
+                                </h3>
+                                
                                 <div onClick={()=>fileInputRef.current.click()} className="w-32 h-32 mx-auto border-2 border-dashed rounded flex items-center justify-center cursor-pointer">{formData.image?<img src={formData.image} className="w-full h-full object-cover"/>:<Icon name="Upload"/>}<input type="file" ref={fileInputRef} className="hidden" onChange={(e)=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=()=>setFormData(p=>({...p,image:r.result}));r.readAsDataURL(f);}}}/></div>
+                                
                                 <input className="w-full border p-2 rounded" placeholder="名稱" value={formData.name} onChange={e=>setFormData({...formData,name:e.target.value})}/>
+                                
                                 <div className="grid grid-cols-2 gap-2">
                                     <select className="border p-2 rounded" value={formData.character} onChange={e=>setFormData({...formData,character:e.target.value})}>{CHARACTERS.map(c=><option key={c}>{c}</option>)}</select>
                                     <input className="border p-2 rounded" placeholder="系列" value={formData.series} onChange={e=>setFormData({...formData,series:e.target.value})}/>
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <input type="number" className="border p-2 rounded" placeholder="價格" value={formData.acquiredPrice} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
-                                    <input type="date" className="border p-2 rounded" value={formData.date} onChange={e=>setFormData({...formData,date:e.target.value})}/>
+                                    <input className="border p-2 rounded" placeholder="類型" value={formData.type} onChange={e=>setFormData({...formData,type:e.target.value})}/>
+                                    {/* 官方價格 (圖鑑用) */}
+                                    <input type="number" className="border p-2 rounded" placeholder="官方原價" value={formData.officialPrice} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/>
                                 </div>
-                                {!editingItem && <div className="flex items-center gap-2"><label>數量:</label><input type="number" className="border p-1 w-16" value={formData.quantity} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div>}
-                                <button onClick={handleSave} className="w-full bg-slate-900 text-white py-3 rounded">儲存</button>
+
+                                {modalMode === 'collection' && (
+                                    <>
+                                        <hr className="border-gray-100" />
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <input type="number" className="border p-2 rounded" placeholder="入手價格" value={formData.acquiredPrice} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
+                                            <input type="date" className="border p-2 rounded" value={formData.date} onChange={e=>setFormData({...formData,date:e.target.value})}/>
+                                        </div>
+                                        {!editingItem && <div className="flex items-center gap-2"><label>數量:</label><input type="number" className="border p-1 w-16" value={formData.quantity} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div>}
+                                        <textarea className="w-full border p-2 rounded h-20" placeholder="備註..." value={formData.note} onChange={e=>setFormData({...formData,note:e.target.value})}/>
+                                    </>
+                                )}
+
+                                <button onClick={handleSave} className="w-full bg-slate-900 text-white py-3 rounded">
+                                    {modalMode === 'catalog' ? '更新圖鑑 (公開)' : '儲存收藏'}
+                                </button>
                                 <button onClick={()=>setIsModalOpen(false)} className="w-full text-gray-500 py-2">取消</button>
                             </div>
                         </div>

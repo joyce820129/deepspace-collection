@@ -128,13 +128,13 @@
             
             const dragItem = useRef(null);
             const dragOverItem = useRef(null);
+            const dragType = useRef(null); // 新增：用 ref 記錄拖曳類型，解決 dragEnd 讀不到 dataTransfer 的問題
             const fileInputRef = useRef(null);
 
             useEffect(() => {
                 localStorage.setItem('deepspace_active_tab', activeTab);
             }, [activeTab]);
 
-            // 當分組模式改變時，重置類型篩選
             useEffect(() => {
                 setTypeFilter('all');
             }, [collectionGroupingMode]);
@@ -327,15 +327,27 @@
 
             const handleDragEnd = async (e) => {
                 e.target.classList.remove('dragging');
-                const type = e.dataTransfer.getData('type');
-                if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) return;
+                // 使用 ref 來獲取類型，因為 dragend 事件中 dataTransfer 可能不可用
+                const type = dragType.current;
+                
+                if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) {
+                    dragItem.current = null;
+                    dragOverItem.current = null;
+                    return;
+                }
 
                 if (type === 'collection') {
                     const currentStacks = getStackedItems(items, 'none');
                     const moved = currentStacks[dragItem.current];
+                    
+                    // 執行移動
                     currentStacks.splice(dragItem.current, 1);
                     currentStacks.splice(dragOverItem.current, 0, moved);
+                    
+                    // 展平回原始陣列
                     const newFlatList = currentStacks.flatMap(s => s.instances);
+                    
+                    // 立即更新本地狀態以獲得即時回饋
                     setItems(newFlatList);
 
                     if (isFirebaseInitialized && user) {
@@ -363,7 +375,11 @@
                     newOrderList.splice(dragOverItem.current, 0, movedItem);
                     setCatalogItems(newOrderList);
                 }
-                dragItem.current = null; dragOverItem.current = null;
+                
+                // 重置
+                dragItem.current = null;
+                dragOverItem.current = null;
+                dragType.current = null;
             };
 
             // 新增：手動移動功能 (上移/下移)
@@ -450,9 +466,7 @@
                     }
                 }
                 setIsModalOpen(false);
-                if (modalMode === 'collection' && activeTab === 'templates') {
-                   alert('已加入收藏！');
-                }
+                // 已移除彈窗
             };
 
             // --- Helpers ---
@@ -481,7 +495,6 @@
                 return { totalCount, totalSpent, byChar };
             }, [items]);
 
-            // 取得目前所有的類型 (用於過濾)
             const availableTypes = useMemo(() => {
                 const types = new Set(items.map(i => i.type).filter(Boolean));
                 return ['all', ...Array.from(types)];
@@ -489,7 +502,6 @@
 
             const getGroupedData = (list, mode, sortOrder) => {
                 let processedList = list;
-                // 應用類型篩選
                 if (mode === 'type' && typeFilter !== 'all') {
                     processedList = list.filter(i => i.type === typeFilter);
                 }
@@ -520,6 +532,18 @@
                 catalog: getGroupedData(catalogItems, groupingMode, 'desc')
             }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, typeFilter]);
 
+            // --- 拖曳處理函式 ---
+            const handleDragStart = (e, index, type) => {
+                const currentMode = type === 'collection' ? collectionGroupingMode : groupingMode;
+                if (currentMode !== 'none') { e.preventDefault(); return; }
+                
+                dragItem.current = index;
+                dragType.current = type; // 設定拖曳類型
+                e.target.classList.add('dragging');
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData('type', type);
+            };
+
             // --- Component UI (Cards) ---
             const StackCard = ({ stack, index, isDraggable }) => {
                 const theme = CHARACTER_THEMES[stack.character] || CHARACTER_THEMES["其他"];
@@ -533,8 +557,15 @@
                 }, [stack.instances]);
 
                 return (
-                    <div draggable={isDraggable} onDragStart={(e) => handleDragStart(e, index, 'collection')} onDragEnter={(e) => dragOverItem.current = index} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative ${isDraggable ? 'cursor-move' : ''}`}>
-                        {/* 移動按鈕 (僅在 none 模式且滑鼠懸停時顯示，手機版則一直顯示或點擊顯示) */}
+                    <div 
+                        draggable={isDraggable} 
+                        onDragStart={(e) => handleDragStart(e, index, 'collection')} 
+                        onDragEnter={(e) => dragOverItem.current = index} 
+                        onDragEnd={handleDragEnd} 
+                        onDragOver={(e) => e.preventDefault()} 
+                        className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative ${isDraggable ? 'cursor-move' : ''}`}
+                    >
+                        {/* 移動按鈕 */}
                         {isDraggable && (
                             <div className="absolute top-2 left-2 z-20 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 rounded-lg p-1 backdrop-blur-sm">
                                 <button onClick={(e) => {e.stopPropagation(); handleMoveStack(index, -1)}} className="p-1 hover:bg-blue-100 rounded text-blue-600 disabled:opacity-30" disabled={index === 0}><Icon name="ArrowLeft" size={14} /></button>
@@ -571,7 +602,14 @@
             const CatalogCard = ({ item, index, isDraggable }) => {
                 const theme = CHARACTER_THEMES[item.character] || CHARACTER_THEMES["其他"];
                 return (
-                    <div draggable={isDraggable} onDragStart={(e) => handleDragStart(e, index, 'catalog')} onDragEnter={(e) => dragOverItem.current = index} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group relative ${isDraggable ? 'cursor-move' : ''}`}>
+                    <div 
+                        draggable={isDraggable} 
+                        onDragStart={(e) => handleDragStart(e, index, 'catalog')} 
+                        onDragEnter={(e) => dragOverItem.current = index} 
+                        onDragEnd={handleDragEnd} 
+                        onDragOver={(e) => e.preventDefault()} 
+                        className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group relative ${isDraggable ? 'cursor-move' : ''}`}
+                    >
                         <div className="aspect-square bg-gray-50 relative overflow-hidden">
                             <img src={item.image} alt={item.name} className="w-full h-full object-cover pointer-events-none" />
                             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
@@ -592,7 +630,6 @@
                         <div className="p-3">
                             <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${theme.badge}`}>{item.character}</span><span className="text-[10px] text-gray-500 border px-1 rounded">{item.type}</span></div>
                             <h3 className="font-bold text-gray-800 text-sm truncate">{item.name}</h3>
-                            {/* 顯示官方價格，支援文字 */}
                             <p className="text-xs text-gray-500 mt-1">原價: {isNaN(Number(item.officialPrice)) || item.officialPrice === '' ? item.officialPrice : `${item.officialPrice}r`}</p>
                         </div>
                     </div>
@@ -632,7 +669,6 @@
                                     </div>
                                 </div>
                                 
-                                {/* 類型篩選器 (僅在 依類型 模式下顯示) */}
                                 {collectionGroupingMode === 'type' && (
                                     <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide animate-fade-in">
                                         {availableTypes.map(t => (
@@ -730,7 +766,6 @@
                                         <option value="" disabled>選擇類型</option>
                                         {MERCH_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
-                                    {/* 官方價格 (圖鑑用) - 文字輸入 */}
                                     <input type="text" className="border p-2 rounded" placeholder="原價 (可填文字)" value={formData.officialPrice} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/>
                                 </div>
 

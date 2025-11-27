@@ -162,6 +162,8 @@
                     const userColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'items');
                     unsubCollection = onSnapshot(userColl, (snapshot) => {
                         const cloudItems = snapshot.docs.map(doc => doc.data());
+                        // 依 order 排序
+                        cloudItems.sort((a, b) => (a.order || 0) - (b.order || 0));
                         setItems(cloudItems);
                     }, (err) => console.error("Collection sync error:", err));
                 } else {
@@ -194,13 +196,16 @@
 
             // --- 資料寫入 ---
             const saveToCollection = async (newItem) => {
+                // 為新物品加入 order (若未設定)
+                const itemWithOrder = { ...newItem, order: newItem.order || Date.now() };
+
                 if (user && isFirebaseInitialized) {
                     const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
-                    await setDoc(doc(db, path, newItem.id), newItem);
+                    await setDoc(doc(db, path, newItem.id), itemWithOrder);
                 } else {
                     setItems(prev => {
                         const exists = prev.find(i => i.id === newItem.id);
-                        return exists ? prev.map(i => i.id === newItem.id ? newItem : i) : [...prev, newItem];
+                        return exists ? prev.map(i => i.id === newItem.id ? itemWithOrder : i) : [...prev, itemWithOrder];
                     });
                 }
             };
@@ -265,6 +270,10 @@
                             keys.forEach((k, i) => { 
                                 if (vals[i]) {
                                     let v = vals[i].trim();
+                                    // 移除強制 parseInt，允許文字
+                                    if (k === 'officialPrice') {
+                                        // 簡單處理：如果看起來像純數字就轉數字，否則保留文字
+                                    }
                                     obj[k] = v; 
                                 }
                             });
@@ -283,7 +292,7 @@
                                 id: item.id || `imp_${timestamp}_${count}`,
                                 name: item.name,
                                 character: item.character || '其他',
-                                type: item.type || '其他',
+                                type: item.type || '未分類',
                                 series: item.series || '',
                                 officialPrice: item.officialPrice || '', 
                                 image: item.image || null,
@@ -312,11 +321,32 @@
                 if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) return;
 
                 if (type === 'collection') {
+                    // 1. 本地更新
                     const currentStacks = getStackedItems(items, 'none');
                     const moved = currentStacks[dragItem.current];
                     currentStacks.splice(dragItem.current, 1);
                     currentStacks.splice(dragOverItem.current, 0, moved);
-                    setItems(currentStacks.flatMap(s => s.instances));
+                    const newFlatList = currentStacks.flatMap(s => s.instances);
+                    setItems(newFlatList);
+
+                    // 2. 雲端寫入 (Batch Write 更新 order)
+                    if (isFirebaseInitialized && user) {
+                        const batch = writeBatch(db);
+                        const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
+                        
+                        // 為了節省寫入次數，這裡簡單地重寫所有項目的 order
+                        // 在實際產品中可能需要更優化的算法，但個人收藏數量通常可接受
+                        newFlatList.forEach((item, index) => {
+                            const ref = doc(db, path, item.id);
+                            batch.update(ref, { order: index });
+                        });
+                        
+                        try {
+                            await batch.commit();
+                        } catch (err) {
+                            console.error("Batch order update failed", err);
+                        }
+                    }
                 } else if (type === 'catalog') {
                     if (!isFirebaseInitialized) {
                         const _items = [...catalogItems];
@@ -347,11 +377,9 @@
                 };
                 
                 if (mode === 'catalog' && item) {
-                    // 編輯圖鑑
                     setEditingItem(item);
                     setFormData({ ...item });
                 } else if (mode === 'collection') {
-                    // 收藏操作
                     if (item) {
                         setEditingItem(item);
                         setFormData({ ...item, quantity: 1 });
@@ -369,18 +397,16 @@
             const handleSave = async () => {
                 if (!formData.name) return alert("請輸入名稱");
                 
+                const timestamp = Date.now();
+
                 if (modalMode === 'catalog') {
-                    // 儲存到圖鑑
                     const itemToSave = { ...formData };
-                    // 移除與圖鑑無關的欄位 (收藏用)
                     delete itemToSave.quantity;
                     delete itemToSave.acquiredPrice;
                     delete itemToSave.date;
                     delete itemToSave.note;
-                    
                     await saveToCatalog(itemToSave);
                 } else {
-                    // 儲存到收藏
                     const qty = Math.max(1, parseInt(formData.quantity) || 1);
                     if (editingItem) {
                         const itemToSave = { ...formData };
@@ -388,7 +414,12 @@
                         await saveToCollection(itemToSave);
                     } else {
                         for (let i = 0; i < qty; i++) {
-                            const newItem = { ...formData, id: Date.now().toString() + '-' + i };
+                            // 賦予每筆新增資料一個遞增的 order，確保它們排在一起
+                            const newItem = { 
+                                ...formData, 
+                                id: timestamp + '-' + i,
+                                order: timestamp + i 
+                            };
                             delete newItem.quantity;
                             await saveToCollection(newItem);
                         }
@@ -611,12 +642,15 @@
                     {isModalOpen && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                             <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-                                <h3 className="font-bold">
-                                    {modalMode === 'catalog' 
-                                        ? (editingItem ? '編輯公開圖鑑' : '新增公開圖鑑') 
-                                        : (editingItem ? '編輯我的收藏' : '加入我的收藏')
-                                    }
-                                </h3>
+                                <div className="flex justify-between items-center">
+                                    <h3 className="font-bold">
+                                        {modalMode === 'catalog' 
+                                            ? (editingItem ? '編輯公開圖鑑' : '新增公開圖鑑') 
+                                            : (editingItem ? '編輯我的收藏' : '加入我的收藏')
+                                        }
+                                    </h3>
+                                    <button onClick={()=>setIsModalOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button>
+                                </div>
                                 
                                 <div onClick={()=>fileInputRef.current.click()} className="w-32 h-32 mx-auto border-2 border-dashed rounded flex items-center justify-center cursor-pointer">{formData.image?<img src={formData.image} className="w-full h-full object-cover"/>:<Icon name="Upload"/>}<input type="file" ref={fileInputRef} className="hidden" onChange={(e)=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=()=>setFormData(p=>({...p,image:r.result}));r.readAsDataURL(f);}}}/></div>
                                 
@@ -639,7 +673,7 @@
                                     <>
                                         <hr className="border-gray-100" />
                                         <div className="grid grid-cols-2 gap-2">
-                                            <input type="number" className="border p-2 rounded" placeholder="入手價格" value={formData.acquiredPrice} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
+                                            <input type="number" className="border p-2 rounded" placeholder="入手價格 (NT$)" value={formData.acquiredPrice} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
                                             <input type="date" className="border p-2 rounded" value={formData.date} onChange={e=>setFormData({...formData,date:e.target.value})}/>
                                         </div>
                                         {!editingItem && <div className="flex items-center gap-2"><label>數量:</label><input type="number" className="border p-1 w-16" value={formData.quantity} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div>}
@@ -650,7 +684,6 @@
                                 <button onClick={handleSave} className="w-full bg-slate-900 text-white py-3 rounded">
                                     {modalMode === 'catalog' ? '更新圖鑑 (公開)' : '儲存收藏'}
                                 </button>
-                                <button onClick={()=>setIsModalOpen(false)} className="w-full text-gray-500 py-2">取消</button>
                             </div>
                         </div>
                     )}

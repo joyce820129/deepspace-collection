@@ -895,14 +895,19 @@
                                       (mode === 'series' && seriesFilters.length === 0) || 
                                       (mode === 'date' && dateFilters.length === 0);
 
-                if (mode === 'none') {
-                     return { '全部': processedList };
-                }
-                
-                if (isAllSelected && !appSettings.groupAllInFilterMode) {
+                if (mode === 'none' || (isAllSelected && !appSettings.groupAllInFilterMode)) {
+                    // Special case: If mode is 'none' but grouping is ON, we should still group (e.g. by Type)
+                    // But user requested NO grouping if mode is 'none' ("全部" tab)
+                    // The setting `groupAllInFilterMode` was intended for when filters ARE applied but select all.
+                    // However, to strictly follow "No big headers in All mode", we just return flattened list here.
                     return { '全部': processedList };
                 }
                 
+                // Logic for when grouping IS active (not 'none' mode, or specific setting overrides)
+                // BUT per user request 1 & 2: "全部" tab (mode='none') should NOT have headers.
+                // So the above block handles it.
+                
+                // Below handles mode='series', 'type', etc.
                 const grouped = processedList.reduce((acc, item) => {
                     let key = '';
                     if (mode === 'series') key = item.series || '其他系列';

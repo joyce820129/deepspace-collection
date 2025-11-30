@@ -15,7 +15,9 @@
         body { font-family: 'Noto Sans TC', sans-serif; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        /* animate-fade-in 保留，拖曳相關 CSS 移除 */
+        .dragging { opacity: 0.5; transform: scale(0.95); box-shadow: 0 0 0 2px #3b82f6; z-index: 50; }
+        .cursor-move { cursor: grab; }
+        .cursor-move:active { cursor: grabbing; }
         .animate-fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .thin-scrollbar::-webkit-scrollbar { width: 4px; }
@@ -85,7 +87,6 @@
         };
 
         // --- Components Defined Outside App ---
-
         const Icon = ({ name, size = 24, className = "" }) => {
             const containerRef = useRef(null);
             useEffect(() => {
@@ -133,7 +134,7 @@
             </div>
         ));
 
-        const StackCard = memo(({ stack, index, openModal, deleteFromCollection }) => {
+        const StackCard = memo(({ stack, index, isDraggable, handleDragStart, handleDragEnter, handleDragEnd, handleMoveStack, openModal, deleteFromCollection }) => {
             const theme = CHARACTER_THEMES[stack.character] || CHARACTER_THEMES["其他"];
             const consolidated = useMemo(() => {
                 const map = new Map();
@@ -145,7 +146,21 @@
             }, [stack.instances]);
 
             return (
-                <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative`}>
+                <div 
+                    draggable={isDraggable} 
+                    onDragStart={(e) => handleDragStart(e, index, 'collection')} 
+                    onDragEnter={(e) => handleDragEnter(e, index)} 
+                    onDragEnd={handleDragEnd} 
+                    onDragOver={(e) => { e.preventDefault(); handleDragEnter(e, index); }}
+                    className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative ${isDraggable ? 'cursor-move' : ''}`}
+                >
+                    {isDraggable && (
+                        <div className="absolute top-2 left-2 z-20 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 rounded-lg p-1 backdrop-blur-sm">
+                            <button onClick={(e) => {e.stopPropagation(); handleMoveStack(index, -1)}} className="p-1 hover:bg-blue-100 rounded text-blue-600 disabled:opacity-30" disabled={index === 0}><Icon name="ArrowLeft" size={14} /></button>
+                            <button onClick={(e) => {e.stopPropagation(); handleMoveStack(index, 1)}} className="p-1 hover:bg-blue-100 rounded text-blue-600 disabled:opacity-30"><Icon name="ArrowRight" size={14} /></button>
+                        </div>
+                    )}
+
                     {stack.totalCount > 1 && <div className="absolute top-2 left-2 z-10 bg-slate-900 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">x{stack.totalCount}</div>}
                     <div className={`h-40 w-full relative bg-gray-100 flex items-center justify-center overflow-hidden`}>
                         {stack.image ? <img src={stack.image} className="w-full h-full object-cover pointer-events-none" /> : <Icon name="Image" className={`opacity-20 ${theme.text}`} size={32} />}
@@ -185,12 +200,19 @@
             );
         });
 
-        const CatalogCard = memo(({ item, index, openModal, deleteFromCatalog }) => {
+        const CatalogCard = memo(({ item, index, isDraggable, handleDragStart, handleDragEnter, handleDragEnd, openModal, deleteFromCatalog }) => {
             const theme = CHARACTER_THEMES[item.character] || CHARACTER_THEMES["其他"];
             const priceDisplay = item.officialPrice ? (isNaN(Number(item.officialPrice)) ? item.officialPrice : `${item.officialPrice}r`) : '?';
             
             return (
-                <div className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group relative`}>
+                <div 
+                    draggable={isDraggable} 
+                    onDragStart={(e) => handleDragStart(e, index, 'catalog')} 
+                    onDragEnter={(e) => handleDragEnter(e, index)} 
+                    onDragEnd={handleDragEnd} 
+                    onDragOver={(e) => { e.preventDefault(); handleDragEnter(e, index); }}
+                    className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group relative ${isDraggable ? 'cursor-move' : ''}`}
+                >
                     <div className="aspect-square bg-gray-50 relative overflow-hidden">
                         <img src={item.image} alt={item.name} className="w-full h-full object-cover pointer-events-none" />
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
@@ -214,7 +236,8 @@
         const SettingsModal = memo(({ 
             isOpen, onClose, appSettings, setAppSettings, 
             importJson, setImportJson, handleBulkImport, handleExportCatalog, handleResetData,
-            handleAddType, handleDeleteType, newTypeInput, setNewTypeInput
+            handleDragStart, handleDragEnter, handleDragEnd, handleAddType, handleDeleteType, newTypeInput, setNewTypeInput,
+            handleCharDragStart
         }) => {
             const [settingsTab, setSettingsTab] = useState('layout');
             
@@ -237,7 +260,7 @@
             const toggleMultiSelect = (key) => {
                 setAppSettings(prev => ({ ...prev, multiSelect: { ...prev.multiSelect, [key]: !prev.multiSelect[key] } }));
             };
-            
+
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
                     <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -290,7 +313,7 @@
                         {settingsTab === 'filter' && (
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
-                                    <p className="text-sm text-gray-500">勾選角色以顯示週邊。</p>
+                                    <p className="text-sm text-gray-500">拖曳排序或勾選顯示角色。</p>
                                     <button onClick={() => toggleCharacterVisibility('ALL')} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700">我全都要</button>
                                 </div>
                                 <div className="space-y-2">
@@ -299,9 +322,15 @@
                                         return (
                                             <div 
                                                 key={char} 
-                                                className="flex items-center justify-between p-3 border rounded-xl bg-white hover:bg-gray-50"
+                                                className="flex items-center justify-between p-3 border rounded-xl bg-white hover:bg-gray-50 group cursor-grab active:cursor-grabbing"
+                                                draggable
+                                                onDragStart={(e) => handleCharDragStart(e, index)}
+                                                onDragEnter={(e) => handleDragEnter(e, index)}
+                                                onDragEnd={handleDragEnd}
+                                                onDragOver={(e) => { e.preventDefault(); handleDragEnter(e, index); }}
                                             >
                                                 <div className="flex items-center gap-3">
+                                                    <Icon name="GripVertical" size={16} className="text-gray-400" />
                                                     <span className={`text-sm font-medium ${CHARACTER_THEMES[char]?.text}`}>{char}</span>
                                                 </div>
                                                 <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer" checked={isChecked} onChange={() => toggleCharacterVisibility(char)} />
@@ -336,10 +365,18 @@
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">目前類型列表</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">目前類型列表 (拖曳排序)</label>
                                     <div className="flex flex-wrap gap-2">
                                         {appSettings.customTypes.map((t, index) => (
-                                            <span key={t} className="px-3 py-1 bg-gray-100 rounded-full text-xs flex items-center gap-1 group">
+                                            <span 
+                                                key={t} 
+                                                className="px-3 py-1 bg-gray-100 rounded-full text-xs flex items-center gap-1 group cursor-grab active:cursor-grabbing"
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, index, 'settings-type')}
+                                                onDragEnter={(e) => handleDragEnter(e, index)}
+                                                onDragEnd={handleDragEnd}
+                                                onDragOver={(e) => { e.preventDefault(); handleDragEnter(e, index); }}
+                                            >
                                                 {t}
                                                 <button onClick={()=>handleDeleteType(t)} className="text-gray-400 hover:text-red-500"><Icon name="X" size={12}/></button>
                                             </span>
@@ -418,6 +455,9 @@
             const [importJson, setImportJson] = useState('');
             const [newTypeInput, setNewTypeInput] = useState(''); 
 
+            const dragItem = useRef(null);
+            const dragOverItem = useRef(null);
+            const dragType = useRef(null); 
             const fileInputRef = useRef(null);
 
             useEffect(() => {
@@ -534,6 +574,90 @@
                 }
             };
 
+            // --- Drag Handlers ---
+            const handleDragStart = (e, index, type) => {
+                if (type !== 'settings-type' && type !== 'settings-character') {
+                     const currentMode = type === 'collection' ? collectionGroupingMode : (type === 'catalog' ? groupingMode : 'none');
+                     if (currentMode !== 'none') { e.preventDefault(); return; }
+                }
+                
+                dragItem.current = index;
+                dragType.current = type;
+                e.target.classList.add('dragging');
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData('type', type);
+            };
+
+            const handleDragEnter = (e, index) => dragOverItem.current = index;
+
+            const handleDragEnd = async (e) => {
+                e.target.classList.remove('dragging');
+                const type = dragType.current;
+                if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) {
+                    dragItem.current = null; dragOverItem.current = null; return;
+                }
+
+                if (type === 'settings-type') {
+                    const newTypes = [...appSettings.customTypes];
+                    const movedType = newTypes[dragItem.current];
+                    newTypes.splice(dragItem.current, 1);
+                    newTypes.splice(dragOverItem.current, 0, movedType);
+                    setAppSettings(prev => ({ ...prev, customTypes: newTypes }));
+                } else if (type === 'settings-character') {
+                    const newChars = [...appSettings.customCharacters];
+                    const movedChar = newChars[dragItem.current];
+                    newChars.splice(dragItem.current, 1);
+                    newChars.splice(dragOverItem.current, 0, movedChar);
+                    setAppSettings(prev => ({ ...prev, customCharacters: newChars }));
+                } else if (type === 'collection') {
+                    const currentStacks = getStackedItems(items, 'none');
+                    const moved = currentStacks[dragItem.current];
+                    currentStacks.splice(dragItem.current, 1);
+                    currentStacks.splice(dragOverItem.current, 0, moved);
+                    const newFlatList = currentStacks.flatMap(s => s.instances);
+                    setItems(newFlatList);
+                    if (isFirebaseInitialized && user) {
+                        const batch = writeBatch(db);
+                        const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
+                        newFlatList.forEach((item, index) => batch.update(doc(db, path, item.id), { order: index }));
+                        try { await batch.commit(); } catch (err) { console.error(err); }
+                    }
+                } else if (type === 'catalog') {
+                    if (!isFirebaseInitialized) {
+                        const _items = [...catalogItems];
+                        const moved = _items[dragItem.current];
+                        _items.splice(dragItem.current, 1);
+                        _items.splice(dragOverItem.current, 0, moved);
+                        setCatalogItems(_items);
+                    } else {
+                         alert("提示：公開圖鑑排序僅本地暫時生效。");
+                         const newOrderList = [...catalogItems];
+                         const movedItem = newOrderList[dragItem.current];
+                         newOrderList.splice(dragItem.current, 1);
+                         newOrderList.splice(dragOverItem.current, 0, movedItem);
+                         setCatalogItems(newOrderList);
+                    }
+                }
+                dragItem.current = null; dragOverItem.current = null; dragType.current = null;
+            };
+
+            const handleMoveStack = async (index, direction) => {
+                const currentStacks = getStackedItems(items, 'none');
+                const newIndex = index + direction;
+                if (newIndex < 0 || newIndex >= currentStacks.length) return;
+                const moved = currentStacks[index];
+                currentStacks.splice(index, 1);
+                currentStacks.splice(newIndex, 0, moved);
+                const newFlatList = currentStacks.flatMap(s => s.instances);
+                setItems(newFlatList);
+                if (isFirebaseInitialized && user) {
+                    const batch = writeBatch(db);
+                    const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
+                    newFlatList.forEach((item, idx) => batch.update(doc(db, path, item.id), { order: index }));
+                    try { await batch.commit(); } catch (err) { console.error(err); }
+                }
+            };
+
             const handleAddType = () => {
                 if (newTypeInput && !appSettings.customTypes.includes(newTypeInput)) {
                     setAppSettings(prev => ({...prev, customTypes: [...prev.customTypes, newTypeInput]}));
@@ -545,68 +669,7 @@
                     setAppSettings(prev => ({...prev, customTypes: prev.customTypes.filter(type => type !== t)}));
                 }
             };
-
-            const handleBulkImport = async () => {
-                if (!importJson.trim()) return;
-                try {
-                    let parsedData = [];
-                    const text = importJson.trim();
-                    if (text.startsWith('[')) {
-                        parsedData = JSON.parse(text);
-                    } else {
-                        const rows = text.split('\n').map(r=>r.trim()).filter(r=>r);
-                        const header = rows[0].toLowerCase();
-                        const sep = header.includes('\t') ? '\t' : ',';
-                        const cols = rows[0].split(sep).map(s=>s.trim());
-                        const mapKey = { 'name': 'name', '名稱': 'name', 'character': 'character', '角色': 'character', 'type': 'type', '類型': 'type', 'series': 'series', '系列': 'series', 'officialprice': 'officialPrice', '原價': 'officialPrice', 'image': 'image', '圖片': 'image' };
-                        const keys = cols.map(c => mapKey[c.toLowerCase()] || c);
-                        if (!keys.includes('name')) throw new Error("缺少 'name' 或 '名稱' 欄位");
-                        parsedData = rows.slice(1).map(row => {
-                            const vals = row.split(sep);
-                            let obj = {};
-                            keys.forEach((k, i) => { if (vals[i]) obj[k] = vals[i].trim(); });
-                            return obj;
-                        }).filter(o => o.name);
-                    }
-                    if (parsedData.length === 0) throw new Error("無有效資料");
-                    let count = 0;
-                    const timestamp = Date.now();
-                    for (const item of parsedData) {
-                        const newItem = {
-                            id: item.id || `imp_${timestamp}_${count}`,
-                            name: item.name,
-                            character: item.character || '其他',
-                            type: item.type || '未分類',
-                            series: item.series || '',
-                            officialPrice: item.officialPrice || '',
-                            image: item.image || null,
-                            order: timestamp + count
-                        };
-                        if(isFirebaseInitialized) await saveToCatalog(newItem);
-                        else setCatalogItems(prev => [...prev, newItem]);
-                        count++;
-                    }
-                    alert(`匯入成功 ${parsedData.length} 筆`);
-                    setImportJson('');
-                } catch (e) { alert("匯入失敗: " + e.message); }
-            };
-
-             const handleExportCatalog = () => {
-                const dataStr = JSON.stringify(catalogItems, null, 2);
-                setImportJson(dataStr);
-            };
-
-            const handleResetData = () => {
-                if (confirm("確定要清空本地資料嗎？此操作無法復原。")) {
-                    setItems([]);
-                    setCatalogItems([]);
-                    localStorage.removeItem('deepspace_items_v7_local');
-                    localStorage.removeItem('deepspace_catalog_v7_local');
-                    alert("已清空。");
-                }
-            };
             
-            // Toggle logic for "All" vs specific char
             const toggleCharacterVisibility = (char) => {
                 setAppSettings(prev => {
                     const current = prev.visibleCharacters;
@@ -839,11 +902,7 @@
                                       (mode === 'series' && seriesFilters.length === 0) || 
                                       (mode === 'date' && dateFilters.length === 0);
 
-                if (mode === 'none') {
-                     return { '全部': processedList };
-                }
-                
-                if (isAllSelected && !appSettings.groupAllInFilterMode) {
+                if (mode === 'none' || (isAllSelected && !appSettings.groupAllInFilterMode)) {
                     return { '全部': processedList };
                 }
                 
@@ -935,8 +994,15 @@
                                     {Object.entries(groupedData.collection).map(([gName, gItems]) => {
                                         const stacks = getStackedItems(gItems, collectionGroupingMode);
                                         return <div key={gName} className="animate-in fade-in">
-                                            {collectionGroupingMode!=='none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0"><div className={`h-6 w-1 rounded-full ${preorderDates.has(gName) ? 'bg-yellow-400' : 'bg-blue-500'}`}></div><h3 className="font-bold text-lg text-gray-700">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({stacks.length})</span></h3></div>}
-                                            <div style={gridStyle}>{stacks.map((s,i)=><StackCard key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'} openModal={openModal} deleteFromCollection={deleteFromCollection} />)}</div>
+                                            {/* Group Headers logic - Only show if grouping is ACTIVE */}
+                                            {collectionGroupingMode !== 'none' && (
+                                                <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0">
+                                                    <div className={`h-6 w-1 rounded-full ${preorderDates.has(gName) ? 'bg-yellow-400' : 'bg-blue-500'}`}></div>
+                                                    <h3 className="font-bold text-lg text-gray-700">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({stacks.length})</span></h3>
+                                                </div>
+                                            )}
+
+                                            <div style={gridStyle}>{stacks.map((s,i)=><StackCard key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'} handleDragStart={handleDragStart} handleDragEnter={handleDragEnter} handleDragEnd={handleDragEnd} handleMoveStack={handleMoveStack} openModal={openModal} deleteFromCollection={deleteFromCollection} />)}</div>
                                         </div>;
                                     })}
                                     {items.length===0 && <div className="text-center py-20 text-gray-400 border-2 border-dashed rounded-3xl">尚無收藏</div>}
@@ -958,8 +1024,14 @@
                                 <div className="space-y-8">
                                     {Object.entries(groupedData.catalog).map(([gName, gItems]) => (
                                         <div key={gName} className="animate-in fade-in">
-                                            {groupingMode !== 'none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({gItems.length})</span></h3></div>}
-                                            <div style={gridStyle}>{gItems.map((item,i)=><CatalogCard key={item.id} item={item} index={i} isDraggable={groupingMode==='none'} openModal={openModal} deleteFromCatalog={deleteFromCatalog}/>)}</div>
+                                            {/* Header for None mode if grouping enabled */}
+                                            {groupingMode !== 'none' && (
+                                                <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0">
+                                                    <div className="h-6 w-1 bg-blue-500 rounded-full"></div>
+                                                    <h3 className="font-bold text-lg text-gray-700">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({gItems.length})</span></h3>
+                                                </div>
+                                            )}
+                                            <div style={gridStyle}>{gItems.map((item,i)=><CatalogCard key={item.id} item={item} index={i} isDraggable={groupingMode==='none'} handleDragStart={handleDragStart} handleDragEnter={handleDragEnter} handleDragEnd={handleDragEnd} openModal={openModal} deleteFromCatalog={deleteFromCatalog}/>)}</div>
                                         </div>
                                     ))}
                                     {catalogItems.length===0 && <div className="text-center py-20 text-gray-400">圖鑑目前是空的</div>}
@@ -1031,10 +1103,14 @@
                         handleBulkImport={handleBulkImport}
                         handleExportCatalog={handleExportCatalog}
                         handleResetData={handleResetData}
+                        handleDragStart={handleDragStart}
+                        handleDragEnter={handleDragEnter}
+                        handleDragEnd={handleDragEnd}
                         handleAddType={handleAddType}
                         handleDeleteType={handleDeleteType}
                         newTypeInput={newTypeInput}
                         setNewTypeInput={setNewTypeInput}
+                        handleCharDragStart={(e, idx) => handleDragStart(e, idx, 'settings-character')}
                     />}
 
                     {isModalOpen && (/* Modal Content reused from previous step, logic integrated */

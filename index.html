@@ -30,10 +30,10 @@
 
     <script type="text/babel" data-type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-        const { useState, useEffect, useMemo, useRef, memo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
         // ==========================================
         // --- 請在此處填入您的 Firebase 設定 ---
@@ -50,6 +50,7 @@
 
         const GLOBAL_APP_ID = "deepspace_shared_v1";
 
+        // --- 初始化 Firebase ---
         let auth, db;
         let isFirebaseInitialized = false;
 
@@ -70,23 +71,6 @@
             } catch(e) { console.log("Preview env init failed", e); }
         }
 
-        const CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝"];
-        const DEFAULT_MERCH_TYPES = [
-            "徽章", "立牌", "拍立得", "小卡", "相卡", "明信片", "雷射票", "書籤", 
-            "透卡", "貼紙", "色紙", "簽名板", "杯墊", "吊飾", "公仔", "娃娃", "卡冊", "其他"
-        ];
-
-        const CHARACTER_THEMES = {
-            "沈星回": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", badge: "bg-purple-100 text-purple-800" },
-            "黎深": { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200", badge: "bg-slate-100 text-slate-800" },
-            "祁煜": { bg: "bg-pink-50", text: "text-pink-700", border: "border-pink-200", badge: "bg-pink-100 text-pink-800" },
-            "秦徹": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", badge: "bg-red-100 text-red-800" },
-            "夏以晝": { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", badge: "bg-orange-100 text-orange-800" },
-            "其他": { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200", badge: "bg-gray-100 text-gray-800" }
-        };
-
-        // --- Components Defined Outside App ---
-
         const Icon = ({ name, size = 24, className = "" }) => {
             const containerRef = useRef(null);
             useEffect(() => {
@@ -106,317 +90,53 @@
             return <span ref={containerRef} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}></span>;
         };
 
-        const FilterBar = memo(({ options, selected, toggle, multi, highlightSet }) => (
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide animate-fade-in items-center">
-                <button 
-                    onClick={() => toggle('all')}
-                    className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border ${selected.length === 0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                >
-                    {multi ? "全選" : "全部"}
-                </button>
-                {options.map(opt => {
-                    const isHighlight = highlightSet && highlightSet.has(opt);
-                    return (
-                        <button 
-                            key={opt}
-                            onClick={() => toggle(opt)}
-                            className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border 
-                                ${selected.includes(opt) 
-                                    ? 'bg-blue-100 text-blue-700 border-blue-300' 
-                                    : (isHighlight ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')
-                                }`}
-                        >
-                            {opt}
-                        </button>
-                    );
-                })}
-                {multi && <button onClick={() => toggle('all')} className="px-3 py-1 text-xs rounded-full bg-gray-200 text-gray-600 border border-transparent hover:bg-gray-300 whitespace-nowrap">重置</button>}
-            </div>
-        ));
+        const CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝"];
+        
+        // 初始預設類型
+        const DEFAULT_MERCH_TYPES = [
+            "徽章", "立牌", "拍立得", "小卡", "相卡", "明信片", "雷射票", "書籤", 
+            "透卡", "貼紙", "色紙", "簽名板", "杯墊", "吊飾", "公仔", "娃娃", "卡冊", "其他"
+        ];
 
-        const StackCard = memo(({ stack, index, isDraggable, handleDragStart, handleDragEnter, handleDragEnd, handleMoveStack, openModal, deleteFromCollection }) => {
-            const theme = CHARACTER_THEMES[stack.character] || CHARACTER_THEMES["其他"];
-            const consolidated = useMemo(() => {
-                const map = new Map();
-                stack.instances.forEach(inst => {
-                    const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}-${inst.currency}`;
-                    if (!map.has(key)) map.set(key, { ...inst, count: 1 }); else map.get(key).count++;
-                });
-                return Array.from(map.values());
-            }, [stack.instances]);
-
-            return (
-                <div 
-                    draggable={isDraggable} 
-                    onDragStart={(e) => handleDragStart(e, index, 'collection')} 
-                    onDragEnter={(e) => handleDragEnter(e, index)} 
-                    onDragEnd={handleDragEnd} 
-                    onDragOver={(e) => e.preventDefault()} 
-                    className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative ${isDraggable ? 'cursor-move' : ''}`}
-                >
-                    {isDraggable && (
-                        <div className="absolute top-2 left-2 z-20 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 rounded-lg p-1 backdrop-blur-sm">
-                            <button onClick={(e) => {e.stopPropagation(); handleMoveStack(index, -1)}} className="p-1 hover:bg-blue-100 rounded text-blue-600 disabled:opacity-30" disabled={index === 0}><Icon name="ArrowLeft" size={14} /></button>
-                            <button onClick={(e) => {e.stopPropagation(); handleMoveStack(index, 1)}} className="p-1 hover:bg-blue-100 rounded text-blue-600 disabled:opacity-30"><Icon name="ArrowRight" size={14} /></button>
-                        </div>
-                    )}
-
-                    {stack.totalCount > 1 && <div className="absolute top-2 left-2 z-10 bg-slate-900 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">x{stack.totalCount}</div>}
-                    <div className={`h-40 w-full relative bg-gray-100 flex items-center justify-center overflow-hidden`}>
-                        {stack.image ? <img src={stack.image} className="w-full h-full object-cover pointer-events-none" /> : <Icon name="Image" className={`opacity-20 ${theme.text}`} size={32} />}
-                        <div className="absolute top-2 right-2"><span className={`text-[10px] font-bold px-2 py-1 rounded-full bg-white/90 shadow-sm ${theme.text}`}>{stack.character}</span></div>
-                    </div>
-                    <div className="p-3 flex-1 flex flex-col bg-white">
-                        <h3 className="font-bold text-gray-800 text-sm line-clamp-1">{stack.name}</h3>
-                        <div className="flex-1 mt-1 space-y-2 overflow-y-auto max-h-[120px] thin-scrollbar pr-1">
-                            {consolidated.map((inst, idx) => (
-                                <div key={idx} className="bg-gray-50 rounded p-2 text-xs border border-gray-100 flex justify-between items-center">
-                                    <div>
-                                        <div className="flex gap-1 text-[10px] text-gray-500 items-center">
-                                            {inst.isPreorder ? 
-                                                <span className="text-orange-500 font-bold flex items-center gap-0.5"><Icon name="Package" size={10}/> 預購 {inst.shippingDate}</span> 
-                                                : 
-                                                <span className="flex items-center gap-0.5"><Icon name="Calendar" size={10}/> {inst.date}</span>
-                                            }
-                                        </div>
-                                        <div className="flex items-baseline gap-1">
-                                            <span className="font-bold text-base text-slate-800">
-                                                {inst.currency === 'r' ? `${inst.acquiredPrice}r` : `NT$ ${inst.acquiredPrice}`}
-                                            </span>
-                                            {inst.officialPrice && <span className="text-[11px] text-gray-500 font-medium ml-1">({inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center gap-1 ml-auto pl-2 border-l border-gray-100">
-                                        {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">x{inst.count}</span>}
-                                        <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all"><Icon name="Edit3" size={12}/></button>
-                                        <button onClick={(e)=>{e.stopPropagation(); deleteFromCollection(inst.id);}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-red-500 hover:border-red-300 shadow-sm transition-all"><Icon name="Trash2" size={12}/></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        });
-
-        const CatalogCard = memo(({ item, index, isDraggable, handleDragStart, handleDragEnter, handleDragEnd, openModal, deleteFromCatalog }) => {
-            const theme = CHARACTER_THEMES[item.character] || CHARACTER_THEMES["其他"];
-            const priceDisplay = item.officialPrice ? (isNaN(Number(item.officialPrice)) ? item.officialPrice : `${item.officialPrice}r`) : '?';
-            
-            return (
-                <div draggable={isDraggable} onDragStart={(e) => handleDragStart(e, index, 'catalog')} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group relative ${isDraggable ? 'cursor-move' : ''}`}>
-                    <div className="aspect-square bg-gray-50 relative overflow-hidden">
-                        <img src={item.image} alt={item.name} className="w-full h-full object-cover pointer-events-none" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                        <button onClick={() => openModal(null, item, 'collection')} className="absolute bottom-3 right-3 bg-white text-blue-600 p-2 rounded-full shadow-lg transform translate-y-10 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all z-20 w-10 h-10 flex items-center justify-center" title="加入我的收藏"><Icon name="Plus" size={24} /></button>
-                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                            <button onClick={() => openModal(item, null, 'catalog')} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-blue-600 shadow-sm"><Icon name="Edit3" size={14} /></button>
-                            <button onClick={() => deleteFromCatalog(item.id)} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-red-600 shadow-sm"><Icon name="Trash2" size={14} /></button>
-                        </div>
-                    </div>
-                    <div className="p-3 relative">
-                        <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${theme.badge}`}>{item.character}</span><span className="text-[10px] text-gray-500 border px-1 rounded">{item.type}</span></div>
-                        <h3 className="font-bold text-gray-800 text-sm truncate">{item.name}</h3>
-                        <div className="flex justify-end mt-2">
-                            <span className="text-xl font-bold text-black">{priceDisplay}</span>
-                        </div>
-                    </div>
-                </div>
-            );
-        });
-
-        const SettingsModal = memo(({ 
-            isOpen, onClose, appSettings, setAppSettings, 
-            importJson, setImportJson, handleBulkImport, handleExportCatalog, handleResetData,
-            handleDragStart, handleDragEnter, handleDragEnd, handleAddType, handleDeleteType, newTypeInput, setNewTypeInput,
-            handleCharDragStart
-        }) => {
-            const [settingsTab, setSettingsTab] = useState('layout');
-            
-            if (!isOpen) return null;
-
-            const toggleCharacterVisibility = (char) => {
-                setAppSettings(prev => {
-                    const current = prev.visibleCharacters;
-                    if (char === "ALL") {
-                         const allMainSelected = CHARACTERS.every(c => current.includes(c));
-                         return allMainSelected ? { ...prev, visibleCharacters: [] } : { ...prev, visibleCharacters: [...CHARACTERS] };
-                    } else {
-                        return current.includes(char) 
-                            ? { ...prev, visibleCharacters: current.filter(c => c !== char) } 
-                            : { ...prev, visibleCharacters: [...current, char] };
-                    }
-                });
-            };
-
-            const toggleMultiSelect = (key) => {
-                setAppSettings(prev => ({ ...prev, multiSelect: { ...prev.multiSelect, [key]: !prev.multiSelect[key] } }));
-            };
-            
-            return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center border-b pb-3">
-                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icon name="Settings" /> 設定</h3>
-                            <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button>
-                        </div>
-                        
-                        <div className="flex gap-2 border-b pb-2 overflow-x-auto">
-                            {['layout', 'filter', 'filters_config', 'types', 'data'].map(t => (
-                                <button key={t} onClick={()=>setSettingsTab(t)} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${settingsTab===t ? 'bg-slate-900 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-                                    {t==='layout' ? '版面' : t==='filter' ? '角色管理' : t==='filters_config' ? '篩選設定' : t==='types' ? '類型' : '資料'}
-                                </button>
-                            ))}
-                        </div>
-
-                        {settingsTab === 'layout' && (
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">每行顯示數量</label>
-                                    <div className="flex gap-2">
-                                        {[2,3,4,5].map(cols => (
-                                            <button key={cols} onClick={()=>setAppSettings(prev=>({...prev, layoutCols: cols}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.layoutCols===cols ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{cols}</button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">預購預設幣值</label>
-                                    <div className="flex gap-2">
-                                        {['NT$', 'r'].map(curr => (
-                                            <button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultPreorderCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.defaultPreorderCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{curr}</button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
-                                        <input 
-                                            type="checkbox" 
-                                            className="w-5 h-5 text-blue-600 rounded"
-                                            checked={appSettings.groupAllInFilterMode}
-                                            onChange={(e) => setAppSettings(prev => ({...prev, groupAllInFilterMode: e.target.checked}))}
-                                        />
-                                        <span className="text-sm font-medium">顯示分類大標題 (全部模式)</span>
-                                    </label>
-                                    <p className="text-xs text-gray-400 mt-1 ml-1">在「全部」檢視下，是否依據當前模式顯示分組標題。</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {settingsTab === 'filter' && (
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <p className="text-sm text-gray-500">拖曳排序或勾選顯示角色。</p>
-                                    <button onClick={() => toggleCharacterVisibility('ALL')} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700">我全都要</button>
-                                </div>
-                                <div className="space-y-2">
-                                    {appSettings.customCharacters.map((char, index) => {
-                                        const isChecked = appSettings.visibleCharacters.includes(char);
-                                        return (
-                                            <div 
-                                                key={char} 
-                                                className="flex items-center justify-between p-3 border rounded-xl bg-white hover:bg-gray-50 group cursor-grab active:cursor-grabbing"
-                                                draggable
-                                                onDragStart={(e) => handleCharDragStart(e, index)}
-                                                onDragEnter={(e) => handleDragEnter(e, index)}
-                                                onDragEnd={handleDragEnd}
-                                                onDragOver={(e) => e.preventDefault()}
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <Icon name="GripVertical" size={16} className="text-gray-400" />
-                                                    <span className={`text-sm font-medium ${CHARACTER_THEMES[char]?.text}`}>{char}</span>
-                                                </div>
-                                                <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer" checked={isChecked} onChange={() => toggleCharacterVisibility(char)} />
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        {settingsTab === 'filters_config' && (
-                            <div className="space-y-4">
-                                <p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p>
-                                <div className="space-y-3">
-                                    {['series', 'type', 'character', 'date'].map(key => (
-                                        <label key={key} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
-                                            <input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.multiSelect[key]} onChange={() => toggleMultiSelect(key)} />
-                                            <span className="text-sm font-medium">依{key==='series'?'系列':key==='type'?'類型':key==='character'?'角色':'收物日'} - 多選</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {settingsTab === 'types' && (
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label>
-                                    <div className="flex gap-2">
-                                        <input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} />
-                                        <button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">目前類型列表 (拖曳排序)</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {appSettings.customTypes.map((t, index) => (
-                                            <span 
-                                                key={t} 
-                                                className="px-3 py-1 bg-gray-100 rounded-full text-xs flex items-center gap-1 group cursor-grab active:cursor-grabbing"
-                                                draggable
-                                                onDragStart={(e) => handleDragStart(e, index, 'settings-type')}
-                                                onDragEnter={(e) => handleDragEnter(e, index)}
-                                                onDragEnd={handleDragEnd}
-                                                onDragOver={(e) => e.preventDefault()}
-                                            >
-                                                {t}
-                                                <button onClick={()=>handleDeleteType(t)} className="text-gray-400 hover:text-red-500"><Icon name="X" size={12}/></button>
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {settingsTab === 'data' && (
-                            <div className="space-y-4">
-                                <div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800"><p className="font-bold mb-1">批次匯入：</p><p>貼上 Excel 或 JSON。匯入後將存入共用圖鑑。</p></div>
-                                <textarea className="w-full h-32 p-3 border rounded-xl text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea>
-                                <div className="flex gap-2">
-                                    <button onClick={handleBulkImport} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">匯入</button>
-                                    <button onClick={handleExportCatalog} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded hover:bg-gray-50">匯出</button>
-                                </div>
-                                <hr />
-                                <button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-2 rounded hover:bg-red-50 text-sm">⚠️ 清空本地快取資料</button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        });
+        const CHARACTER_THEMES = {
+            "沈星回": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", badge: "bg-purple-100 text-purple-800" },
+            "黎深": { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200", badge: "bg-slate-100 text-slate-800" },
+            "祁煜": { bg: "bg-pink-50", text: "text-pink-700", border: "border-pink-200", badge: "bg-pink-100 text-pink-800" },
+            "秦徹": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", badge: "bg-red-100 text-red-800" },
+            "夏以晝": { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", badge: "bg-orange-100 text-orange-800" },
+            "其他": { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200", badge: "bg-gray-100 text-gray-800" }
+        };
 
         const App = () => {
             const [user, setUser] = useState(null);
-            const [activeTab, setActiveTab] = useState(() => localStorage.getItem('deepspace_active_tab') || 'collection');
+            
+            const [activeTab, setActiveTab] = useState(() => {
+                return localStorage.getItem('deepspace_active_tab') || 'collection';
+            });
 
+            // --- App Settings State ---
             const [appSettings, setAppSettings] = useState(() => {
                 const savedSettings = localStorage.getItem('deepspace_settings');
                 const defaults = {
                     layoutCols: 4, 
                     customTypes: DEFAULT_MERCH_TYPES,
-                    customCharacters: CHARACTERS,
-                    visibleCharacters: CHARACTERS,
-                    multiSelect: { type: true, character: false, date: false, series: false },
+                    visibleCharacters: CHARACTERS, // 預設全選
+                    multiSelect: {
+                        type: true,
+                        character: false,
+                        date: false,
+                        series: false // 新增系列多選
+                    },
                     defaultPreorderCurrency: 'NT$',
-                    groupAllInFilterMode: true
+                    groupAllInFilterMode: true // 新增：預設開啟分類標題
                 };
                 if (savedSettings) {
                     const parsed = JSON.parse(savedSettings);
                     if (!parsed.visibleCharacters) parsed.visibleCharacters = CHARACTERS;
-                    if (!parsed.customCharacters) parsed.customCharacters = CHARACTERS;
                     if (!parsed.multiSelect) parsed.multiSelect = defaults.multiSelect;
-                    if (typeof parsed.multiSelect.series === 'undefined') parsed.multiSelect.series = false;
+                    if (parsed.multiSelect && typeof parsed.multiSelect.series === 'undefined') {
+                         parsed.multiSelect.series = false;
+                    }
                     if (!parsed.defaultPreorderCurrency) parsed.defaultPreorderCurrency = 'NT$';
                     if (typeof parsed.groupAllInFilterMode === 'undefined') parsed.groupAllInFilterMode = true;
                     return parsed;
@@ -424,22 +144,28 @@
                 return defaults;
             });
 
-            useEffect(() => { localStorage.setItem('deepspace_settings', JSON.stringify(appSettings)); }, [appSettings]);
-            useEffect(() => { localStorage.setItem('deepspace_active_tab', activeTab); }, [activeTab]);
+            useEffect(() => {
+                localStorage.setItem('deepspace_settings', JSON.stringify(appSettings));
+            }, [appSettings]);
 
             const [groupingMode, setGroupingMode] = useState('none'); 
             const [collectionGroupingMode, setCollectionGroupingMode] = useState('none'); 
+            
+            // 改為陣列以支援多選
             const [selectedTypeFilters, setSelectedTypeFilters] = useState([]); 
             const [selectedCharFilters, setSelectedCharFilters] = useState([]); 
             const [selectedDateFilters, setSelectedDateFilters] = useState([]);
             const [selectedSeriesFilters, setSelectedSeriesFilters] = useState([]); 
+
             const [dateSortOrder, setDateSortOrder] = useState('desc'); 
-            const [exchangeRate, setExchangeRate] = useState(4.5); 
-            const [exchangeRateTimestamp, setExchangeRateTimestamp] = useState(null);
-            const [showRmbDetail, setShowRmbDetail] = useState(false);
+            const [exchangeRate, setExchangeRate] = useState(4.5); // 預設匯率
+            const [exchangeRateTimestamp, setExchangeRateTimestamp] = useState(null); // 匯率更新時間
             
+            // 資料狀態
             const [items, setItems] = useState([]); 
             const [catalogItems, setCatalogItems] = useState([]); 
+            
+            // UI 狀態
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false); 
             const [editingItem, setEditingItem] = useState(null); 
@@ -447,12 +173,19 @@
             const [formData, setFormData] = useState({});
             const [importJson, setImportJson] = useState('');
             const [newTypeInput, setNewTypeInput] = useState(''); 
-
+            const [settingsTab, setSettingsTab] = useState('layout'); 
+            const [showRmbDetail, setShowRmbDetail] = useState(false);
+            
             const dragItem = useRef(null);
             const dragOverItem = useRef(null);
             const dragType = useRef(null); 
             const fileInputRef = useRef(null);
 
+            useEffect(() => {
+                localStorage.setItem('deepspace_active_tab', activeTab);
+            }, [activeTab]);
+
+            // 抓取匯率 (安全網站 HTTPS)
             useEffect(() => {
                 fetch('https://api.exchangerate-api.com/v4/latest/CNY')
                     .then(res => res.json())
@@ -460,16 +193,22 @@
                         if(data && data.rates && data.rates.TWD) {
                             setExchangeRate(data.rates.TWD);
                             const now = new Date();
-                            setExchangeRateTimestamp(`${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`);
+                            const formattedTime = `${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+                            setExchangeRateTimestamp(formattedTime);
                         }
                     })
-                    .catch(err => console.error("Exchange rate error", err));
+                    .catch(err => console.error("Exchange rate fetch failed", err));
             }, []);
 
+            // 重置篩選器
             useEffect(() => {
-                setSelectedTypeFilters([]); setSelectedCharFilters([]); setSelectedDateFilters([]); setSelectedSeriesFilters([]);
+                setSelectedTypeFilters([]);
+                setSelectedCharFilters([]);
+                setSelectedDateFilters([]);
+                setSelectedSeriesFilters([]);
             }, [collectionGroupingMode, groupingMode]);
 
+            // --- 1. 初始化與 Auth ---
             useEffect(() => {
                 if (!isFirebaseInitialized) {
                     const localItems = localStorage.getItem('deepspace_items_v7_local');
@@ -478,53 +217,60 @@
                     if (localCatalog) setCatalogItems(JSON.parse(localCatalog));
                     return;
                 }
-                
-                setPersistence(auth, browserLocalPersistence).catch(console.error);
 
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-                    if (currentUser) {
-                        if (!currentUser.isAnonymous) setUser(currentUser);
-                        else setUser(null); 
+                    if (currentUser && !currentUser.isAnonymous) {
+                        setUser(currentUser);
                     } else {
                         setUser(null);
-                        signInAnonymously(auth).catch(console.error);
                     }
                 });
                 
+                if (!auth.currentUser) {
+                    signInAnonymously(auth).catch(e => console.log("Anon login failed", e));
+                }
+
                 return () => unsubscribe();
             }, []);
 
+            // --- 2. 同步資料 ---
             useEffect(() => {
                 if (!isFirebaseInitialized) return;
-                if (!auth.currentUser) return;
 
                 const catalogColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'public', 'data', 'catalog');
                 const unsubCatalog = onSnapshot(catalogColl, (snapshot) => {
                     const cloudCatalog = snapshot.docs.map(doc => doc.data());
                     cloudCatalog.sort((a, b) => (a.order || 0) - (b.order || 0));
                     setCatalogItems(cloudCatalog);
-                }, () => {});
+                }, (err) => console.log("Catalog sync waiting..."));
 
                 let unsubCollection = () => {};
-                if (user) { 
+
+                if (!user || user.isAnonymous) {
+                     const localItems = localStorage.getItem('deepspace_items_v7_local');
+                     if (localItems) setItems(JSON.parse(localItems));
+                } else {
                     const userColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'items');
                     unsubCollection = onSnapshot(userColl, (snapshot) => {
                         const cloudItems = snapshot.docs.map(doc => doc.data());
                         cloudItems.sort((a, b) => (a.order || 0) - (b.order || 0));
                         setItems(cloudItems);
-                    }, console.error);
-                } else { 
-                    const localItems = localStorage.getItem('deepspace_items_v7_local');
-                    if (localItems) setItems(JSON.parse(localItems));
+                    }, (err) => console.error("Collection sync error:", err));
                 }
+
                 return () => { unsubCatalog(); unsubCollection(); };
-            }, [user, auth.currentUser]);
+            }, [user]);
 
             useEffect(() => {
-                if (!isFirebaseInitialized || !user) localStorage.setItem('deepspace_items_v7_local', JSON.stringify(items));
+                if (!isFirebaseInitialized || (user && user.isAnonymous) || !user) {
+                    localStorage.setItem('deepspace_items_v7_local', JSON.stringify(items));
+                }
             }, [items, user]);
+
             useEffect(() => {
-                if (!isFirebaseInitialized) localStorage.setItem('deepspace_catalog_v7_local', JSON.stringify(catalogItems));
+                if (!isFirebaseInitialized) {
+                    localStorage.setItem('deepspace_catalog_v7_local', JSON.stringify(catalogItems));
+                }
             }, [catalogItems]);
 
             const handleLogin = async () => {
@@ -534,10 +280,12 @@
             };
             const handleLogout = () => signOut(auth);
 
+            // --- 資料寫入 ---
             const saveToCollection = async (newItem) => {
                 const itemWithOrder = { ...newItem, order: newItem.order || Date.now() };
-                if (user && isFirebaseInitialized) {
-                    await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, newItem.id), itemWithOrder);
+                if (user && !user.isAnonymous && isFirebaseInitialized) {
+                    const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
+                    await setDoc(doc(db, path, newItem.id), itemWithOrder);
                 } else {
                     setItems(prev => {
                         const exists = prev.find(i => i.id === newItem.id);
@@ -545,33 +293,107 @@
                     });
                 }
             };
+
             const deleteFromCollection = async (itemId) => {
-                if (user && isFirebaseInitialized) {
-                    await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, itemId));
-                } else { setItems(prev => prev.filter(i => i.id !== itemId)); }
+                if (user && !user.isAnonymous && isFirebaseInitialized) {
+                    const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
+                    await deleteDoc(doc(db, path, itemId));
+                } else {
+                    setItems(prev => prev.filter(i => i.id !== itemId));
+                }
             };
+
             const saveToCatalog = async (newItem) => {
                 if (!isFirebaseInitialized) {
                     setCatalogItems(prev => {
                         const exists = prev.find(i => i.id === newItem.id);
                         return exists ? prev.map(i => i.id === newItem.id ? newItem : i) : [...prev, newItem];
-                    }); return;
+                    });
+                    return;
                 }
+                const path = `artifacts/${GLOBAL_APP_ID}/public/data/catalog`;
                 let order = newItem.order || Date.now();
-                await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, newItem.id), { ...newItem, order }, { merge: true });
+                await setDoc(doc(db, path, newItem.id), { ...newItem, order }, { merge: true });
             };
+
             const deleteFromCatalog = async (itemId) => {
-                if (confirm("警告：確定要從共用圖鑑刪除嗎？")) {
-                    if (isFirebaseInitialized) await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, itemId));
-                    else setCatalogItems(prev => prev.filter(i => i.id !== itemId));
+                if (confirm("警告：您正在從「共用圖鑑」中刪除此項目。\n這將會影響所有使用者看到的內容。\n\n確定要刪除嗎？")) {
+                    if (isFirebaseInitialized) {
+                        const path = `artifacts/${GLOBAL_APP_ID}/public/data/catalog`;
+                        await deleteDoc(doc(db, path, itemId));
+                    } else {
+                        setCatalogItems(prev => prev.filter(i => i.id !== itemId));
+                    }
                 }
             };
 
-            // --- Drag Handlers ---
+            const handleBulkImport = async () => {
+                if (!importJson.trim()) return;
+                try {
+                    let parsedData = [];
+                    const text = importJson.trim();
+                    if (text.startsWith('[')) {
+                        parsedData = JSON.parse(text);
+                    } else {
+                        const rows = text.split('\n').map(r=>r.trim()).filter(r=>r);
+                        const header = rows[0].toLowerCase();
+                        const sep = header.includes('\t') ? '\t' : ',';
+                        const cols = rows[0].split(sep).map(s=>s.trim());
+                        const mapKey = { 'name': 'name', '名稱': 'name', 'character': 'character', '角色': 'character', 'type': 'type', '類型': 'type', 'series': 'series', '系列': 'series', 'officialprice': 'officialPrice', '原價': 'officialPrice', 'image': 'image', '圖片': 'image' };
+                        const keys = cols.map(c => mapKey[c.toLowerCase()] || c);
+                        if (!keys.includes('name')) throw new Error("缺少 'name' 或 '名稱' 欄位");
+                        parsedData = rows.slice(1).map(row => {
+                            const vals = row.split(sep);
+                            let obj = {};
+                            keys.forEach((k, i) => { if (vals[i]) obj[k] = vals[i].trim(); });
+                            return obj;
+                        }).filter(o => o.name);
+                    }
+                    if (parsedData.length === 0) throw new Error("無有效資料");
+                    let count = 0;
+                    const timestamp = Date.now();
+                    for (const item of parsedData) {
+                        const newItem = {
+                            id: item.id || `imp_${timestamp}_${count}`,
+                            name: item.name,
+                            character: item.character || '其他',
+                            type: item.type || '未分類',
+                            series: item.series || '',
+                            officialPrice: item.officialPrice || '',
+                            image: item.image || null,
+                            order: timestamp + count
+                        };
+                        if(isFirebaseInitialized) await saveToCatalog(newItem);
+                        else setCatalogItems(prev => [...prev, newItem]);
+                        count++;
+                    }
+                    alert(`匯入成功 ${parsedData.length} 筆`);
+                    setImportJson('');
+                } catch (e) { alert("匯入失敗: " + e.message); }
+            };
+
+             const handleExportCatalog = () => {
+                const dataStr = JSON.stringify(catalogItems, null, 2);
+                setImportJson(dataStr);
+            };
+
+            const handleResetData = () => {
+                if (confirm("確定要清空本地資料嗎？此操作無法復原。")) {
+                    setItems([]);
+                    setCatalogItems([]);
+                    localStorage.removeItem('deepspace_items_v7_local');
+                    localStorage.removeItem('deepspace_catalog_v7_local');
+                    alert("已清空。");
+                }
+            };
+
+            // --- Drag & Drop ---
             const handleDragStart = (e, index, type) => {
-                if (type !== 'settings-type' && type !== 'settings-character') {
-                     const currentMode = type === 'collection' ? collectionGroupingMode : (type === 'catalog' ? groupingMode : 'none');
-                     if (currentMode !== 'none') { e.preventDefault(); return; }
+                const currentMode = type === 'collection' ? collectionGroupingMode : (type === 'catalog' ? groupingMode : 'none');
+                
+                if (type !== 'settings-type' && currentMode !== 'none') { 
+                    e.preventDefault(); 
+                    return; 
                 }
                 
                 dragItem.current = index;
@@ -581,35 +403,25 @@
                 e.dataTransfer.setData('type', type);
             };
 
-            const handleDragEnter = (e, index) => dragOverItem.current = index;
-
             const handleDragEnd = async (e) => {
                 e.target.classList.remove('dragging');
                 const type = dragType.current;
+                
                 if (dragItem.current === null || dragOverItem.current === null || dragItem.current === dragOverItem.current) {
                     dragItem.current = null; dragOverItem.current = null; return;
                 }
 
-                if (type === 'settings-type') {
-                    const newTypes = [...appSettings.customTypes];
-                    const movedType = newTypes[dragItem.current];
-                    newTypes.splice(dragItem.current, 1);
-                    newTypes.splice(dragOverItem.current, 0, movedType);
-                    setAppSettings(prev => ({ ...prev, customTypes: newTypes }));
-                } else if (type === 'settings-character') {
-                    const newChars = [...appSettings.customCharacters];
-                    const movedChar = newChars[dragItem.current];
-                    newChars.splice(dragItem.current, 1);
-                    newChars.splice(dragOverItem.current, 0, movedChar);
-                    setAppSettings(prev => ({ ...prev, customCharacters: newChars }));
-                } else if (type === 'collection') {
+                if (type === 'collection') {
                     const currentStacks = getStackedItems(items, 'none');
                     const moved = currentStacks[dragItem.current];
+                    
                     currentStacks.splice(dragItem.current, 1);
                     currentStacks.splice(dragOverItem.current, 0, moved);
+                    
                     const newFlatList = currentStacks.flatMap(s => s.instances);
                     setItems(newFlatList);
-                    if (isFirebaseInitialized && user) {
+
+                    if (isFirebaseInitialized && user && !user.isAnonymous) {
                         const batch = writeBatch(db);
                         const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
                         newFlatList.forEach((item, index) => batch.update(doc(db, path, item.id), { order: index }));
@@ -623,15 +435,24 @@
                         _items.splice(dragOverItem.current, 0, moved);
                         setCatalogItems(_items);
                     } else {
-                         alert("提示：公開圖鑑排序僅本地暫時生效。");
-                         const newOrderList = [...catalogItems];
-                         const movedItem = newOrderList[dragItem.current];
-                         newOrderList.splice(dragItem.current, 1);
-                         newOrderList.splice(dragOverItem.current, 0, movedItem);
-                         setCatalogItems(newOrderList);
+                        alert("提示：公開圖鑑排序僅本地暫時生效。");
+                        const newOrderList = [...catalogItems];
+                        const movedItem = newOrderList[dragItem.current];
+                        newOrderList.splice(dragItem.current, 1);
+                        newOrderList.splice(dragOverItem.current, 0, movedItem);
+                        setCatalogItems(newOrderList);
                     }
+                } else if (type === 'settings-type') {
+                    const newTypes = [...appSettings.customTypes];
+                    const movedType = newTypes[dragItem.current];
+                    newTypes.splice(dragItem.current, 1);
+                    newTypes.splice(dragOverItem.current, 0, movedType);
+                    setAppSettings(prev => ({ ...prev, customTypes: newTypes }));
                 }
-                dragItem.current = null; dragOverItem.current = null; dragType.current = null;
+                
+                dragItem.current = null;
+                dragOverItem.current = null;
+                dragType.current = null;
             };
 
             const handleMoveStack = async (index, direction) => {
@@ -643,7 +464,7 @@
                 currentStacks.splice(newIndex, 0, moved);
                 const newFlatList = currentStacks.flatMap(s => s.instances);
                 setItems(newFlatList);
-                if (isFirebaseInitialized && user) {
+                if (isFirebaseInitialized && user && !user.isAnonymous) {
                     const batch = writeBatch(db);
                     const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
                     newFlatList.forEach((item, idx) => batch.update(doc(db, path, item.id), { order: index }));
@@ -651,6 +472,7 @@
                 }
             };
 
+            // --- Settings Actions ---
             const handleAddType = () => {
                 if (newTypeInput && !appSettings.customTypes.includes(newTypeInput)) {
                     setAppSettings(prev => ({...prev, customTypes: [...prev.customTypes, newTypeInput]}));
@@ -663,15 +485,17 @@
                 }
             };
             
+            // Toggle logic for "All" vs specific char
             const toggleCharacterVisibility = (char) => {
                 setAppSettings(prev => {
                     const current = prev.visibleCharacters;
                     if (char === "ALL") {
+                        // "我全都要" logic
                          const allMainSelected = CHARACTERS.every(c => current.includes(c));
                          if (allMainSelected) {
-                             return { ...prev, visibleCharacters: [] }; 
+                             return { ...prev, visibleCharacters: [] }; // Unselect all
                          } else {
-                             return { ...prev, visibleCharacters: [...CHARACTERS] }; 
+                             return { ...prev, visibleCharacters: [...CHARACTERS] }; // Select all
                          }
                     } else {
                         if (current.includes(char)) {
@@ -709,7 +533,7 @@
                     quantity: 1,
                     isPreorder: false, 
                     shippingDate: '',
-                    currency: appSettings.defaultPreorderCurrency 
+                    currency: appSettings.defaultPreorderCurrency // 新增：預購預設幣值
                 };
                 
                 if (mode === 'catalog' && item) { 
@@ -724,7 +548,7 @@
                             quantity: 1,
                             isPreorder: item.isPreorder || false,
                             shippingDate: item.shippingDate || '',
-                            currency: item.currency || 'NT$' 
+                            currency: item.currency || 'NT$' // 相容舊資料
                         }); 
                     }
                     else if (template) { 
@@ -781,6 +605,7 @@
                 setIsModalOpen(false);
             };
             
+            // Enter to save handler
             const handleKeyDown = (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
@@ -789,6 +614,7 @@
             };
 
             // --- Helpers ---
+            // 取得統一的日期 (收物日 or 預購出貨日)
             const getEffectiveDate = (item) => item.isPreorder ? item.shippingDate : item.date;
 
             const getStackedItems = (sourceItems, mode) => {
@@ -809,6 +635,7 @@
                 return stacks;
             };
 
+            // 更新 Filter helpers
             const toggleFilter = (filterState, setFilterState, value, multiSelectEnabled) => {
                 if (value === 'all') {
                     setFilterState([]);
@@ -822,8 +649,9 @@
                         setFilterState(prev => [...prev, value]);
                     }
                 } else {
+                    // Single select mode
                      if (filterState.includes(value)) {
-                         setFilterState([]); 
+                         setFilterState([]); // Toggle off
                      } else {
                          setFilterState([value]);
                      }
@@ -831,8 +659,10 @@
             };
 
             const getFilteredList = (list, mode, typeFilters, charFilters, dateFilters, seriesFilters) => {
+                // 1. 全域角色過濾 (Settings)
                 let processed = list.filter(i => appSettings.visibleCharacters.includes(i.character));
 
+                // 2. 模式專屬過濾
                 if (mode === 'type' && typeFilters.length > 0) {
                     processed = processed.filter(i => typeFilters.includes(i.type));
                 }
@@ -840,11 +670,13 @@
                     processed = processed.filter(i => charFilters.includes(i.character));
                 }
                 if (mode === 'date' && dateFilters.length > 0) {
+                    // 修正：日期過濾現在要同時比對 date 和 shippingDate (視為 unified date)
                     processed = processed.filter(i => {
                         const effDate = getEffectiveDate(i);
                         return dateFilters.includes(effDate);
                     });
                 }
+                // 新增系列過濾
                 if (mode === 'series' && seriesFilters.length > 0) {
                     processed = processed.filter(i => seriesFilters.includes(i.series));
                 }
@@ -852,16 +684,30 @@
                 return processed;
             };
 
+            // 調整 stats 計算，只計算可見角色
             const stats = useMemo(() => {
                 const visibleItems = items.filter(i => appSettings.visibleCharacters.includes(i.character));
                 const totalCount = visibleItems.length;
-                let totalNT = 0, totalR = 0;
+                
+                let totalNT = 0;
+                let totalR = 0;
+
                 visibleItems.forEach(item => {
                     const price = Number(item.acquiredPrice || 0);
-                    if (item.currency === 'r') totalR += price; else totalNT += price;
+                    if (item.currency === 'r') {
+                        totalR += price;
+                    } else {
+                        totalNT += price;
+                    }
                 });
+
                 const grandTotal = totalNT + (totalR * exchangeRate);
-                const byChar = visibleItems.reduce((acc, item) => { acc[item.character] = (acc[item.character] || 0) + 1; return acc; }, {});
+
+                const byChar = visibleItems.reduce((acc, item) => { 
+                    acc[item.character] = (acc[item.character] || 0) + 1; 
+                    return acc; 
+                }, {});
+
                 return { totalCount, totalNT, totalR, grandTotal, byChar };
             }, [items, appSettings.visibleCharacters, exchangeRate]);
 
@@ -871,16 +717,23 @@
             }, [items, appSettings.customTypes]);
 
             const availableDates = useMemo(() => {
+                // 修正：使用 getEffectiveDate 收集所有日期
                 const dates = new Set(items.map(i => getEffectiveDate(i)).filter(Boolean));
                 return Array.from(dates).sort((a, b) => new Date(b) - new Date(a));
             }, [items]);
 
+            // 計算哪些日期含有預購商品，用於標示黃色
             const preorderDates = useMemo(() => {
                 const set = new Set();
-                items.forEach(i => { if (i.isPreorder && i.shippingDate) set.add(i.shippingDate); });
+                items.forEach(i => {
+                    if (i.isPreorder && i.shippingDate) {
+                        set.add(i.shippingDate);
+                    }
+                });
                 return set;
             }, [items]);
 
+            // 新增可用系列計算
             const availableSeries = useMemo(() => {
                 const source = activeTab === 'collection' ? items : catalogItems;
                 const series = new Set(source.map(i => i.series).filter(Boolean));
@@ -888,6 +741,7 @@
             }, [items, catalogItems, activeTab]);
 
             const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters, dateFilters, seriesFilters) => {
+                // 先過濾
                 const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters, seriesFilters);
 
                 const isAllSelected = (mode === 'type' && typeFilters.length === 0) || 
@@ -895,19 +749,16 @@
                                       (mode === 'series' && seriesFilters.length === 0) || 
                                       (mode === 'date' && dateFilters.length === 0);
 
-                if (mode === 'none' || (isAllSelected && !appSettings.groupAllInFilterMode)) {
-                    // Special case: If mode is 'none' but grouping is ON, we should still group (e.g. by Type)
-                    // But user requested NO grouping if mode is 'none' ("全部" tab)
-                    // The setting `groupAllInFilterMode` was intended for when filters ARE applied but select all.
-                    // However, to strictly follow "No big headers in All mode", we just return flattened list here.
+                // 如果是 none 模式，或 (是特定模式但全選 且 設定為不顯示大標題)
+                if (mode === 'none') {
+                     return { '全部': processedList };
+                }
+                
+                if (isAllSelected && !appSettings.groupAllInFilterMode) {
                     return { '全部': processedList };
                 }
                 
-                // Logic for when grouping IS active (not 'none' mode, or specific setting overrides)
-                // BUT per user request 1 & 2: "全部" tab (mode='none') should NOT have headers.
-                // So the above block handles it.
-                
-                // Below handles mode='series', 'type', etc.
+                // 否則進行分組
                 const grouped = processedList.reduce((acc, item) => {
                     let key = '';
                     if (mode === 'series') key = item.series || '其他系列';
@@ -927,27 +778,325 @@
                     });
                     const sorted = {}; keys.forEach(k=>sorted[k]=grouped[k]); return sorted;
                 }
-                
-                // Custom sort order for Character grouping
-                if (mode === 'character') {
-                    const sorted = {};
-                    appSettings.customCharacters.forEach(char => { if (grouped[char]) sorted[char] = grouped[char]; });
-                    Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; });
-                    return sorted;
-                }
-                
                 return grouped;
             };
 
             const groupedData = useMemo(() => ({
                 collection: getGroupedData(items, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters),
                 catalog: getGroupedData(catalogItems, groupingMode, 'desc', selectedTypeFilters, selectedCharFilters, [], selectedSeriesFilters)
-            }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters, appSettings.visibleCharacters, appSettings.groupAllInFilterMode, appSettings.customCharacters]);
+            }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters, appSettings.visibleCharacters, appSettings.groupAllInFilterMode]);
 
-            const gridStyle = { display: 'grid', gridTemplateColumns: `repeat(${appSettings.layoutCols}, minmax(0, 1fr))`, gap: '1rem' };
+            // Grid Style Helper
+            const gridStyle = {
+                display: 'grid',
+                gridTemplateColumns: `repeat(${appSettings.layoutCols}, minmax(0, 1fr))`,
+                gap: '1rem'
+            };
+
+            // --- Components ---
+            const FilterBar = ({ options, selected, toggle, multi, highlightSet }) => (
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide animate-fade-in items-center">
+                    <button 
+                        onClick={() => toggle('all')}
+                        className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border ${selected.length === 0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                    >
+                        {multi ? "全選" : "全部"}
+                    </button>
+                    {options.map(opt => {
+                        const isHighlight = highlightSet && highlightSet.has(opt);
+                        return (
+                            <button 
+                                key={opt}
+                                onClick={() => toggle(opt)}
+                                className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border 
+                                    ${selected.includes(opt) 
+                                        ? 'bg-blue-100 text-blue-700 border-blue-300' 
+                                        : (isHighlight ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')
+                                    }`}
+                            >
+                                {opt}
+                            </button>
+                        );
+                    })}
+                    {multi && <button onClick={() => toggle('all')} className="px-3 py-1 text-xs rounded-full bg-gray-200 text-gray-600 border border-transparent hover:bg-gray-300 whitespace-nowrap">重置</button>}
+                </div>
+            );
+
+            const StackCard = ({ stack, index, isDraggable }) => {
+                const theme = CHARACTER_THEMES[stack.character] || CHARACTER_THEMES["其他"];
+                const consolidated = useMemo(() => {
+                    const map = new Map();
+                    stack.instances.forEach(inst => {
+                        const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}-${inst.currency}`;
+                        if (!map.has(key)) map.set(key, { ...inst, count: 1 }); else map.get(key).count++;
+                    });
+                    return Array.from(map.values());
+                }, [stack.instances]);
+
+                return (
+                    <div 
+                        draggable={isDraggable} 
+                        onDragStart={(e) => handleDragStart(e, index, 'collection')} 
+                        onDragEnter={(e) => dragOverItem.current = index} 
+                        onDragEnd={handleDragEnd} 
+                        onDragOver={(e) => e.preventDefault()} 
+                        className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative ${isDraggable ? 'cursor-move' : ''}`}
+                    >
+                        {/* 移動按鈕 */}
+                        {isDraggable && (
+                            <div className="absolute top-2 left-2 z-20 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 rounded-lg p-1 backdrop-blur-sm">
+                                <button onClick={(e) => {e.stopPropagation(); handleMoveStack(index, -1)}} className="p-1 hover:bg-blue-100 rounded text-blue-600 disabled:opacity-30" disabled={index === 0}><Icon name="ArrowLeft" size={14} /></button>
+                                <button onClick={(e) => {e.stopPropagation(); handleMoveStack(index, 1)}} className="p-1 hover:bg-blue-100 rounded text-blue-600 disabled:opacity-30"><Icon name="ArrowRight" size={14} /></button>
+                            </div>
+                        )}
+
+                        {stack.totalCount > 1 && <div className="absolute top-2 left-2 z-10 bg-slate-900 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">x{stack.totalCount}</div>}
+                        <div className={`h-40 w-full relative bg-gray-100 flex items-center justify-center overflow-hidden`}>
+                            {stack.image ? <img src={stack.image} className="w-full h-full object-cover pointer-events-none" /> : <Icon name="Image" className={`opacity-20 ${theme.text}`} size={32} />}
+                            <div className="absolute top-2 right-2"><span className={`text-[10px] font-bold px-2 py-1 rounded-full bg-white/90 shadow-sm ${theme.text}`}>{stack.character}</span></div>
+                        </div>
+                        <div className="p-3 flex-1 flex flex-col bg-white">
+                            <h3 className="font-bold text-gray-800 text-sm line-clamp-1">{stack.name}</h3>
+                            <div className="flex-1 mt-1 space-y-2 overflow-y-auto max-h-[120px] thin-scrollbar pr-1">
+                                {consolidated.map((inst, idx) => (
+                                    <div key={idx} className="bg-gray-50 rounded p-2 text-xs border border-gray-100 flex justify-between items-center">
+                                        <div>
+                                            <div className="flex gap-1 text-[10px] text-gray-500 items-center">
+                                                {inst.isPreorder ? 
+                                                    <span className="text-orange-500 font-bold flex items-center gap-0.5"><Icon name="Package" size={10}/> 預購 {inst.shippingDate}</span> 
+                                                    : 
+                                                    <span className="flex items-center gap-0.5"><Icon name="Calendar" size={10}/> {inst.date}</span>
+                                                }
+                                            </div>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="font-bold text-base text-slate-800">
+                                                    {inst.currency === 'r' ? `${inst.acquiredPrice}r` : `NT$ ${inst.acquiredPrice}`}
+                                                </span>
+                                                {/* 原價顯示修改：移除[原]字 */}
+                                                {inst.officialPrice && <span className="text-[11px] text-gray-500 font-medium ml-1">({inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-1 ml-auto pl-2 border-l border-gray-100">
+                                            {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">x{inst.count}</span>}
+                                            <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all"><Icon name="Edit3" size={12}/></button>
+                                            <button onClick={(e)=>{e.stopPropagation(); deleteFromCollection(inst.id);}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-red-500 hover:border-red-300 shadow-sm transition-all"><Icon name="Trash2" size={12}/></button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const CatalogCard = ({ item, index, isDraggable }) => {
+                const theme = CHARACTER_THEMES[item.character] || CHARACTER_THEMES["其他"];
+                const priceDisplay = item.officialPrice ? (isNaN(Number(item.officialPrice)) ? item.officialPrice : `${item.officialPrice}r`) : '?';
+                
+                return (
+                    <div draggable={isDraggable} onDragStart={(e) => handleDragStart(e, index, 'catalog')} onDragEnter={(e) => dragOverItem.current = index} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()} className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group relative ${isDraggable ? 'cursor-move' : ''}`}>
+                        <div className="aspect-square bg-gray-50 relative overflow-hidden">
+                            <img src={item.image} alt={item.name} className="w-full h-full object-cover pointer-events-none" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                            <button onClick={() => openModal(null, item, 'collection')} className="absolute bottom-3 right-3 bg-white text-blue-600 p-2 rounded-full shadow-lg transform translate-y-10 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all z-20 w-10 h-10 flex items-center justify-center" title="加入我的收藏"><Icon name="Plus" size={24} /></button>
+                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                <button onClick={() => openModal(item, null, 'catalog')} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-blue-600 shadow-sm"><Icon name="Edit3" size={14} /></button>
+                                <button onClick={() => deleteFromCatalog(item.id)} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-red-600 shadow-sm"><Icon name="Trash2" size={14} /></button>
+                            </div>
+                        </div>
+                        <div className="p-3 relative">
+                            <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${theme.badge}`}>{item.character}</span><span className="text-[10px] text-gray-500 border px-1 rounded">{item.type}</span></div>
+                            <h3 className="font-bold text-gray-800 text-sm truncate">{item.name}</h3>
+                            <div className="flex justify-end mt-2">
+                                <span className="text-xl font-bold text-black">{priceDisplay}</span>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- Settings Modal ---
+            const SettingsModal = () => (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center border-b pb-3">
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icon name="Settings" /> 設定</h3>
+                            <button onClick={()=>setIsSettingsOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button>
+                        </div>
+                        
+                        <div className="flex gap-2 border-b pb-2 overflow-x-auto">
+                            {['layout', 'filter', 'filters_config', 'types', 'data'].map(t => (
+                                <button key={t} onClick={()=>setSettingsTab(t)} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${settingsTab===t ? 'bg-slate-900 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+                                    {t==='layout' ? '版面' : t==='filter' ? '推角顯示' : t==='filters_config' ? '篩選設定' : t==='types' ? '類型' : '資料'}
+                                </button>
+                            ))}
+                        </div>
+
+                        {settingsTab === 'layout' && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">每行顯示數量</label>
+                                    <div className="flex gap-2">
+                                        {[2,3,4,5].map(cols => (
+                                            <button key={cols} onClick={()=>setAppSettings(prev=>({...prev, layoutCols: cols}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.layoutCols===cols ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                                {cols}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">預購預設幣值</label>
+                                    <div className="flex gap-2">
+                                        {['NT$', 'r'].map(curr => (
+                                            <button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultPreorderCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.defaultPreorderCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                                {curr}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-5 h-5 text-blue-600 rounded"
+                                            checked={appSettings.groupAllInFilterMode}
+                                            onChange={(e) => setAppSettings(prev => ({...prev, groupAllInFilterMode: e.target.checked}))}
+                                        />
+                                        <span className="text-sm font-medium">顯示分類大標題 (全部模式)</span>
+                                    </label>
+                                    <p className="text-xs text-gray-400 mt-1 ml-1">在「全部」檢視下，是否依據當前模式顯示分組標題。</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {settingsTab === 'filter' && (
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <p className="text-sm text-gray-500">勾選角色以顯示週邊。</p>
+                                    <button 
+                                        onClick={() => toggleCharacterVisibility('ALL')}
+                                        className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700"
+                                    >
+                                        我全都要
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {CHARACTERS.map(char => {
+                                        const isChecked = appSettings.visibleCharacters.includes(char);
+                                        return (
+                                            <label key={char} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                                                    checked={isChecked}
+                                                    onChange={() => toggleCharacterVisibility(char)}
+                                                />
+                                                <span className={`text-sm font-medium ${CHARACTER_THEMES[char].text}`}>{char}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {settingsTab === 'filters_config' && (
+                            <div className="space-y-4">
+                                <p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p>
+                                <div className="space-y-3">
+                                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-5 h-5 text-blue-600 rounded"
+                                            checked={appSettings.multiSelect.series}
+                                            onChange={() => toggleMultiSelect('series')}
+                                        />
+                                        <span className="text-sm font-medium">依系列 - 多選</span>
+                                    </label>
+                                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-5 h-5 text-blue-600 rounded"
+                                            checked={appSettings.multiSelect.type}
+                                            onChange={() => toggleMultiSelect('type')}
+                                        />
+                                        <span className="text-sm font-medium">依類型 - 多選</span>
+                                    </label>
+                                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-5 h-5 text-blue-600 rounded"
+                                            checked={appSettings.multiSelect.character}
+                                            onChange={() => toggleMultiSelect('character')}
+                                        />
+                                        <span className="text-sm font-medium">依角色 - 多選</span>
+                                    </label>
+                                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-5 h-5 text-blue-600 rounded"
+                                            checked={appSettings.multiSelect.date}
+                                            onChange={() => toggleMultiSelect('date')}
+                                        />
+                                        <span className="text-sm font-medium">依收物日 - 多選</span>
+                                    </label>
+                                </div>
+                            </div>
+                        )}
+
+                        {settingsTab === 'types' && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label>
+                                    <div className="flex gap-2">
+                                        <input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} />
+                                        <button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">目前類型列表 (拖曳排序)</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {appSettings.customTypes.map((t, index) => (
+                                            <span 
+                                                key={t} 
+                                                className="px-3 py-1 bg-gray-100 rounded-full text-xs flex items-center gap-1 group cursor-grab active:cursor-grabbing"
+                                                draggable
+                                                onDragStart={(e) => handleDragStart(e, index, 'settings-type')}
+                                                onDragEnter={(e) => dragOverItem.current = index}
+                                                onDragEnd={handleDragEnd}
+                                                onDragOver={(e) => e.preventDefault()}
+                                            >
+                                                {t}
+                                                <button onClick={()=>handleDeleteType(t)} className="text-gray-400 hover:text-red-500"><Icon name="X" size={12}/></button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {settingsTab === 'data' && (
+                            <div className="space-y-4">
+                                <div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800">
+                                    <p className="font-bold mb-1">批次匯入：</p>
+                                    <p>貼上 Excel 或 JSON。匯入後將存入共用圖鑑。</p>
+                                </div>
+                                <textarea className="w-full h-32 p-3 border rounded-xl text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea>
+                                <div className="flex gap-2">
+                                    <button onClick={handleBulkImport} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">匯入</button>
+                                    <button onClick={handleExportCatalog} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded hover:bg-gray-50">匯出</button>
+                                </div>
+                                <hr />
+                                <button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-2 rounded hover:bg-red-50 text-sm">⚠️ 清空本地快取資料</button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
 
             return (
                 <div className="min-h-screen bg-gray-50 pb-24 md:pb-0 md:pl-64">
+                    {/* Desktop Sidebar */}
                     <aside className="hidden md:flex fixed left-0 top-0 h-full w-64 bg-slate-900 text-white flex-col shadow-2xl z-30">
                         <div className="p-6 border-b border-slate-800"><h1 className="text-2xl font-bold tracking-wider flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400"><Icon name="Star" className="text-yellow-400" size={24} /> 深空收藏艙</h1></div>
                         <div className="px-4 py-4 flex flex-col gap-2">
@@ -965,6 +1114,7 @@
                         </div>
                     </aside>
 
+                    {/* Mobile Header */}
                     <div className="md:hidden bg-slate-900 text-white p-4 sticky top-0 z-20 shadow-lg flex justify-between items-center">
                         <div className="flex items-center gap-2"><Icon name="Star" className="text-yellow-400" size={20}/><span className="font-bold">深空收藏艙</span></div>
                         <div className="flex gap-2 items-center">
@@ -987,17 +1137,28 @@
                                     </div>
                                 </div>
                                 
-                                {collectionGroupingMode === 'series' && <FilterBar options={availableSeries} selected={selectedSeriesFilters} toggle={(val)=>toggleFilter(selectedSeriesFilters, setSelectedSeriesFilters, val, appSettings.multiSelect.series)} multi={appSettings.multiSelect.series} />}
-                                {collectionGroupingMode === 'type' && <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />}
-                                {collectionGroupingMode === 'character' && <FilterBar options={appSettings.customCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />}
-                                {collectionGroupingMode === 'date' && <FilterBar options={availableDates} selected={selectedDateFilters} toggle={(val)=>toggleFilter(selectedDateFilters, setSelectedDateFilters, val, appSettings.multiSelect.date)} multi={appSettings.multiSelect.date} highlightSet={preorderDates} />}
+                                {collectionGroupingMode === 'series' && (
+                                    <FilterBar options={availableSeries} selected={selectedSeriesFilters} toggle={(val)=>toggleFilter(selectedSeriesFilters, setSelectedSeriesFilters, val, appSettings.multiSelect.series)} multi={appSettings.multiSelect.series} />
+                                )}
+                                {collectionGroupingMode === 'type' && (
+                                    <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />
+                                )}
+                                {collectionGroupingMode === 'character' && (
+                                    <FilterBar options={appSettings.visibleCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />
+                                )}
+                                {collectionGroupingMode === 'date' && (
+                                    <FilterBar options={availableDates} selected={selectedDateFilters} toggle={(val)=>toggleFilter(selectedDateFilters, setSelectedDateFilters, val, appSettings.multiSelect.date)} multi={appSettings.multiSelect.date} highlightSet={preorderDates} />
+                                )}
 
                                 <div className="space-y-8">
                                     {Object.entries(groupedData.collection).map(([gName, gItems]) => {
                                         const stacks = getStackedItems(gItems, collectionGroupingMode);
                                         return <div key={gName} className="animate-in fade-in">
-                                            {collectionGroupingMode!=='none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0"><div className={`h-6 w-1 rounded-full ${preorderDates.has(gName) ? 'bg-yellow-400' : 'bg-blue-500'}`}></div><h3 className="font-bold text-lg text-gray-700">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({stacks.length})</span></h3></div>}
-                                            <div style={gridStyle}>{stacks.map((s,i)=><StackCard key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'} handleDragStart={handleDragStart} handleDragEnter={handleDragEnter} handleDragEnd={handleDragEnd} handleMoveStack={handleMoveStack} openModal={openModal} deleteFromCollection={deleteFromCollection} />)}</div>
+                                            {collectionGroupingMode !== 'none' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}
+                                            {/* Header for None mode if grouping enabled */}
+                                            {collectionGroupingMode === 'none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}
+                                            
+                                            <div style={gridStyle}>{stacks.map((s,i)=><StackCard key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'}/>)}</div>
                                         </div>;
                                     })}
                                     {items.length===0 && <div className="text-center py-20 text-gray-400 border-2 border-dashed rounded-3xl">尚無收藏</div>}
@@ -1013,14 +1174,23 @@
                                         {[{id:'none',l:'全部'},{id:'series',l:'依系列'},{id:'type',l:'依類型'},{id:'character',l:'依角色'}].map(m=><button key={m.id} onClick={()=>setGroupingMode(m.id)} className={`px-3 py-1.5 text-xs border rounded-lg ${groupingMode===m.id?'bg-slate-900 text-white':'bg-white text-gray-500'}`}>{m.l}</button>)}
                                     </div>
                                 </div>
-                                {groupingMode === 'series' && <FilterBar options={availableSeries} selected={selectedSeriesFilters} toggle={(val)=>toggleFilter(selectedSeriesFilters, setSelectedSeriesFilters, val, appSettings.multiSelect.series)} multi={appSettings.multiSelect.series} />}
-                                {groupingMode === 'type' && <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />}
-                                {groupingMode === 'character' && <FilterBar options={appSettings.customCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />}
+                                {groupingMode === 'series' && (
+                                    <FilterBar options={availableSeries} selected={selectedSeriesFilters} toggle={(val)=>toggleFilter(selectedSeriesFilters, setSelectedSeriesFilters, val, appSettings.multiSelect.series)} multi={appSettings.multiSelect.series} />
+                                )}
+                                {groupingMode === 'type' && (
+                                    <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />
+                                )}
+                                {groupingMode === 'character' && (
+                                    <FilterBar options={appSettings.visibleCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />
+                                )}
                                 <div className="space-y-8">
                                     {Object.entries(groupedData.catalog).map(([gName, gItems]) => (
                                         <div key={gName} className="animate-in fade-in">
-                                            {groupingMode !== 'none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({gItems.length})</span></h3></div>}
-                                            <div style={gridStyle}>{gItems.map((item,i)=><CatalogCard key={item.id} item={item} index={i} isDraggable={groupingMode==='none'} handleDragStart={handleDragStart} handleDragEnter={handleDragEnter} handleDragEnd={handleDragEnd} openModal={openModal} deleteFromCatalog={deleteFromCatalog}/>)}</div>
+                                            {groupingMode!=='none' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}
+                                            {/* Header for None mode if grouping enabled */}
+                                            {groupingMode === 'none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}
+                                            
+                                            <div style={gridStyle}>{gItems.map((item,i)=><CatalogCard key={item.id} item={item} index={i} isDraggable={groupingMode==='none'}/>)}</div>
                                         </div>
                                     ))}
                                     {catalogItems.length===0 && <div className="text-center py-20 text-gray-400">圖鑑目前是空的</div>}
@@ -1082,27 +1252,9 @@
                         )}
                     </main>
 
-                    {isSettingsOpen && <SettingsModal 
-                        isOpen={isSettingsOpen} 
-                        onClose={()=>setIsSettingsOpen(false)}
-                        appSettings={appSettings}
-                        setAppSettings={setAppSettings}
-                        importJson={importJson}
-                        setImportJson={setImportJson}
-                        handleBulkImport={handleBulkImport}
-                        handleExportCatalog={handleExportCatalog}
-                        handleResetData={handleResetData}
-                        handleDragStart={handleDragStart}
-                        handleDragEnter={handleDragEnter}
-                        handleDragEnd={handleDragEnd}
-                        handleAddType={handleAddType}
-                        handleDeleteType={handleDeleteType}
-                        newTypeInput={newTypeInput}
-                        setNewTypeInput={setNewTypeInput}
-                        handleCharDragStart={(e, idx) => handleDragStart(e, idx, 'settings-character')}
-                    />}
+                    {isSettingsOpen && <SettingsModal />}
 
-                    {isModalOpen && (/* Modal Content reused from previous step, logic integrated */
+                    {isModalOpen && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                             <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
                                 <div className="flex justify-between items-center">
@@ -1130,13 +1282,29 @@
                                         <div className="grid grid-cols-2 gap-2">
                                             <div className="relative">
                                                 <input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
-                                                {formData.isPreorder && <select className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0" value={formData.currency || appSettings.defaultPreorderCurrency} onChange={e=>setFormData({...formData, currency: e.target.value})}><option value="NT$">NT$</option><option value="r">r</option></select>}
+                                                {formData.isPreorder && (
+                                                    <select 
+                                                        className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0"
+                                                        value={formData.currency || appSettings.defaultPreorderCurrency}
+                                                        onChange={e=>setFormData({...formData, currency: e.target.value})}
+                                                    >
+                                                        <option value="NT$">NT$</option>
+                                                        <option value="r">r</option>
+                                                    </select>
+                                                )}
                                                 {!formData.isPreorder && <span className="absolute right-3 top-2 text-gray-500 text-sm">NT$</span>}
                                             </div>
+
                                             {formData.isPreorder ? (
-                                                <div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span><input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/></div>
+                                                <div className="relative">
+                                                    <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span>
+                                                    <input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/>
+                                                </div>
                                             ) : (
-                                                <div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500">收物日期</span><input type="date" className="border p-2 rounded w-full" value={formData.date} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,date:e.target.value})}/></div>
+                                                <div className="relative">
+                                                    <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500">收物日期</span>
+                                                    <input type="date" className="border p-2 rounded w-full" value={formData.date} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,date:e.target.value})}/>
+                                                </div>
                                             )}
                                         </div>
                                         {!editingItem && <div className="flex items-center gap-2"><label>數量:</label><input type="number" className="border p-1 w-16" value={formData.quantity} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div>}

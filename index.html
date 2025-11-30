@@ -39,14 +39,14 @@
         // --- 請在此處填入您的 Firebase 設定 ---
         // ==========================================
         const firebaseConfig = {
-  apiKey: "AIzaSyDxpH_rteE6PJq_bMmg3X2CxTs1lrQmhZA",
-  authDomain: "deepspace-collection.firebaseapp.com",
-  projectId: "deepspace-collection",
-  storageBucket: "deepspace-collection.firebasestorage.app",
-  messagingSenderId: "129454784064",
-  appId: "1:129454784064:web:38e7f8ffcf99d9a61ea9a5",
-  measurementId: "G-GCCS7NBT15"
-};
+            apiKey: "AIzaSyDxpH_rteE6PJq_bMmg3X2CxTs1lrQmhZA",
+            authDomain: "deepspace-collection.firebaseapp.com",
+            projectId: "deepspace-collection",
+            storageBucket: "deepspace-collection.firebasestorage.app",
+            messagingSenderId: "129454784064",
+            appId: "1:129454784064:web:38e7f8ffcf99d9a61ea9a5",
+            measurementId: "G-GCCS7NBT15"
+        };
 
         const GLOBAL_APP_ID = "deepspace_shared_v1";
 
@@ -125,7 +125,7 @@
                         type: true,
                         character: false,
                         date: false,
-                        series: false 
+                        series: false // 新增系列多選
                     },
                     defaultPreorderCurrency: 'NT$',
                     groupAllInFilterMode: true // 新增：預設開啟分類標題
@@ -485,17 +485,15 @@
                 }
             };
             
-            // Toggle logic for "All" vs specific char
             const toggleCharacterVisibility = (char) => {
                 setAppSettings(prev => {
                     const current = prev.visibleCharacters;
                     if (char === "ALL") {
-                        // "我全都要" logic
                          const allMainSelected = CHARACTERS.every(c => current.includes(c));
                          if (allMainSelected) {
-                             return { ...prev, visibleCharacters: [] }; // Unselect all
+                             return { ...prev, visibleCharacters: [] }; 
                          } else {
-                             return { ...prev, visibleCharacters: [...CHARACTERS] }; // Select all
+                             return { ...prev, visibleCharacters: [...CHARACTERS] }; 
                          }
                     } else {
                         if (current.includes(char)) {
@@ -533,7 +531,7 @@
                     quantity: 1,
                     isPreorder: false, 
                     shippingDate: '',
-                    currency: appSettings.defaultPreorderCurrency // 新增：預購預設幣值
+                    currency: appSettings.defaultPreorderCurrency 
                 };
                 
                 if (mode === 'catalog' && item) { 
@@ -548,7 +546,7 @@
                             quantity: 1,
                             isPreorder: item.isPreorder || false,
                             shippingDate: item.shippingDate || '',
-                            currency: item.currency || 'NT$' // 相容舊資料
+                            currency: item.currency || 'NT$' 
                         }); 
                     }
                     else if (template) { 
@@ -605,7 +603,6 @@
                 setIsModalOpen(false);
             };
             
-            // Enter to save handler
             const handleKeyDown = (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
@@ -614,7 +611,6 @@
             };
 
             // --- Helpers ---
-            // 取得統一的日期 (收物日 or 預購出貨日)
             const getEffectiveDate = (item) => item.isPreorder ? item.shippingDate : item.date;
 
             const getStackedItems = (sourceItems, mode) => {
@@ -635,7 +631,6 @@
                 return stacks;
             };
 
-            // 更新 Filter helpers
             const toggleFilter = (filterState, setFilterState, value, multiSelectEnabled) => {
                 if (value === 'all') {
                     setFilterState([]);
@@ -649,9 +644,8 @@
                         setFilterState(prev => [...prev, value]);
                     }
                 } else {
-                    // Single select mode
                      if (filterState.includes(value)) {
-                         setFilterState([]); // Toggle off
+                         setFilterState([]); 
                      } else {
                          setFilterState([value]);
                      }
@@ -659,10 +653,8 @@
             };
 
             const getFilteredList = (list, mode, typeFilters, charFilters, dateFilters, seriesFilters) => {
-                // 1. 全域角色過濾 (Settings)
                 let processed = list.filter(i => appSettings.visibleCharacters.includes(i.character));
 
-                // 2. 模式專屬過濾
                 if (mode === 'type' && typeFilters.length > 0) {
                     processed = processed.filter(i => typeFilters.includes(i.type));
                 }
@@ -670,13 +662,11 @@
                     processed = processed.filter(i => charFilters.includes(i.character));
                 }
                 if (mode === 'date' && dateFilters.length > 0) {
-                    // 修正：日期過濾現在要同時比對 date 和 shippingDate (視為 unified date)
                     processed = processed.filter(i => {
                         const effDate = getEffectiveDate(i);
                         return dateFilters.includes(effDate);
                     });
                 }
-                // 新增系列過濾
                 if (mode === 'series' && seriesFilters.length > 0) {
                     processed = processed.filter(i => seriesFilters.includes(i.series));
                 }
@@ -684,7 +674,6 @@
                 return processed;
             };
 
-            // 調整 stats 計算，只計算可見角色
             const stats = useMemo(() => {
                 const visibleItems = items.filter(i => appSettings.visibleCharacters.includes(i.character));
                 const totalCount = visibleItems.length;
@@ -717,12 +706,10 @@
             }, [items, appSettings.customTypes]);
 
             const availableDates = useMemo(() => {
-                // 修正：使用 getEffectiveDate 收集所有日期
                 const dates = new Set(items.map(i => getEffectiveDate(i)).filter(Boolean));
                 return Array.from(dates).sort((a, b) => new Date(b) - new Date(a));
             }, [items]);
 
-            // 計算哪些日期含有預購商品，用於標示黃色
             const preorderDates = useMemo(() => {
                 const set = new Set();
                 items.forEach(i => {
@@ -733,7 +720,6 @@
                 return set;
             }, [items]);
 
-            // 新增可用系列計算
             const availableSeries = useMemo(() => {
                 const source = activeTab === 'collection' ? items : catalogItems;
                 const series = new Set(source.map(i => i.series).filter(Boolean));
@@ -741,27 +727,32 @@
             }, [items, catalogItems, activeTab]);
 
             const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters, dateFilters, seriesFilters) => {
-                // 先過濾
                 const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters, seriesFilters);
 
-                // 如果全選模式，但設定了「顯示大標題」，則進行分組
                 const isAllSelected = (mode === 'type' && typeFilters.length === 0) || 
                                       (mode === 'character' && charFilters.length === 0) || 
                                       (mode === 'series' && seriesFilters.length === 0) || 
                                       (mode === 'date' && dateFilters.length === 0);
 
-                // 如果是 none 模式，或 (是特定模式但全選 且 設定為不顯示大標題)，回傳全部
                 if (mode === 'none' || (isAllSelected && !appSettings.groupAllInFilterMode)) {
+                    if (mode === 'none' && appSettings.groupAllInFilterMode) {
+                        // Default grouping for "All" tab: group by Type
+                         return processedList.reduce((acc, item) => {
+                            const key = item.type || '未分類';
+                            if (!acc[key]) acc[key] = [];
+                            acc[key].push(item);
+                            return acc;
+                        }, {});
+                    }
                     return { '全部': processedList };
                 }
                 
-                // 否則進行分組
                 const grouped = processedList.reduce((acc, item) => {
                     let key = '';
                     if (mode === 'series') key = item.series || '其他系列';
                     else if (mode === 'type') key = item.type || '其他類型';
                     else if (mode === 'character') key = item.character || '其他角色';
-                    else if (mode === 'date') key = getEffectiveDate(item) || '未知日期'; // 使用 unified date
+                    else if (mode === 'date') key = getEffectiveDate(item) || '未知日期';
                     
                     if (!acc[key]) acc[key] = [];
                     acc[key].push(item);
@@ -783,7 +774,6 @@
                 catalog: getGroupedData(catalogItems, groupingMode, 'desc', selectedTypeFilters, selectedCharFilters, [], selectedSeriesFilters)
             }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters, appSettings.visibleCharacters, appSettings.groupAllInFilterMode]);
 
-            // Grid Style Helper
             const gridStyle = {
                 display: 'grid',
                 gridTemplateColumns: `repeat(${appSettings.layoutCols}, minmax(0, 1fr))`,
@@ -839,7 +829,6 @@
                         onDragOver={(e) => e.preventDefault()} 
                         className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col group relative ${isDraggable ? 'cursor-move' : ''}`}
                     >
-                        {/* 移動按鈕 */}
                         {isDraggable && (
                             <div className="absolute top-2 left-2 z-20 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 rounded-lg p-1 backdrop-blur-sm">
                                 <button onClick={(e) => {e.stopPropagation(); handleMoveStack(index, -1)}} className="p-1 hover:bg-blue-100 rounded text-blue-600 disabled:opacity-30" disabled={index === 0}><Icon name="ArrowLeft" size={14} /></button>
@@ -869,7 +858,7 @@
                                                 <span className="font-bold text-base text-slate-800">
                                                     {inst.currency === 'r' ? `${inst.acquiredPrice}r` : `NT$ ${inst.acquiredPrice}`}
                                                 </span>
-                                                {inst.officialPrice && <span className="text-[11px] text-gray-500 font-medium ml-1">(原{inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}
+                                                {inst.officialPrice && <span className="text-[11px] text-gray-500 font-medium ml-1">({inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}
                                             </div>
                                         </div>
                                         
@@ -1149,7 +1138,13 @@
                                 <div className="space-y-8">
                                     {Object.entries(groupedData.collection).map(([gName, gItems]) => {
                                         const stacks = getStackedItems(gItems, collectionGroupingMode);
-                                        return <div key={gName} className="animate-in fade-in">{collectionGroupingMode!=='none' && collectionGroupingMode!=='type' && collectionGroupingMode!=='character' && collectionGroupingMode!=='date' && collectionGroupingMode!=='series' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}<div style={gridStyle}>{stacks.map((s,i)=><StackCard key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'}/>)}</div></div>;
+                                        return <div key={gName} className="animate-in fade-in">
+                                            {collectionGroupingMode !== 'none' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}
+                                            {/* Also show header if Group All is enabled and we are in All mode, handled by getGroupedData returning keys */}
+                                            {collectionGroupingMode === 'none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}
+                                            
+                                            <div style={gridStyle}>{stacks.map((s,i)=><StackCard key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'}/>)}</div>
+                                        </div>;
                                     })}
                                     {items.length===0 && <div className="text-center py-20 text-gray-400 border-2 border-dashed rounded-3xl">尚無收藏</div>}
                                 </div>
@@ -1176,7 +1171,10 @@
                                 <div className="space-y-8">
                                     {Object.entries(groupedData.catalog).map(([gName, gItems]) => (
                                         <div key={gName} className="animate-in fade-in">
-                                            {groupingMode!=='none' && groupingMode!=='type' && groupingMode!=='character' && groupingMode!=='series' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}
+                                            {groupingMode!=='none' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}
+                                            {/* Header for None mode if grouping enabled */}
+                                            {groupingMode === 'none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName}</h3></div>}
+                                            
                                             <div style={gridStyle}>{gItems.map((item,i)=><CatalogCard key={item.id} item={item} index={i} isDraggable={groupingMode==='none'}/>)}</div>
                                         </div>
                                     ))}

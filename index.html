@@ -125,9 +125,10 @@
                         type: true,
                         character: false,
                         date: false,
-                        series: false // 新增系列多選
+                        series: false 
                     },
-                    defaultPreorderCurrency: 'NT$' // 新增預設幣值
+                    defaultPreorderCurrency: 'NT$',
+                    groupAllInFilterMode: true // 新增：預設開啟分類標題
                 };
                 if (savedSettings) {
                     const parsed = JSON.parse(savedSettings);
@@ -137,6 +138,7 @@
                          parsed.multiSelect.series = false;
                     }
                     if (!parsed.defaultPreorderCurrency) parsed.defaultPreorderCurrency = 'NT$';
+                    if (typeof parsed.groupAllInFilterMode === 'undefined') parsed.groupAllInFilterMode = true;
                     return parsed;
                 }
                 return defaults;
@@ -172,7 +174,7 @@
             const [importJson, setImportJson] = useState('');
             const [newTypeInput, setNewTypeInput] = useState(''); 
             const [settingsTab, setSettingsTab] = useState('layout'); 
-            const [showRmbDetail, setShowRmbDetail] = useState(false); // 新增：是否顯示匯率算式
+            const [showRmbDetail, setShowRmbDetail] = useState(false);
             
             const dragItem = useRef(null);
             const dragOverItem = useRef(null);
@@ -183,14 +185,13 @@
                 localStorage.setItem('deepspace_active_tab', activeTab);
             }, [activeTab]);
 
-            // 抓取匯率
+            // 抓取匯率 (安全網站 HTTPS)
             useEffect(() => {
                 fetch('https://api.exchangerate-api.com/v4/latest/CNY')
                     .then(res => res.json())
                     .then(data => {
                         if(data && data.rates && data.rates.TWD) {
                             setExchangeRate(data.rates.TWD);
-                            // 紀錄時間
                             const now = new Date();
                             const formattedTime = `${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
                             setExchangeRateTimestamp(formattedTime);
@@ -613,6 +614,9 @@
             };
 
             // --- Helpers ---
+            // 取得統一的日期 (收物日 or 預購出貨日)
+            const getEffectiveDate = (item) => item.isPreorder ? item.shippingDate : item.date;
+
             const getStackedItems = (sourceItems, mode) => {
                 const map = new Map();
                 const stacks = [];
@@ -666,7 +670,11 @@
                     processed = processed.filter(i => charFilters.includes(i.character));
                 }
                 if (mode === 'date' && dateFilters.length > 0) {
-                    processed = processed.filter(i => dateFilters.includes(i.date));
+                    // 修正：日期過濾現在要同時比對 date 和 shippingDate (視為 unified date)
+                    processed = processed.filter(i => {
+                        const effDate = getEffectiveDate(i);
+                        return dateFilters.includes(effDate);
+                    });
                 }
                 // 新增系列過濾
                 if (mode === 'series' && seriesFilters.length > 0) {
@@ -709,8 +717,20 @@
             }, [items, appSettings.customTypes]);
 
             const availableDates = useMemo(() => {
-                const dates = new Set(items.map(i => i.date).filter(Boolean));
+                // 修正：使用 getEffectiveDate 收集所有日期
+                const dates = new Set(items.map(i => getEffectiveDate(i)).filter(Boolean));
                 return Array.from(dates).sort((a, b) => new Date(b) - new Date(a));
+            }, [items]);
+
+            // 計算哪些日期含有預購商品，用於標示黃色
+            const preorderDates = useMemo(() => {
+                const set = new Set();
+                items.forEach(i => {
+                    if (i.isPreorder && i.shippingDate) {
+                        set.add(i.shippingDate);
+                    }
+                });
+                return set;
             }, [items]);
 
             // 新增可用系列計算
@@ -724,18 +744,44 @@
                 // 先過濾
                 const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters, seriesFilters);
 
-                // 如果是 type, character, date, series 模式，不分組，直接回傳全部 (因為介面改為上方篩選列)
-                if (mode === 'none' || mode === 'type' || mode === 'character' || mode === 'date' || mode === 'series') {
+                // 如果全選模式，但設定了「顯示大標題」，則進行分組
+                const isAllSelected = (mode === 'type' && typeFilters.length === 0) || 
+                                      (mode === 'character' && charFilters.length === 0) || 
+                                      (mode === 'series' && seriesFilters.length === 0) || 
+                                      (mode === 'date' && dateFilters.length === 0);
+
+                // 如果是 none 模式，或 (是特定模式但全選 且 設定為不顯示大標題)，回傳全部
+                if (mode === 'none' || (isAllSelected && !appSettings.groupAllInFilterMode)) {
                     return { '全部': processedList };
                 }
                 
-                return { '全部': processedList };
+                // 否則進行分組
+                const grouped = processedList.reduce((acc, item) => {
+                    let key = '';
+                    if (mode === 'series') key = item.series || '其他系列';
+                    else if (mode === 'type') key = item.type || '其他類型';
+                    else if (mode === 'character') key = item.character || '其他角色';
+                    else if (mode === 'date') key = getEffectiveDate(item) || '未知日期'; // 使用 unified date
+                    
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(item);
+                    return acc;
+                }, {});
+
+                if (mode === 'date') {
+                    const keys = Object.keys(grouped).sort((a,b) => {
+                        if(a==='未知日期') return 1; if(b==='未知日期') return -1;
+                        return sortOrder==='desc' ? new Date(b)-new Date(a) : new Date(a)-new Date(b);
+                    });
+                    const sorted = {}; keys.forEach(k=>sorted[k]=grouped[k]); return sorted;
+                }
+                return grouped;
             };
 
             const groupedData = useMemo(() => ({
                 collection: getGroupedData(items, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters),
                 catalog: getGroupedData(catalogItems, groupingMode, 'desc', selectedTypeFilters, selectedCharFilters, [], selectedSeriesFilters)
-            }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters, appSettings.visibleCharacters]);
+            }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters, appSettings.visibleCharacters, appSettings.groupAllInFilterMode]);
 
             // Grid Style Helper
             const gridStyle = {
@@ -745,7 +791,7 @@
             };
 
             // --- Components ---
-            const FilterBar = ({ options, selected, toggle, multi }) => (
+            const FilterBar = ({ options, selected, toggle, multi, highlightSet }) => (
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide animate-fade-in items-center">
                     <button 
                         onClick={() => toggle('all')}
@@ -753,15 +799,22 @@
                     >
                         {multi ? "全選" : "全部"}
                     </button>
-                    {options.map(opt => (
-                        <button 
-                            key={opt}
-                            onClick={() => toggle(opt)}
-                            className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border ${selected.includes(opt) ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                        >
-                            {opt}
-                        </button>
-                    ))}
+                    {options.map(opt => {
+                        const isHighlight = highlightSet && highlightSet.has(opt);
+                        return (
+                            <button 
+                                key={opt}
+                                onClick={() => toggle(opt)}
+                                className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border 
+                                    ${selected.includes(opt) 
+                                        ? 'bg-blue-100 text-blue-700 border-blue-300' 
+                                        : (isHighlight ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')
+                                    }`}
+                            >
+                                {opt}
+                            </button>
+                        );
+                    })}
                     {multi && <button onClick={() => toggle('all')} className="px-3 py-1 text-xs rounded-full bg-gray-200 text-gray-600 border border-transparent hover:bg-gray-300 whitespace-nowrap">重置</button>}
                 </div>
             );
@@ -897,6 +950,18 @@
                                             </button>
                                         ))}
                                     </div>
+                                </div>
+                                <div>
+                                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-5 h-5 text-blue-600 rounded"
+                                            checked={appSettings.groupAllInFilterMode}
+                                            onChange={(e) => setAppSettings(prev => ({...prev, groupAllInFilterMode: e.target.checked}))}
+                                        />
+                                        <span className="text-sm font-medium">顯示分類大標題 (全部模式)</span>
+                                    </label>
+                                    <p className="text-xs text-gray-400 mt-1 ml-1">在「全部」檢視下，是否依據當前模式顯示分組標題。</p>
                                 </div>
                             </div>
                         )}
@@ -1078,7 +1143,7 @@
                                     <FilterBar options={appSettings.visibleCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />
                                 )}
                                 {collectionGroupingMode === 'date' && (
-                                    <FilterBar options={availableDates} selected={selectedDateFilters} toggle={(val)=>toggleFilter(selectedDateFilters, setSelectedDateFilters, val, appSettings.multiSelect.date)} multi={appSettings.multiSelect.date} />
+                                    <FilterBar options={availableDates} selected={selectedDateFilters} toggle={(val)=>toggleFilter(selectedDateFilters, setSelectedDateFilters, val, appSettings.multiSelect.date)} multi={appSettings.multiSelect.date} highlightSet={preorderDates} />
                                 )}
 
                                 <div className="space-y-8">

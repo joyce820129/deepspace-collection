@@ -30,7 +30,7 @@
 
     <script type="text/babel" data-type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
         import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         const { useState, useEffect, useMemo, useRef, memo } = React;
@@ -230,7 +230,7 @@
             isOpen, onClose, appSettings, setAppSettings, 
             importJson, setImportJson, handleBulkImport, handleExportCatalog, handleResetData,
             handleDragStart, handleDragEnter, handleDragEnd, handleAddType, handleDeleteType, newTypeInput, setNewTypeInput,
-            dragOverItem, handleCharDragStart
+            handleCharDragStart
         }) => {
             const [settingsTab, setSettingsTab] = useState('layout');
             
@@ -253,7 +253,7 @@
             const toggleMultiSelect = (key) => {
                 setAppSettings(prev => ({ ...prev, multiSelect: { ...prev.multiSelect, [key]: !prev.multiSelect[key] } }));
             };
-
+            
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
                     <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -318,7 +318,7 @@
                                                 className="flex items-center justify-between p-3 border rounded-xl bg-white hover:bg-gray-50 group cursor-grab active:cursor-grabbing"
                                                 draggable
                                                 onDragStart={(e) => handleCharDragStart(e, index)}
-                                                onDragEnter={(e) => dragOverItem.current = index}
+                                                onDragEnter={(e) => handleDragEnter(e, index)}
                                                 onDragEnd={handleDragEnd}
                                                 onDragOver={(e) => e.preventDefault()}
                                             >
@@ -366,7 +366,7 @@
                                                 className="px-3 py-1 bg-gray-100 rounded-full text-xs flex items-center gap-1 group cursor-grab active:cursor-grabbing"
                                                 draggable
                                                 onDragStart={(e) => handleDragStart(e, index, 'settings-type')}
-                                                onDragEnter={(e) => dragOverItem.current = index}
+                                                onDragEnter={(e) => handleDragEnter(e, index)}
                                                 onDragEnd={handleDragEnd}
                                                 onDragOver={(e) => e.preventDefault()}
                                             >
@@ -478,16 +478,25 @@
                     if (localCatalog) setCatalogItems(JSON.parse(localCatalog));
                     return;
                 }
+                
+                setPersistence(auth, browserLocalPersistence).catch(console.error);
+
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-                    setUser(currentUser && !currentUser.isAnonymous ? currentUser : null);
+                    if (currentUser) {
+                        if (!currentUser.isAnonymous) setUser(currentUser);
+                        else setUser(null); 
+                    } else {
+                        setUser(null);
+                        signInAnonymously(auth).catch(console.error);
+                    }
                 });
-                if (!auth.currentUser) signInAnonymously(auth).catch(console.error);
+                
                 return () => unsubscribe();
             }, []);
 
             useEffect(() => {
                 if (!isFirebaseInitialized) return;
-                if (!user && !auth.currentUser) return;
+                if (!auth.currentUser) return;
 
                 const catalogColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'public', 'data', 'catalog');
                 const unsubCatalog = onSnapshot(catalogColl, (snapshot) => {
@@ -497,22 +506,22 @@
                 }, () => {});
 
                 let unsubCollection = () => {};
-                if (user && !user.isAnonymous) {
+                if (user) { 
                     const userColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'items');
                     unsubCollection = onSnapshot(userColl, (snapshot) => {
                         const cloudItems = snapshot.docs.map(doc => doc.data());
                         cloudItems.sort((a, b) => (a.order || 0) - (b.order || 0));
                         setItems(cloudItems);
                     }, console.error);
-                } else {
+                } else { 
                     const localItems = localStorage.getItem('deepspace_items_v7_local');
                     if (localItems) setItems(JSON.parse(localItems));
                 }
                 return () => { unsubCatalog(); unsubCollection(); };
-            }, [user]);
+            }, [user, auth.currentUser]);
 
             useEffect(() => {
-                if (!isFirebaseInitialized || !user || user.isAnonymous) localStorage.setItem('deepspace_items_v7_local', JSON.stringify(items));
+                if (!isFirebaseInitialized || !user) localStorage.setItem('deepspace_items_v7_local', JSON.stringify(items));
             }, [items, user]);
             useEffect(() => {
                 if (!isFirebaseInitialized) localStorage.setItem('deepspace_catalog_v7_local', JSON.stringify(catalogItems));
@@ -527,7 +536,7 @@
 
             const saveToCollection = async (newItem) => {
                 const itemWithOrder = { ...newItem, order: newItem.order || Date.now() };
-                if (user && !user.isAnonymous && isFirebaseInitialized) {
+                if (user && isFirebaseInitialized) {
                     await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, newItem.id), itemWithOrder);
                 } else {
                     setItems(prev => {
@@ -537,7 +546,7 @@
                 }
             };
             const deleteFromCollection = async (itemId) => {
-                if (user && !user.isAnonymous && isFirebaseInitialized) {
+                if (user && isFirebaseInitialized) {
                     await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, itemId));
                 } else { setItems(prev => prev.filter(i => i.id !== itemId)); }
             };
@@ -600,7 +609,7 @@
                     currentStacks.splice(dragOverItem.current, 0, moved);
                     const newFlatList = currentStacks.flatMap(s => s.instances);
                     setItems(newFlatList);
-                    if (isFirebaseInitialized && user && !user.isAnonymous) {
+                    if (isFirebaseInitialized && user) {
                         const batch = writeBatch(db);
                         const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
                         newFlatList.forEach((item, index) => batch.update(doc(db, path, item.id), { order: index }));
@@ -634,7 +643,7 @@
                 currentStacks.splice(newIndex, 0, moved);
                 const newFlatList = currentStacks.flatMap(s => s.instances);
                 setItems(newFlatList);
-                if (isFirebaseInitialized && user && !user.isAnonymous) {
+                if (isFirebaseInitialized && user) {
                     const batch = writeBatch(db);
                     const path = `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
                     newFlatList.forEach((item, idx) => batch.update(doc(db, path, item.id), { order: index }));
@@ -654,6 +663,36 @@
                 }
             };
             
+            const toggleCharacterVisibility = (char) => {
+                setAppSettings(prev => {
+                    const current = prev.visibleCharacters;
+                    if (char === "ALL") {
+                         const allMainSelected = CHARACTERS.every(c => current.includes(c));
+                         if (allMainSelected) {
+                             return { ...prev, visibleCharacters: [] }; 
+                         } else {
+                             return { ...prev, visibleCharacters: [...CHARACTERS] }; 
+                         }
+                    } else {
+                        if (current.includes(char)) {
+                            return { ...prev, visibleCharacters: current.filter(c => c !== char) };
+                        } else {
+                            return { ...prev, visibleCharacters: [...current, char] };
+                        }
+                    }
+                });
+            };
+
+            const toggleMultiSelect = (key) => {
+                setAppSettings(prev => ({
+                    ...prev,
+                    multiSelect: {
+                        ...prev.multiSelect,
+                        [key]: !prev.multiSelect[key]
+                    }
+                }));
+            };
+
             const openModal = (item = null, template = null, mode = 'collection') => {
                 setModalMode(mode);
                 const defaultData = { 
@@ -856,7 +895,6 @@
                                       (mode === 'series' && seriesFilters.length === 0) || 
                                       (mode === 'date' && dateFilters.length === 0);
 
-                // 如果是 none 模式，或 (是特定模式但全選 且 設定為不顯示大標題)，回傳全部
                 if (mode === 'none') {
                      return { '全部': processedList };
                 }
@@ -953,7 +991,7 @@
                                     {Object.entries(groupedData.collection).map(([gName, gItems]) => {
                                         const stacks = getStackedItems(gItems, collectionGroupingMode);
                                         return <div key={gName} className="animate-in fade-in">
-                                            {collectionGroupingMode !== 'none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0"><div className={`h-6 w-1 rounded-full ${preorderDates.has(gName) ? 'bg-yellow-400' : 'bg-blue-500'}`}></div><h3 className="font-bold text-lg text-gray-700">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({stacks.length})</span></h3></div>}
+                                            {collectionGroupingMode!=='none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0"><div className={`h-6 w-1 rounded-full ${preorderDates.has(gName) ? 'bg-yellow-400' : 'bg-blue-500'}`}></div><h3 className="font-bold text-lg text-gray-700">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({stacks.length})</span></h3></div>}
                                             <div style={gridStyle}>{stacks.map((s,i)=><StackCard key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'} handleDragStart={handleDragStart} handleDragEnter={handleDragEnter} handleDragEnd={handleDragEnd} handleMoveStack={handleMoveStack} openModal={openModal} deleteFromCollection={deleteFromCollection} />)}</div>
                                         </div>;
                                     })}
@@ -1059,7 +1097,7 @@
                         handleCharDragStart={(e, idx) => handleDragStart(e, idx, 'settings-character')}
                     />}
 
-                    {isModalOpen && (
+                    {isModalOpen && (/* Modal Content reused from previous step, logic integrated */
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                             <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
                                 <div className="flex justify-between items-center">

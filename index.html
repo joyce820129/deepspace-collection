@@ -219,20 +219,48 @@
             );
         });
 
-        const CatalogCard = memo(({ item, index, openModal, deleteFromCatalog }) => {
+        const CatalogCard = memo(({ item, index, openModal, deleteFromCatalog, isBatchMode, isSelected, onToggleSelect }) => {
             const theme = CHARACTER_THEMES[item.character] || CHARACTER_THEMES["其他"];
             const priceDisplay = item.officialPrice ? (isNaN(Number(item.officialPrice)) ? item.officialPrice : `${item.officialPrice}r`) : '?';
             
+            const handleCardClick = (e) => {
+                if (isBatchMode) {
+                    e.stopPropagation();
+                    onToggleSelect(item.id);
+                }
+            };
+
             return (
-                <div className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group relative`}>
+                <div 
+                    onClick={handleCardClick}
+                    className={`bg-white rounded-xl shadow-sm border overflow-hidden group relative transition-all
+                        ${isBatchMode ? 'cursor-pointer hover:border-blue-400' : 'border-gray-100'}
+                        ${isSelected ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50' : ''}
+                    `}
+                >
                     <div className="aspect-square bg-gray-50 relative overflow-hidden">
                         <img src={item.image} alt={item.name} className="w-full h-full object-cover pointer-events-none" />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                        <button onClick={() => openModal(null, item, 'collection')} className="absolute bottom-3 right-3 bg-white text-blue-600 p-2 rounded-full shadow-lg transform translate-y-10 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all z-20 w-10 h-10 flex items-center justify-center" title="加入我的收藏"><Icon name="Plus" size={24} /></button>
-                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                            <button onClick={() => openModal(item, null, 'catalog')} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-blue-600 shadow-sm"><Icon name="Edit3" size={14} /></button>
-                            <button onClick={() => deleteFromCatalog(item.id)} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-red-600 shadow-sm"><Icon name="Trash2" size={14} /></button>
-                        </div>
+                        
+                        {/* Batch Mode Overlay */}
+                        {isBatchMode && (
+                            <div className={`absolute inset-0 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500/20' : 'bg-black/0 group-hover:bg-black/5'}`}>
+                                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white/80 border-gray-300'}`}>
+                                    {isSelected && <Icon name="Check" size={18} />}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Normal Mode Buttons */}
+                        {!isBatchMode && (
+                            <>
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                <button onClick={(e) => {e.stopPropagation(); openModal(null, item, 'collection');}} className="absolute bottom-3 right-3 bg-white text-blue-600 p-2 rounded-full shadow-lg transform translate-y-10 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all z-20 w-10 h-10 flex items-center justify-center" title="加入我的收藏"><Icon name="Plus" size={24} /></button>
+                                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                    <button onClick={(e) => {e.stopPropagation(); openModal(item, null, 'catalog');}} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-blue-600 shadow-sm"><Icon name="Edit3" size={14} /></button>
+                                    <button onClick={(e) => {e.stopPropagation(); deleteFromCatalog(item.id);}} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-red-600 shadow-sm"><Icon name="Trash2" size={14} /></button>
+                                </div>
+                            </>
+                        )}
                     </div>
                     <div className="p-3 relative">
                         <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${theme.badge}`}>{item.character}</span><span className="text-[10px] text-gray-500 border px-1 rounded">{item.type}</span></div>
@@ -244,6 +272,96 @@
                 </div>
             );
         });
+
+        const BatchAddModal = ({ isOpen, onClose, selectedItems, onSave, defaultCurrency }) => {
+            const [commonDate, setCommonDate] = useState(new Date().toISOString().split('T')[0]);
+            const [isPreorder, setIsPreorder] = useState(false);
+            const [commonShippingDate, setCommonShippingDate] = useState('');
+            const [commonNote, setCommonNote] = useState(''); 
+            const [prices, setPrices] = useState({}); 
+
+            if (!isOpen) return null;
+
+            const handlePriceChange = (id, val) => {
+                setPrices(prev => ({ ...prev, [id]: val }));
+            };
+
+            const handleConfirm = () => {
+                const itemsToSave = selectedItems.map(item => ({
+                    ...item,
+                    date: !isPreorder ? commonDate : '',
+                    isPreorder: isPreorder,
+                    shippingDate: isPreorder ? (commonShippingDate || commonDate) : '',
+                    acquiredPrice: prices[item.id] || '',
+                    note: commonNote,
+                    quantity: 1,
+                    currency: defaultCurrency,
+                }));
+                onSave(itemsToSave);
+            };
+
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-3xl w-full max-w-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+                        <div className="flex justify-between items-center border-b pb-3">
+                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icon name="Layers" /> 批次新增收藏</h3>
+                            <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button>
+                        </div>
+
+                        <div className="space-y-4 flex-1 overflow-y-auto p-1">
+                            {/* Common Fields */}
+                            <div className="bg-gray-50 p-4 rounded-xl space-y-3 border border-gray-100">
+                                <h4 className="font-bold text-sm text-gray-700">共同資訊</h4>
+                                <div className="flex items-center gap-4">
+                                     <div className="flex items-center gap-2">
+                                        <input type="checkbox" id="batchPreorder" checked={isPreorder} onChange={e=>setIsPreorder(e.target.checked)} className="w-4 h-4 text-blue-600 rounded"/>
+                                        <label htmlFor="batchPreorder" className="text-sm font-bold text-gray-700">預購商品</label>
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="text-xs text-gray-500 block mb-1">{isPreorder ? '預計出貨日' : '收物日期'}</label>
+                                        <input type="date" className="border p-2 rounded w-full bg-white" value={isPreorder ? commonShippingDate : commonDate} onChange={e => isPreorder ? setCommonShippingDate(e.target.value) : setCommonDate(e.target.value)}/>
+                                    </div>
+                                </div>
+                                <textarea className="w-full border p-2 rounded h-16 text-sm bg-white" placeholder="共同備註 (選填)..." value={commonNote} onChange={e=>setCommonNote(e.target.value)}/>
+                            </div>
+
+                            {/* Individual Fields */}
+                            <div className="space-y-2">
+                                <h4 className="font-bold text-sm text-gray-700">個別價格 ({selectedItems.length})</h4>
+                                {selectedItems.map(item => (
+                                    <div key={item.id} className="flex items-center gap-3 p-2 border rounded-lg hover:bg-gray-50">
+                                        <div className="w-12 h-12 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                                            {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-gray-400 m-auto mt-3" size={20}/>}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold truncate">{item.name}</p>
+                                            <p className="text-xs text-gray-500">{item.character} · {item.type}</p>
+                                        </div>
+                                        <div className="w-32">
+                                            <div className="relative">
+                                                <input 
+                                                    type="number" 
+                                                    className="border p-2 rounded w-full pr-8 text-sm" 
+                                                    placeholder="價格" 
+                                                    value={prices[item.id] || ''} 
+                                                    onChange={e=>handlePriceChange(item.id, e.target.value)}
+                                                />
+                                                <span className="absolute right-2 top-2 text-xs text-gray-400">{defaultCurrency}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="pt-2 border-t flex gap-2">
+                            <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">取消</button>
+                            <button onClick={handleConfirm} className="flex-1 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 font-bold shadow-md">確認新增</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
 
         // SettingsModal: Removed memo to force updates, increased z-index
         const SettingsModal = ({ 
@@ -467,6 +585,11 @@
             const [formData, setFormData] = useState({});
             const [importJson, setImportJson] = useState('');
             const [newTypeInput, setNewTypeInput] = useState(''); 
+
+            // Batch Add States
+            const [isBatchMode, setIsBatchMode] = useState(false);
+            const [batchSelection, setBatchSelection] = useState(new Set());
+            const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
             const fileInputRef = useRef(null);
             
@@ -700,6 +823,38 @@
                         [key]: !prev.multiSelect[key]
                     }
                 }));
+            };
+
+            // Batch Add Logic
+            const toggleBatchMode = () => {
+                setIsBatchMode(prev => !prev);
+                setBatchSelection(new Set()); // Clear on toggle
+            };
+
+            const handleBatchSelect = (itemId) => {
+                setBatchSelection(prev => {
+                    const newSet = new Set(prev);
+                    if (newSet.has(itemId)) newSet.delete(itemId);
+                    else newSet.add(itemId);
+                    return newSet;
+                });
+            };
+
+            const openBatchModal = () => {
+                if (batchSelection.size === 0) return alert("請至少選擇一個物品");
+                setIsBatchModalOpen(true);
+            };
+
+            const handleBatchSave = async (itemsToSave) => {
+                for (const item of itemsToSave) {
+                    // Ensure unique ID
+                    const uniqueItem = { ...item, id: Date.now() + Math.random().toString(36).substr(2, 9), order: Date.now() }; 
+                    await saveToCollection(uniqueItem);
+                }
+                setIsBatchModalOpen(false);
+                setIsBatchMode(false);
+                setBatchSelection(new Set());
+                alert(`已成功新增 ${itemsToSave.length} 個物品至收藏！`);
             };
 
             const openModal = (item = null, template = null, mode = 'collection') => {
@@ -1110,10 +1265,19 @@
                         )}
 
                         {activeTab === 'templates' && (
-                            <div className="space-y-6 animate-fade-in">
+                            <div className="space-y-6 animate-fade-in pb-20 md:pb-0">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                     <div><h2 className="text-2xl font-bold text-gray-800">共用週邊圖鑑</h2><p className="text-xs text-gray-400">資料共用，歡迎匯入分享</p></div>
                                     <div className="flex gap-2 items-center">
+                                        <button 
+                                            onClick={toggleBatchMode} 
+                                            className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-sm
+                                                ${isBatchMode ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}
+                                            `}
+                                        >
+                                            <Icon name={isBatchMode ? "CheckSquare" : "Square"} size={16}/> 批次新增
+                                        </button>
+                                        <div className="h-6 w-px bg-gray-300 mx-2"></div>
                                         {[{id:'none',l:'全部'},{id:'series',l:'依系列'},{id:'type',l:'依類型'},{id:'character',l:'依角色'}].map(m=><button key={m.id} onClick={()=>setGroupingMode(m.id)} className={`px-3 py-1.5 text-xs border rounded-lg ${groupingMode===m.id?'bg-slate-900 text-white':'bg-white text-gray-500'}`}>{m.l}</button>)}
                                     </div>
                                 </div>
@@ -1124,11 +1288,40 @@
                                     {Object.entries(groupedData.catalog).map(([gName, gItems]) => (
                                         <div key={gName} className="animate-fade-in">
                                             {groupingMode !== 'none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({gItems.length})</span></h3></div>}
-                                            <div style={gridStyle}>{gItems.map((item,i)=><CatalogCard key={item.id} item={item} index={i} isDraggable={groupingMode==='none'} openModal={openModal} deleteFromCatalog={deleteFromCatalog}/>)}</div>
+                                            <div style={gridStyle}>
+                                                {gItems.map((item,i) => (
+                                                    <CatalogCard 
+                                                        key={item.id} 
+                                                        item={item} 
+                                                        index={i} 
+                                                        openModal={openModal} 
+                                                        deleteFromCatalog={deleteFromCatalog}
+                                                        isBatchMode={isBatchMode}
+                                                        isSelected={batchSelection.has(item.id)}
+                                                        onToggleSelect={handleBatchSelect}
+                                                    />
+                                                ))}
+                                            </div>
                                         </div>
                                     ))}
                                     {catalogItems.length===0 && <div className="text-center py-20 text-gray-400">圖鑑目前是空的</div>}
                                 </div>
+                                
+                                {/* Batch Mode Floating Bar */}
+                                {isBatchMode && (
+                                    <div className="fixed bottom-20 md:bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-4 animate-fade-in">
+                                        <span className="font-bold text-sm">已選擇 {batchSelection.size} 項</span>
+                                        <div className="h-4 w-px bg-slate-700"></div>
+                                        <button onClick={() => setIsBatchMode(false)} className="text-sm text-slate-300 hover:text-white">取消</button>
+                                        <button 
+                                            onClick={openBatchModal} 
+                                            disabled={batchSelection.size === 0}
+                                            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            確認新增
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -1201,6 +1394,16 @@
                         newTypeInput={newTypeInput}
                         setNewTypeInput={setNewTypeInput}
                     />}
+
+                    {isBatchModalOpen && (
+                        <BatchAddModal 
+                            isOpen={isBatchModalOpen}
+                            onClose={() => setIsBatchModalOpen(false)}
+                            selectedItems={catalogItems.filter(i => batchSelection.has(i.id))}
+                            onSave={handleBatchSave}
+                            defaultCurrency={appSettings.defaultPreorderCurrency}
+                        />
+                    )}
 
                     {isModalOpen && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

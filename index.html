@@ -145,7 +145,17 @@
                     const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}-${inst.currency}`;
                     if (!map.has(key)) map.set(key, { ...inst, count: 1 }); else map.get(key).count++;
                 });
-                return Array.from(map.values());
+                // Sort instances by date (Oldest first)
+                const result = Array.from(map.values());
+                result.sort((a, b) => {
+                    const dateA = a.isPreorder ? a.shippingDate : a.date;
+                    const dateB = b.isPreorder ? b.shippingDate : b.date;
+                    if (!dateA && !dateB) return 0;
+                    if (!dateA) return 1;
+                    if (!dateB) return -1;
+                    return new Date(dateA) - new Date(dateB);
+                });
+                return result;
             }, [stack.instances]);
 
             const handleDragStartInternal = (e) => {
@@ -199,7 +209,7 @@
                                     <div className="flex items-center gap-1 ml-auto pl-2 border-l border-gray-100">
                                         {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">x{inst.count}</span>}
                                         <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all"><Icon name="Edit3" size={12}/></button>
-                                        <button onClick={(e)=>{e.stopPropagation(); deleteFromCollection(inst.id);}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-red-500 hover:border-red-300 shadow-sm transition-all"><Icon name="Trash2" size={12}/></button>
+                                        {/* Trash button removed from here */}
                                     </div>
                                 </div>
                             ))}
@@ -1233,7 +1243,22 @@
                                         <textarea className="w-full border p-2 rounded h-20" placeholder="備註..." value={formData.note} onChange={e=>setFormData({...formData,note:e.target.value})}/>
                                     </>
                                 )}
-                                <button onClick={handleSave} className="w-full bg-slate-900 text-white py-3 rounded">{modalMode === 'catalog' ? '更新圖鑑 (公開)' : '儲存收藏'}</button>
+                                <div className="flex gap-2 mt-4">
+                                    {editingItem && modalMode === 'collection' && (
+                                        <button 
+                                            onClick={async () => {
+                                                if(confirm('確定要刪除此收藏嗎？')) {
+                                                    await deleteFromCollection(editingItem.id);
+                                                    setIsModalOpen(false);
+                                                }
+                                            }} 
+                                            className="bg-red-50 text-red-500 border border-red-200 px-4 rounded hover:bg-red-100"
+                                        >
+                                            <Icon name="Trash2" size={18} />
+                                        </button>
+                                    )}
+                                    <button onClick={handleSave} className="flex-1 bg-slate-900 text-white py-3 rounded hover:bg-slate-800">{modalMode === 'catalog' ? '更新圖鑑 (公開)' : '儲存收藏'}</button>
+                                </div>
                             </div>
                         </div>
                     )}

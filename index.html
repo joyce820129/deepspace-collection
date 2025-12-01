@@ -273,32 +273,56 @@
             );
         });
 
-        const BatchAddModal = ({ isOpen, onClose, selectedItems, onSave, defaultCurrency }) => {
+        const BatchAddModal = ({ isOpen, onClose, selectedItems, onSave }) => {
             const [commonDate, setCommonDate] = useState(new Date().toISOString().split('T')[0]);
             const [isPreorder, setIsPreorder] = useState(false);
             const [commonShippingDate, setCommonShippingDate] = useState('');
             const [commonNote, setCommonNote] = useState(''); 
-            const [prices, setPrices] = useState({}); 
+            
+            // Unified state for items: { [id]: { price, currency, quantity } }
+            const [itemsDetails, setItemsDetails] = useState({});
 
-            if (!isOpen) return null;
+            // Initialize state when opening
+            useEffect(() => {
+                if (isOpen && selectedItems.length > 0) {
+                    const initial = {};
+                    selectedItems.forEach(i => {
+                        initial[i.id] = { price: '', currency: 'NT$', quantity: 1 };
+                    });
+                    setItemsDetails(initial);
+                }
+            }, [isOpen, selectedItems]);
 
-            const handlePriceChange = (id, val) => {
-                setPrices(prev => ({ ...prev, [id]: val }));
+            const updateDetail = (id, field, value) => {
+                setItemsDetails(prev => ({
+                    ...prev,
+                    [id]: { ...prev[id], [field]: value }
+                }));
             };
 
             const handleConfirm = () => {
-                const itemsToSave = selectedItems.map(item => ({
-                    ...item,
-                    date: !isPreorder ? commonDate : '',
-                    isPreorder: isPreorder,
-                    shippingDate: isPreorder ? (commonShippingDate || commonDate) : '',
-                    acquiredPrice: prices[item.id] || '',
-                    note: commonNote,
-                    quantity: 1,
-                    currency: defaultCurrency,
-                }));
-                onSave(itemsToSave);
+                const payload = [];
+                selectedItems.forEach(item => {
+                    const detail = itemsDetails[item.id] || { price: '', currency: 'NT$', quantity: 1 };
+                    const qty = Math.max(1, parseInt(detail.quantity) || 1);
+                    
+                    for (let i = 0; i < qty; i++) {
+                        payload.push({
+                            ...item,
+                            date: !isPreorder ? commonDate : '',
+                            isPreorder: isPreorder,
+                            shippingDate: isPreorder ? (commonShippingDate || commonDate) : '',
+                            acquiredPrice: detail.price,
+                            currency: detail.currency,
+                            note: commonNote,
+                            quantity: 1 // Each saved item is a single unit
+                        });
+                    }
+                });
+                onSave(payload);
             };
+
+            if (!isOpen) return null;
 
             return (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
@@ -322,35 +346,62 @@
                                         <input type="date" className="border p-2 rounded w-full bg-white" value={isPreorder ? commonShippingDate : commonDate} onChange={e => isPreorder ? setCommonShippingDate(e.target.value) : setCommonDate(e.target.value)}/>
                                     </div>
                                 </div>
-                                <textarea className="w-full border p-2 rounded h-16 text-sm bg-white" placeholder="共同備註 (選填)..." value={commonNote} onChange={e=>setCommonNote(e.target.value)}/>
                             </div>
 
                             {/* Individual Fields */}
                             <div className="space-y-2">
-                                <h4 className="font-bold text-sm text-gray-700">個別價格 ({selectedItems.length})</h4>
-                                {selectedItems.map(item => (
-                                    <div key={item.id} className="flex items-center gap-3 p-2 border rounded-lg hover:bg-gray-50">
-                                        <div className="w-12 h-12 bg-gray-200 rounded overflow-hidden flex-shrink-0">
-                                            {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-gray-400 m-auto mt-3" size={20}/>}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-bold truncate">{item.name}</p>
-                                            <p className="text-xs text-gray-500">{item.character} · {item.type}</p>
-                                        </div>
-                                        <div className="w-32">
-                                            <div className="relative">
-                                                <input 
-                                                    type="number" 
-                                                    className="border p-2 rounded w-full pr-8 text-sm" 
-                                                    placeholder="價格" 
-                                                    value={prices[item.id] || ''} 
-                                                    onChange={e=>handlePriceChange(item.id, e.target.value)}
-                                                />
-                                                <span className="absolute right-2 top-2 text-xs text-gray-400">{defaultCurrency}</span>
+                                <h4 className="font-bold text-sm text-gray-700">個別設定 ({selectedItems.length})</h4>
+                                {selectedItems.map(item => {
+                                    const detail = itemsDetails[item.id] || { price: '', currency: 'NT$', quantity: 1 };
+                                    return (
+                                        <div key={item.id} className="flex items-center gap-3 p-2 border rounded-lg hover:bg-gray-50">
+                                            <div className="w-12 h-12 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                                                {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-gray-400 m-auto mt-3" size={20}/>}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold truncate">{item.name}</p>
+                                                <p className="text-xs text-gray-500">{item.character} · {item.type}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {/* Quantity Input */}
+                                                <div className="flex items-center gap-1 bg-white border rounded px-1">
+                                                    <span className="text-xs text-gray-400">x</span>
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-8 text-center text-sm outline-none" 
+                                                        value={detail.quantity}
+                                                        onChange={e => updateDetail(item.id, 'quantity', e.target.value)}
+                                                    />
+                                                </div>
+
+                                                {/* Price & Currency Input */}
+                                                <div className="flex items-center border rounded bg-white overflow-hidden w-36">
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-full p-2 text-sm outline-none" 
+                                                        placeholder="價格" 
+                                                        value={detail.price} 
+                                                        onChange={e=>updateDetail(item.id, 'price', e.target.value)}
+                                                    />
+                                                    <select 
+                                                        className="bg-gray-50 border-l p-2 text-xs outline-none text-gray-600 font-bold"
+                                                        value={detail.currency}
+                                                        onChange={e=>updateDetail(item.id, 'currency', e.target.value)}
+                                                    >
+                                                        <option value="NT$">NT$</option>
+                                                        <option value="r">r</option>
+                                                    </select>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
+                            </div>
+
+                            {/* Common Note (Moved to Bottom) */}
+                            <div>
+                                <h4 className="font-bold text-sm text-gray-700 mb-2">備註</h4>
+                                <textarea className="w-full border p-2 rounded h-16 text-sm bg-white" placeholder="共同備註 (選填)..." value={commonNote} onChange={e=>setCommonNote(e.target.value)}/>
                             </div>
                         </div>
 
@@ -854,7 +905,7 @@
                 setIsBatchModalOpen(false);
                 setIsBatchMode(false);
                 setBatchSelection(new Set());
-                alert(`已成功新增 ${itemsToSave.length} 個物品至收藏！`);
+                // Alert removed as requested
             };
 
             const openModal = (item = null, template = null, mode = 'collection') => {
@@ -1401,7 +1452,6 @@
                             onClose={() => setIsBatchModalOpen(false)}
                             selectedItems={catalogItems.filter(i => batchSelection.has(i.id))}
                             onSave={handleBatchSave}
-                            defaultCurrency={appSettings.defaultPreorderCurrency}
                         />
                     )}
 

@@ -81,7 +81,7 @@
 
         const CHARACTER_THEMES = {
             "沈星回": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", badge: "bg-purple-100 text-purple-800" },
-            "黎深": { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200", badge: "bg-slate-100 text-slate-800" },
+            "黎深": { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", badge: "bg-blue-100 text-blue-800" },
             "祁煜": { bg: "bg-pink-50", text: "text-pink-700", border: "border-pink-200", badge: "bg-pink-100 text-pink-800" },
             "秦徹": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", badge: "bg-red-100 text-red-800" },
             "夏以晝": { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", badge: "bg-orange-100 text-orange-800" },
@@ -955,8 +955,10 @@
 
             const availableDates = useMemo(() => {
                 const dates = new Set(items.map(i => getEffectiveDate(i)).filter(Boolean));
-                return Array.from(dates).sort((a, b) => new Date(b) - new Date(a));
-            }, [items]);
+                return Array.from(dates).sort((a, b) => {
+                    return dateSortOrder === 'desc' ? new Date(b) - new Date(a) : new Date(a) - new Date(b);
+                });
+            }, [items, dateSortOrder]);
 
             const preorderDates = useMemo(() => {
                 const set = new Set();
@@ -1073,7 +1075,7 @@
                                 <div className="space-y-8">
                                     {Object.entries(groupedData.collection).map(([gName, gItems]) => {
                                         const stacks = getStackedItems(gItems, collectionGroupingMode);
-                                        return <div key={gName} className="animate-in fade-in">
+                                        return <div key={gName} className="animate-fade-in">
                                             {collectionGroupingMode!=='none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0"><div className={`h-6 w-1 rounded-full ${preorderDates.has(gName) ? 'bg-yellow-400' : 'bg-blue-500'}`}></div><h3 className="font-bold text-lg text-gray-700">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({stacks.length})</span></h3></div>}
                                             <div style={gridStyle}>
                                                 {stacks.map((s,i) => (
@@ -1110,7 +1112,7 @@
                                 {groupingMode === 'character' && <FilterBar options={appSettings.customCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />}
                                 <div className="space-y-8">
                                     {Object.entries(groupedData.catalog).map(([gName, gItems]) => (
-                                        <div key={gName} className="animate-in fade-in">
+                                        <div key={gName} className="animate-fade-in">
                                             {groupingMode !== 'none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({gItems.length})</span></h3></div>}
                                             <div style={gridStyle}>{gItems.map((item,i)=><CatalogCard key={item.id} item={item} index={i} isDraggable={groupingMode==='none'} openModal={openModal} deleteFromCatalog={deleteFromCatalog}/>)}</div>
                                         </div>

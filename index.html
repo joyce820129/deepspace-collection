@@ -421,6 +421,8 @@
             handleAddType, handleDeleteType, newTypeInput, setNewTypeInput
         }) => {
             const [settingsTab, setSettingsTab] = useState('layout');
+            const dragTypeItem = useRef(null);
+            const dragTypeOverItem = useRef(null);
             
             if (!isOpen) return null;
 
@@ -446,6 +448,23 @@
                         [key]: !prev.multiSelect?.[key] 
                     } 
                 }));
+            };
+
+            const handleTypeSort = () => {
+                const _customTypes = [...(appSettings.customTypes || DEFAULT_MERCH_TYPES)];
+                const dragIndex = dragTypeItem.current;
+                const dragOverIndex = dragTypeOverItem.current;
+
+                if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return;
+
+                const dragItemContent = _customTypes[dragIndex];
+                _customTypes.splice(dragIndex, 1);
+                _customTypes.splice(dragOverIndex, 0, dragItemContent);
+                
+                setAppSettings(prev => ({ ...prev, customTypes: _customTypes }));
+                
+                dragTypeItem.current = null;
+                dragTypeOverItem.current = null;
             };
             
             // Safety access for arrays
@@ -550,10 +569,18 @@
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">目前類型列表</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">目前類型列表 (拖曳可排序)</label>
                                     <div className="flex flex-wrap gap-2">
                                         {customTypes.map((t, index) => (
-                                            <span key={t} className="px-3 py-1 bg-gray-100 rounded-full text-xs flex items-center gap-1 group">
+                                            <span 
+                                                key={t} 
+                                                draggable
+                                                onDragStart={(e) => { dragTypeItem.current = index; e.target.classList.add('opacity-50'); }}
+                                                onDragEnter={(e) => { dragTypeOverItem.current = index; }}
+                                                onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleTypeSort(); }}
+                                                onDragOver={(e) => e.preventDefault()}
+                                                className="px-3 py-1 bg-gray-100 rounded-full text-xs flex items-center gap-1 group cursor-move hover:bg-gray-200 transition-all"
+                                            >
                                                 {t}
                                                 <button onClick={()=>handleDeleteType(t)} className="text-gray-400 hover:text-red-500"><Icon name="X" size={12}/></button>
                                             </span>

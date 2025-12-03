@@ -830,8 +830,7 @@
                     }
                     else if (template) { 
                         setEditingItem(null); 
-                        // Point 1: Pre-fill acquiredPrice with officialPrice if available, else empty (so user can type)
-                        // If officialPrice is present, we use it as default.
+                        // Modified: acquiredPrice starts empty so user can type immediately
                         setFormData({ 
                             ...defaultData, 
                             ...template, 
@@ -840,7 +839,7 @@
                             isPreorder: false,
                             shippingDate: '',
                             currency: appSettings.defaultCurrency,
-                            acquiredPrice: template.officialPrice || '' 
+                            acquiredPrice: '' 
                         }); 
                     }
                     else { 
@@ -863,7 +862,7 @@
                     await saveToCatalog(itemToSave);
                 } else {
                     const qty = Math.max(1, parseInt(formData.quantity) || 1);
-                    // Point 2: If acquiredPrice is empty or undefined, default to 0
+                    // Default to 0 if empty
                     const finalAcquiredPrice = formData.acquiredPrice === '' || formData.acquiredPrice === undefined || formData.acquiredPrice === null ? 0 : formData.acquiredPrice;
                     
                     if (editingItem) {
@@ -1287,7 +1286,17 @@
                                     <button onClick={()=>setIsModalOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button>
                                 </div>
                                 <div onClick={()=>fileInputRef.current.click()} className="w-32 h-32 mx-auto border-2 border-dashed rounded flex items-center justify-center cursor-pointer">{formData.image?<img src={formData.image} className="w-full h-full object-cover"/>:<Icon name="Upload"/>}<input type="file" ref={fileInputRef} className="hidden" onChange={(e)=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=()=>setFormData(p=>({...p,image:r.result}));r.readAsDataURL(f);}}}/></div>
-                                <input className="w-full border p-2 rounded" placeholder="名稱" value={formData.name} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,name:e.target.value})}/>
+                                
+                                {/* Name Input: Auto-focus if it's a new custom item (not editing, not from template) */}
+                                <input 
+                                    className="w-full border p-2 rounded" 
+                                    placeholder="名稱" 
+                                    value={formData.name} 
+                                    onKeyDown={handleKeyDown} 
+                                    onChange={e=>setFormData({...formData,name:e.target.value})}
+                                    autoFocus={!editingItem && !formData.name} 
+                                />
+                                
                                 <div className="grid grid-cols-2 gap-2">
                                     <select className="border p-2 rounded" value={formData.character} onChange={e=>setFormData({...formData,character:e.target.value})}>{CHARACTERS.map(c=><option key={c}>{c}</option>)}</select>
                                     <input className="border p-2 rounded" placeholder="系列" value={formData.series} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,series:e.target.value})}/>
@@ -1306,7 +1315,16 @@
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
                                             <div className="relative">
-                                                <input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
+                                                {/* Acquired Price Input: Auto-focus if adding from template (name pre-filled) */}
+                                                <input 
+                                                    type="number" 
+                                                    className="border p-2 rounded w-full pr-12" 
+                                                    placeholder="入手價格" 
+                                                    value={formData.acquiredPrice} 
+                                                    onKeyDown={handleKeyDown} 
+                                                    onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}
+                                                    autoFocus={!editingItem && formData.name}
+                                                />
                                                 <select className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0" value={formData.currency || (formData.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency)} onChange={e=>setFormData({...formData, currency: e.target.value})}><option value="NT$">NT$</option><option value="r">r</option></select>
                                             </div>
                                             {formData.isPreorder ? (

@@ -214,36 +214,34 @@
                     </div>
                     <div className="p-3 flex-1 flex flex-col bg-white">
                         <h3 className="font-bold text-gray-800 text-sm line-clamp-1">{stack.name}</h3>
-                        <div className="flex-1 mt-1 space-y-2 overflow-y-auto max-h-[120px] thin-scrollbar pr-1">
-                            {consolidated.map((inst, idx) => (
-                                <div key={idx} className="bg-gray-50 rounded p-2 text-xs border border-gray-100 flex justify-between items-center">
-                                    <div>
-                                        {showAmount && (
-                                            <>
-                                                <div className="flex gap-1 text-[10px] text-gray-500 items-center">
-                                                    {inst.isPreorder ? 
-                                                        <span className="text-orange-500 font-bold flex items-center gap-0.5"><Icon name="Package" size={10}/> 預購 {inst.shippingDate}</span> 
-                                                        : 
-                                                        <span className="flex items-center gap-0.5"><Icon name="Calendar" size={10}/> {inst.date}</span>
-                                                    }
-                                                </div>
-                                                <div className="flex items-baseline gap-1">
-                                                    <span className="font-bold text-base text-slate-800">
-                                                        {inst.currency === 'r' ? `${inst.acquiredPrice}r` : `NT$ ${inst.acquiredPrice}`}
-                                                    </span>
-                                                    {inst.officialPrice && <span className="text-[11px] text-gray-500 font-medium ml-1">({inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}
-                                                </div>
-                                            </>
-                                        )}
-                                        {!showAmount && <div className="h-4"></div>} {/* Spacer when hidden to keep alignment or remove completely if preferred */}
+                        {showAmount && (
+                            <div className="flex-1 mt-1 space-y-2 overflow-y-auto max-h-[120px] thin-scrollbar pr-1">
+                                {consolidated.map((inst, idx) => (
+                                    <div key={idx} className="bg-gray-50 rounded p-2 text-xs border border-gray-100 flex justify-between items-center">
+                                        <div>
+                                            <div className="flex gap-1 text-[10px] text-gray-500 items-center">
+                                                {inst.isPreorder ? 
+                                                    <span className="text-orange-500 font-bold flex items-center gap-0.5"><Icon name="Package" size={10}/> 預購 {inst.shippingDate}</span> 
+                                                    : 
+                                                    <span className="flex items-center gap-0.5"><Icon name="Calendar" size={10}/> {inst.date}</span>
+                                                }
+                                            </div>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="font-bold text-base text-slate-800">
+                                                    {inst.currency === 'r' ? `${inst.acquiredPrice}r` : `NT$ ${inst.acquiredPrice}`}
+                                                </span>
+                                                {inst.officialPrice && <span className="text-[11px] text-gray-500 font-medium ml-1">({inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-1 ml-auto pl-2 border-l border-gray-100">
+                                            {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">x{inst.count}</span>}
+                                            <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all"><Icon name="Edit3" size={12}/></button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-1 ml-auto pl-2 border-l border-gray-100">
-                                        {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">x{inst.count}</span>}
-                                        <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all"><Icon name="Edit3" size={12}/></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             );
@@ -357,7 +355,7 @@
                                 <div><label className="block text-sm font-medium text-gray-700 mb-2">預設幣值 (非預購)</label><div className="flex gap-2">{['NT$', 'r'].map(curr => (<button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.defaultCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{curr}</button>))}</div></div>
                                 <div><label className="block text-sm font-medium text-gray-700 mb-2">預購預設幣值</label><div className="flex gap-2">{['NT$', 'r'].map(curr => (<button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultPreorderCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.defaultPreorderCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{curr}</button>))}</div></div>
                                 <div><label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.groupAllInFilterMode} onChange={(e) => setAppSettings(prev => ({...prev, groupAllInFilterMode: e.target.checked}))}/><span className="text-sm font-medium">顯示分類大標題 (全部模式)</span></label><p className="text-xs text-gray-400 mt-1 ml-1">在「全部」檢視下，是否依據當前模式顯示分組標題。</p></div>
-                                <div><label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.showAmount !== false} onChange={(e) => setAppSettings(prev => ({...prev, showAmount: e.target.checked}))}/><span className="text-sm font-medium">顯示金額與日期</span></label><p className="text-xs text-gray-400 mt-1 ml-1">若取消勾選，將隱藏我的收藏中，圖片下方的金額、日期等詳細資訊，僅保留編輯按鈕。</p></div>
+                                <div><label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.showAmount !== false} onChange={(e) => setAppSettings(prev => ({...prev, showAmount: e.target.checked}))}/><span className="text-sm font-medium">顯示金額與日期</span></label><p className="text-xs text-gray-400 mt-1 ml-1">若取消勾選，將隱藏我的收藏中，圖片下方的所有詳細資訊（含金額、日期與編輯按鈕），僅保留圖片與名稱。</p></div>
                             </div>
                         )}
                         {settingsTab === 'filter' && (<div className="space-y-4"><div className="flex justify-between items-center"><p className="text-sm text-gray-500">勾選角色以顯示週邊。</p><button onClick={() => toggleCharacterVisibility('ALL')} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700">我全都要</button></div><div className="space-y-2">{customCharacters.map((char, index) => { const isChecked = (appSettings.visibleCharacters || []).includes(char); return (<div key={char} className="flex items-center justify-between p-3 border rounded-xl bg-white hover:bg-gray-50"><div className="flex items-center gap-3"><span className={`text-sm font-medium ${CHARACTER_THEMES[char]?.text}`}>{char}</span></div><input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer" checked={isChecked} onChange={() => toggleCharacterVisibility(char)} /></div>); })}</div></div>)}

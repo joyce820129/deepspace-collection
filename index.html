@@ -154,7 +154,8 @@
             const consolidated = useMemo(() => {
                 const map = new Map();
                 stack.instances.forEach(inst => {
-                    const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}-${inst.currency}-${inst.shippingFee}`;
+                    // Removed shippingFee from key as it's now handled daily
+                    const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}-${inst.currency}`;
                     if (!map.has(key)) map.set(key, { ...inst, count: 1 }); else map.get(key).count++;
                 });
                 // Sort instances by date (Oldest first)
@@ -215,7 +216,6 @@
                                                 {inst.currency === 'r' ? `${inst.acquiredPrice}r` : `NT$ ${inst.acquiredPrice}`}
                                             </span>
                                             {inst.officialPrice && <span className="text-[11px] text-gray-500 font-medium ml-1">({inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}
-                                            {Number(inst.shippingFee) > 0 && <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded ml-1">+運 {inst.shippingFee}</span>}
                                         </div>
                                     </div>
                                     
@@ -328,7 +328,6 @@
                             acquiredPrice: detail.price,
                             currency: detail.currency,
                             note: commonNote,
-                            shippingFee: '', // Batch add currently doesn't support individual shipping fee to keep it simple, or we can add it later
                             quantity: 1 // Each saved item is a single unit
                         });
                     }
@@ -701,7 +700,7 @@
                 const defaults = {
                     layoutCols: 4, 
                     customTypes: DEFAULT_MERCH_TYPES,
-                    customSeries: [], // New Field for Series Order
+                    customSeries: [], 
                     customCharacters: CHARACTERS,
                     visibleCharacters: CHARACTERS,
                     multiSelect: { type: true, character: false, date: false, series: false },
@@ -720,7 +719,7 @@
                         if (!parsed.defaultCurrency) parsed.defaultCurrency = 'NT$';
                         if (typeof parsed.groupAllInFilterMode === 'undefined') parsed.groupAllInFilterMode = true;
                         if (!parsed.customTypes) parsed.customTypes = DEFAULT_MERCH_TYPES;
-                        if (!parsed.customSeries) parsed.customSeries = []; // Ensure customSeries exists
+                        if (!parsed.customSeries) parsed.customSeries = []; 
                         return parsed;
                     } catch (e) {
                         return defaults;
@@ -731,6 +730,8 @@
 
             const [items, setItems] = useState([]); 
             const [catalogItems, setCatalogItems] = useState([]); 
+            // New State for Daily Fees
+            const [dailyFees, setDailyFees] = useState({}); 
 
             // --- Auto Sync Types and Series Effect ---
             useEffect(() => {
@@ -792,14 +793,19 @@
             const [formData, setFormData] = useState({});
             const [importJson, setImportJson] = useState('');
             const [newTypeInput, setNewTypeInput] = useState(''); 
-            const [newSeriesInput, setNewSeriesInput] = useState(''); // New input for Series
+            const [newSeriesInput, setNewSeriesInput] = useState(''); 
 
             // Batch Add States
             const [isBatchMode, setIsBatchMode] = useState(false);
             const [batchSelection, setBatchSelection] = useState(new Set());
             const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
+            // Edit Fee State (Temp)
+            const [editingFeeDate, setEditingFeeDate] = useState(null);
+            const [editingFeeValue, setEditingFeeValue] = useState('');
+
             const fileInputRef = useRef(null);
+            const feeInputRef = useRef(null);
             
             // Drag and Drop Refs
             const dragItem = useRef();
@@ -822,8 +828,11 @@
                 setSelectedTypeFilters([]); setSelectedCharFilters([]); setSelectedDateFilters([]); setSelectedSeriesFilters([]);
             }, [collectionGroupingMode, groupingMode]);
 
+            // --- Load Daily Fees ---
             useEffect(() => {
                 if (!isFirebaseInitialized) {
+                    const localFees = localStorage.getItem('deepspace_daily_fees_local');
+                    if (localFees) setDailyFees(JSON.parse(localFees));
                     const localItems = localStorage.getItem('deepspace_items_v7_local');
                     if (localItems) setItems(JSON.parse(localItems));
                     const localCatalog = localStorage.getItem('deepspace_catalog_v7_local');
@@ -858,16 +867,26 @@
                 }, () => {});
 
                 let unsubCollection = () => {};
+                let unsubFees = () => {};
+
                 if (user) { 
                     const userColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'items');
-                    // Ensure sorting by order when fetching
                     const q = query(userColl, orderBy("order", "asc"));
                     unsubCollection = onSnapshot(q, (snapshot) => {
                         const cloudItems = snapshot.docs.map(doc => doc.data());
-                        // Just in case, JS sort
                         cloudItems.sort((a, b) => (a.order || 0) - (b.order || 0));
                         setItems(cloudItems);
                     }, console.error);
+
+                    // Load Daily Fees
+                    const feesColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'daily_fees');
+                    unsubFees = onSnapshot(feesColl, (snapshot) => {
+                        const feesMap = {};
+                        snapshot.docs.forEach(doc => {
+                            feesMap[doc.id] = doc.data().amount || 0;
+                        });
+                        setDailyFees(feesMap);
+                    });
                 } else { 
                     const localItems = localStorage.getItem('deepspace_items_v7_local');
                     if (localItems) {
@@ -875,13 +894,19 @@
                         parsed.sort((a, b) => (a.order || 0) - (b.order || 0));
                         setItems(parsed);
                     }
+                    const localFees = localStorage.getItem('deepspace_daily_fees_local');
+                    if (localFees) setDailyFees(JSON.parse(localFees));
                 }
-                return () => { unsubCatalog(); unsubCollection(); };
+                return () => { unsubCatalog(); unsubCollection(); unsubFees(); };
             }, [user, auth.currentUser]);
 
             useEffect(() => {
-                if (!isFirebaseInitialized || !user) localStorage.setItem('deepspace_items_v7_local', JSON.stringify(items));
-            }, [items, user]);
+                if (!isFirebaseInitialized || !user) {
+                    localStorage.setItem('deepspace_items_v7_local', JSON.stringify(items));
+                    localStorage.setItem('deepspace_daily_fees_local', JSON.stringify(dailyFees));
+                }
+            }, [items, dailyFees, user]);
+            
             useEffect(() => {
                 if (!isFirebaseInitialized) localStorage.setItem('deepspace_catalog_v7_local', JSON.stringify(catalogItems));
             }, [catalogItems]);
@@ -894,7 +919,6 @@
             const handleLogout = () => signOut(auth);
 
             const saveToCollection = async (newItem) => {
-                // If it's a new item, put it at the end
                 const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0;
                 const itemWithOrder = { ...newItem, order: newItem.order || (maxOrder + 1) };
                 
@@ -930,213 +954,33 @@
                 }
             };
 
-            // --- Type Management ---
-            const handleAddType = () => {
-                if (newTypeInput && !appSettings.customTypes.includes(newTypeInput)) {
-                    setAppSettings(prev => ({...prev, customTypes: [...prev.customTypes, newTypeInput]}));
-                    setNewTypeInput('');
+            const handleSaveShippingFee = async (date, amount) => {
+                const numAmount = parseInt(amount) || 0;
+                if (user && isFirebaseInitialized) {
+                    await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/daily_fees`, date), { amount: numAmount });
+                } else {
+                    setDailyFees(prev => ({ ...prev, [date]: numAmount }));
                 }
-            };
-            const handleDeleteType = (t) => {
-                if (confirm(`確定要刪除類型「${t}」嗎？`)) {
-                    setAppSettings(prev => ({...prev, customTypes: prev.customTypes.filter(type => type !== t)}));
-                }
-            };
-            const handleManualSyncTypes = () => {
-                const allItems = [...items, ...catalogItems];
-                const validTypes = allItems
-                    .map(i => i.type ? i.type.trim() : '')
-                    .filter(t => t !== '');
-                const usedTypes = new Set(validTypes);
-                
-                setAppSettings(prev => {
-                    const currentTypes = prev.customTypes || [];
-                    const newTypes = Array.from(usedTypes).filter(t => !currentTypes.includes(t));
-                    
-                    if (newTypes.length > 0) {
-                        alert(`已同步 ${newTypes.length} 個新類型！`);
-                        return { ...prev, customTypes: [...currentTypes, ...newTypes] };
-                    } else {
-                        alert('目前沒有發現新類型。');
-                        return prev;
-                    }
-                });
+                setEditingFeeDate(null);
             };
 
-            // --- Series Management (NEW) ---
-            const handleAddSeries = () => {
-                if (newSeriesInput && !appSettings.customSeries.includes(newSeriesInput)) {
-                    setAppSettings(prev => ({...prev, customSeries: [...(prev.customSeries || []), newSeriesInput]}));
-                    setNewSeriesInput('');
-                }
-            };
-            const handleDeleteSeries = (s) => {
-                if (confirm(`確定要刪除系列「${s}」嗎？`)) {
-                    setAppSettings(prev => ({...prev, customSeries: prev.customSeries.filter(series => series !== s)}));
-                }
-            };
-            const handleManualSyncSeries = () => {
-                const allItems = [...items, ...catalogItems];
-                const validSeries = allItems
-                    .map(i => i.series ? i.series.trim() : '')
-                    .filter(s => s !== '');
-                const usedSeries = new Set(validSeries);
-                
-                setAppSettings(prev => {
-                    const currentSeries = prev.customSeries || [];
-                    const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s));
-                    
-                    if (newSeries.length > 0) {
-                        alert(`已同步 ${newSeries.length} 個新系列！`);
-                        return { ...prev, customSeries: [...currentSeries, ...newSeries] };
-                    } else {
-                        alert('目前沒有發現新系列。');
-                        return prev;
-                    }
-                });
-            };
+            // ... [Type/Series Management functions remain same] ...
+            const handleAddType = () => { if (newTypeInput && !appSettings.customTypes.includes(newTypeInput)) { setAppSettings(prev => ({...prev, customTypes: [...prev.customTypes, newTypeInput]})); setNewTypeInput(''); } };
+            const handleDeleteType = (t) => { if (confirm(`確定要刪除類型「${t}」嗎？`)) { setAppSettings(prev => ({...prev, customTypes: prev.customTypes.filter(type => type !== t)})); } };
+            const handleManualSyncTypes = () => { /* ... */ const allItems = [...items, ...catalogItems]; const validTypes = allItems.map(i => i.type ? i.type.trim() : '').filter(t => t !== ''); const usedTypes = new Set(validTypes); setAppSettings(prev => { const currentTypes = prev.customTypes || []; const newTypes = Array.from(usedTypes).filter(t => !currentTypes.includes(t)); if (newTypes.length > 0) { alert(`已同步 ${newTypes.length} 個新類型！`); return { ...prev, customTypes: [...currentTypes, ...newTypes] }; } else { alert('目前沒有發現新類型。'); return prev; } }); };
+            const handleAddSeries = () => { if (newSeriesInput && !appSettings.customSeries.includes(newSeriesInput)) { setAppSettings(prev => ({...prev, customSeries: [...(prev.customSeries || []), newSeriesInput]})); setNewSeriesInput(''); } };
+            const handleDeleteSeries = (s) => { if (confirm(`確定要刪除系列「${s}」嗎？`)) { setAppSettings(prev => ({...prev, customSeries: prev.customSeries.filter(series => series !== s)})); } };
+            const handleManualSyncSeries = () => { /* ... */ const allItems = [...items, ...catalogItems]; const validSeries = allItems.map(i => i.series ? i.series.trim() : '').filter(s => s !== ''); const usedSeries = new Set(validSeries); setAppSettings(prev => { const currentSeries = prev.customSeries || []; const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s)); if (newSeries.length > 0) { alert(`已同步 ${newSeries.length} 個新系列！`); return { ...prev, customSeries: [...currentSeries, ...newSeries] }; } else { alert('目前沒有發現新系列。'); return prev; } }); };
 
-            const handleBulkImport = async () => {
-                if (!importJson.trim()) return;
-                try {
-                    let parsedData = [];
-                    const text = importJson.trim();
-                    if (text.startsWith('[')) {
-                        parsedData = JSON.parse(text);
-                    } else {
-                        const rows = text.split('\n').map(r=>r.trim()).filter(r=>r);
-                        const header = rows[0].toLowerCase();
-                        const sep = header.includes('\t') ? '\t' : ',';
-                        const cols = rows[0].split(sep).map(s=>s.trim());
-                        const mapKey = { 'name': 'name', '名稱': 'name', 'character': 'character', '角色': 'character', 'type': 'type', '類型': 'type', 'series': 'series', '系列': 'series', 'officialprice': 'officialPrice', '原價': 'officialPrice', 'image': 'image', '圖片': 'image' };
-                        const keys = cols.map(c => mapKey[c.toLowerCase()] || c);
-                        if (!keys.includes('name')) throw new Error("缺少 'name' 或 '名稱' 欄位");
-                        parsedData = rows.slice(1).map(row => {
-                            const vals = row.split(sep);
-                            let obj = {};
-                            keys.forEach((k, i) => { if (vals[i]) obj[k] = vals[i].trim(); });
-                            return obj;
-                        }).filter(o => o.name);
-                    }
-                    if (parsedData.length === 0) throw new Error("無有效資料");
-
-                    // Sync Types and Series during import
-                    const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== ''));
-                    const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== ''));
-
-                    setAppSettings(prev => {
-                        const currentTypes = prev.customTypes || [];
-                        const newTypesToAdd = Array.from(importedTypes).filter(t => !currentTypes.includes(t));
-                        
-                        const currentSeries = prev.customSeries || [];
-                        const newSeriesToAdd = Array.from(importedSeries).filter(s => !currentSeries.includes(s));
-
-                        let next = { ...prev };
-                        let changed = false;
-                        if (newTypesToAdd.length > 0) { next.customTypes = [...currentTypes, ...newTypesToAdd]; changed = true; }
-                        if (newSeriesToAdd.length > 0) { next.customSeries = [...currentSeries, ...newSeriesToAdd]; changed = true; }
-                        
-                        return changed ? next : prev;
-                    });
-
-                    let count = 0;
-                    const timestamp = Date.now();
-                    for (const item of parsedData) {
-                        const newItem = {
-                            id: item.id || `imp_${timestamp}_${count}`,
-                            name: item.name,
-                            character: item.character || '其他',
-                            type: item.type || '未分類',
-                            series: item.series || '',
-                            officialPrice: item.officialPrice || '',
-                            image: item.image || null,
-                            order: timestamp + count
-                        };
-                        if(isFirebaseInitialized) await saveToCatalog(newItem);
-                        else setCatalogItems(prev => [...prev, newItem]);
-                        count++;
-                    }
-                    alert(`匯入成功 ${parsedData.length} 筆`);
-                    setImportJson('');
-                } catch (e) { alert("匯入失敗: " + e.message); }
-            };
-
-             const handleExportCatalog = () => {
-                const dataStr = JSON.stringify(catalogItems, null, 2);
-                setImportJson(dataStr);
-            };
-
-            const handleResetData = () => {
-                if (confirm("確定要清空本地資料嗎？此操作無法復原。")) {
-                    setItems([]);
-                    setCatalogItems([]);
-                    localStorage.removeItem('deepspace_items_v7_local');
-                    localStorage.removeItem('deepspace_catalog_v7_local');
-                    alert("已清空。");
-                }
-            };
-            
-            // Toggle logic for "All" vs specific char
-            const toggleCharacterVisibility = (char) => {
-                setAppSettings(prev => {
-                    const current = prev.visibleCharacters;
-                    if (char === "ALL") {
-                         const allMainSelected = CHARACTERS.every(c => current.includes(c));
-                         if (allMainSelected) {
-                             return { ...prev, visibleCharacters: [] }; 
-                         } else {
-                             return { ...prev, visibleCharacters: [...CHARACTERS] }; 
-                         }
-                    } else {
-                        if (current.includes(char)) {
-                            return { ...prev, visibleCharacters: current.filter(c => c !== char) };
-                        } else {
-                            return { ...prev, visibleCharacters: [...current, char] };
-                        }
-                    }
-                });
-            };
-
-            const toggleMultiSelect = (key) => {
-                setAppSettings(prev => ({
-                    ...prev,
-                    multiSelect: {
-                        ...prev.multiSelect,
-                        [key]: !prev.multiSelect[key]
-                    }
-                }));
-            };
-
-            // Batch Add Logic
-            const toggleBatchMode = () => {
-                setIsBatchMode(prev => !prev);
-                setBatchSelection(new Set()); // Clear on toggle
-            };
-
-            const handleBatchSelect = (itemId) => {
-                setBatchSelection(prev => {
-                    const newSet = new Set(prev);
-                    if (newSet.has(itemId)) newSet.delete(itemId);
-                    else newSet.add(itemId);
-                    return newSet;
-                });
-            };
-
-            const openBatchModal = () => {
-                if (batchSelection.size === 0) return alert("請至少選擇一個物品");
-                setIsBatchModalOpen(true);
-            };
-
-            const handleBatchSave = async (itemsToSave) => {
-                for (const item of itemsToSave) {
-                    // Ensure unique ID
-                    const uniqueItem = { ...item, id: Date.now() + Math.random().toString(36).substr(2, 9), order: Date.now() }; 
-                    await saveToCollection(uniqueItem);
-                }
-                setIsBatchModalOpen(false);
-                setIsBatchMode(false);
-                setBatchSelection(new Set());
-            };
+            const handleBulkImport = async () => { /* ... */ if (!importJson.trim()) return; try { let parsedData = []; const text = importJson.trim(); if (text.startsWith('[')) { parsedData = JSON.parse(text); } else { const rows = text.split('\n').map(r=>r.trim()).filter(r=>r); const header = rows[0].toLowerCase(); const sep = header.includes('\t') ? '\t' : ','; const cols = rows[0].split(sep).map(s=>s.trim()); const mapKey = { 'name': 'name', '名稱': 'name', 'character': 'character', '角色': 'character', 'type': 'type', '類型': 'type', 'series': 'series', '系列': 'series', 'officialprice': 'officialPrice', '原價': 'officialPrice', 'image': 'image', '圖片': 'image' }; const keys = cols.map(c => mapKey[c.toLowerCase()] || c); if (!keys.includes('name')) throw new Error("缺少 'name' 或 '名稱' 欄位"); parsedData = rows.slice(1).map(row => { const vals = row.split(sep); let obj = {}; keys.forEach((k, i) => { if (vals[i]) obj[k] = vals[i].trim(); }); return obj; }).filter(o => o.name); } if (parsedData.length === 0) throw new Error("無有效資料"); const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== '')); const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== '')); setAppSettings(prev => { const currentTypes = prev.customTypes || []; const newTypesToAdd = Array.from(importedTypes).filter(t => !currentTypes.includes(t)); const currentSeries = prev.customSeries || []; const newSeriesToAdd = Array.from(importedSeries).filter(s => !currentSeries.includes(s)); let next = { ...prev }; let changed = false; if (newTypesToAdd.length > 0) { next.customTypes = [...currentTypes, ...newTypesToAdd]; changed = true; } if (newSeriesToAdd.length > 0) { next.customSeries = [...currentSeries, ...newSeriesToAdd]; changed = true; } return changed ? next : prev; }); let count = 0; const timestamp = Date.now(); for (const item of parsedData) { const newItem = { id: item.id || `imp_${timestamp}_${count}`, name: item.name, character: item.character || '其他', type: item.type || '未分類', series: item.series || '', officialPrice: item.officialPrice || '', image: item.image || null, order: timestamp + count }; if(isFirebaseInitialized) await saveToCatalog(newItem); else setCatalogItems(prev => [...prev, newItem]); count++; } alert(`匯入成功 ${parsedData.length} 筆`); setImportJson(''); } catch (e) { alert("匯入失敗: " + e.message); } };
+            const handleExportCatalog = () => { const dataStr = JSON.stringify(catalogItems, null, 2); setImportJson(dataStr); };
+            const handleResetData = () => { if (confirm("確定要清空本地資料嗎？此操作無法復原。")) { setItems([]); setCatalogItems([]); setDailyFees({}); localStorage.removeItem('deepspace_items_v7_local'); localStorage.removeItem('deepspace_catalog_v7_local'); localStorage.removeItem('deepspace_daily_fees_local'); alert("已清空。"); } };
+            const toggleCharacterVisibility = (char) => { setAppSettings(prev => { const current = prev.visibleCharacters; if (char === "ALL") { const allMainSelected = CHARACTERS.every(c => current.includes(c)); if (allMainSelected) { return { ...prev, visibleCharacters: [] }; } else { return { ...prev, visibleCharacters: [...CHARACTERS] }; } } else { if (current.includes(char)) { return { ...prev, visibleCharacters: current.filter(c => c !== char) }; } else { return { ...prev, visibleCharacters: [...current, char] }; } } }); };
+            const toggleMultiSelect = (key) => { setAppSettings(prev => ({ ...prev, multiSelect: { ...prev.multiSelect, [key]: !prev.multiSelect[key] } })); };
+            const toggleBatchMode = () => { setIsBatchMode(prev => !prev); setBatchSelection(new Set()); };
+            const handleBatchSelect = (itemId) => { setBatchSelection(prev => { const newSet = new Set(prev); if (newSet.has(itemId)) newSet.delete(itemId); else newSet.add(itemId); return newSet; }); };
+            const openBatchModal = () => { if (batchSelection.size === 0) return alert("請至少選擇一個物品"); setIsBatchModalOpen(true); };
+            const handleBatchSave = async (itemsToSave) => { for (const item of itemsToSave) { const uniqueItem = { ...item, id: Date.now() + Math.random().toString(36).substr(2, 9), order: Date.now() }; await saveToCollection(uniqueItem); } setIsBatchModalOpen(false); setIsBatchMode(false); setBatchSelection(new Set()); };
 
             const openModal = (item = null, template = null, mode = 'collection') => {
                 setModalMode(mode);
@@ -1154,7 +998,6 @@
                     quantity: 1,
                     isPreorder: false, 
                     shippingDate: '',
-                    shippingFee: '', // Added shippingFee default
                     currency: appSettings.defaultCurrency 
                 };
                 
@@ -1170,7 +1013,6 @@
                             quantity: 1,
                             isPreorder: item.isPreorder || false,
                             shippingDate: item.shippingDate || '',
-                            shippingFee: item.shippingFee || '', // Load shippingFee
                             currency: item.currency || (item.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency) 
                         }); 
                     }
@@ -1183,7 +1025,6 @@
                             id: Date.now().toString(),
                             isPreorder: false,
                             shippingDate: '',
-                            shippingFee: '',
                             currency: appSettings.defaultCurrency 
                         }); 
                     }
@@ -1199,32 +1040,11 @@
                 if (!formData.name) return alert("請輸入名稱");
                 const timestamp = Date.now();
                 
-                // Add new types/series to settings on save if not exists
-                setAppSettings(prev => {
-                    let next = { ...prev };
-                    let changed = false;
-                    
-                    if (formData.type && !prev.customTypes.includes(formData.type)) {
-                        next.customTypes = [...prev.customTypes, formData.type];
-                        changed = true;
-                    }
-                    if (formData.series && !prev.customSeries.includes(formData.series)) {
-                        next.customSeries = [...prev.customSeries, formData.series];
-                        changed = true;
-                    }
-                    return changed ? next : prev;
-                });
+                setAppSettings(prev => { let next = { ...prev }; let changed = false; if (formData.type && !prev.customTypes.includes(formData.type)) { next.customTypes = [...prev.customTypes, formData.type]; changed = true; } if (formData.series && !prev.customSeries.includes(formData.series)) { next.customSeries = [...prev.customSeries, formData.series]; changed = true; } return changed ? next : prev; });
 
                 if (modalMode === 'catalog') {
                     const itemToSave = { ...formData };
-                    delete itemToSave.quantity; 
-                    delete itemToSave.acquiredPrice; 
-                    delete itemToSave.date; 
-                    delete itemToSave.note;
-                    delete itemToSave.isPreorder;
-                    delete itemToSave.shippingDate;
-                    delete itemToSave.currency;
-                    delete itemToSave.shippingFee; // Catalog doesn't store personal shipping fee
+                    delete itemToSave.quantity; delete itemToSave.acquiredPrice; delete itemToSave.date; delete itemToSave.note; delete itemToSave.isPreorder; delete itemToSave.shippingDate; delete itemToSave.currency;
                     await saveToCatalog(itemToSave);
                 } else {
                     const qty = Math.max(1, parseInt(formData.quantity) || 1);
@@ -1244,151 +1064,22 @@
                 setIsModalOpen(false);
             };
             
-            const handleKeyDown = (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleSave();
-                }
-            };
+            const handleKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); handleSave(); } };
+            const handleDragStart = (e, position) => { dragItem.current = position; };
+            const handleDragEnter = (e, position) => { dragOverItem.current = position; };
+            const commitBatches = async (batchArray) => { /* ... */ const chunkSize = 400; for (let i = 0; i < batchArray.length; i += chunkSize) { const batch = writeBatch(db); const chunk = batchArray.slice(i, i + chunkSize); chunk.forEach(op => batch.update(op.ref, op.data)); await batch.commit(); } };
+            const handleSort = async () => { /* ... */ if (collectionGroupingMode !== 'none') return; const stacks = groupedData.collection['全部'] ? getStackedItems(groupedData.collection['全部'], 'none') : []; const copyStacks = [...stacks]; const dragItemContent = copyStacks[dragItem.current]; copyStacks.splice(dragItem.current, 1); copyStacks.splice(dragOverItem.current, 0, dragItemContent); dragItem.current = null; dragOverItem.current = null; const newItems = []; const updates = []; copyStacks.forEach((stack, index) => { stack.instances.forEach(inst => { const newOrder = index; const updatedItem = { ...inst, order: newOrder }; newItems.push(updatedItem); if (user && isFirebaseInitialized) { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, inst.id); updates.push({ ref, data: { order: newOrder } }); } }); }); setItems(prevItems => { const orderMap = new Map(); newItems.forEach(i => orderMap.set(i.id, i.order)); const updatedList = prevItems.map(item => { if (orderMap.has(item.id)) { return { ...item, order: orderMap.get(item.id) }; } return item; }); return updatedList.sort((a, b) => (a.order || 0) - (b.order || 0)); }); if (user && isFirebaseInitialized && updates.length > 0) { try { await commitBatches(updates); } catch (e) { console.error("Batch update failed", e); alert("排序儲存失敗"); } } };
 
-            // --- Drag and Drop Handlers ---
-            const handleDragStart = (e, position) => {
-                dragItem.current = position;
-            };
-        
-            const handleDragEnter = (e, position) => {
-                dragOverItem.current = position;
-            };
-
-            const commitBatches = async (batchArray) => {
-                const chunkSize = 400; // Firestore limit is 500
-                for (let i = 0; i < batchArray.length; i += chunkSize) {
-                    const batch = writeBatch(db);
-                    const chunk = batchArray.slice(i, i + chunkSize);
-                    chunk.forEach(op => batch.update(op.ref, op.data));
-                    await batch.commit();
-                }
-            };
-
-            const handleSort = async () => {
-                if (collectionGroupingMode !== 'none') return; // Only allow sorting in "All" view
-                
-                // Get the stacks currently visible
-                const stacks = groupedData.collection['全部'] ? getStackedItems(groupedData.collection['全部'], 'none') : [];
-                
-                // Copy stacks and reorder
-                const copyStacks = [...stacks];
-                const dragItemContent = copyStacks[dragItem.current];
-                copyStacks.splice(dragItem.current, 1);
-                copyStacks.splice(dragOverItem.current, 0, dragItemContent);
-        
-                // Reset refs
-                dragItem.current = null;
-                dragOverItem.current = null;
-        
-                // We now need to update the actual 'items' array.
-                const newItems = [];
-                const updates = [];
-
-                copyStacks.forEach((stack, index) => {
-                    stack.instances.forEach(inst => {
-                        const newOrder = index; // Simple index-based ordering
-                        const updatedItem = { ...inst, order: newOrder };
-                        newItems.push(updatedItem);
-
-                        if (user && isFirebaseInitialized) {
-                            const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, inst.id);
-                            updates.push({ ref, data: { order: newOrder } });
-                        }
-                    });
-                });
-
-                setItems(prevItems => {
-                    const orderMap = new Map();
-                    newItems.forEach(i => orderMap.set(i.id, i.order));
-                    
-                    const updatedList = prevItems.map(item => {
-                        if (orderMap.has(item.id)) {
-                            return { ...item, order: orderMap.get(item.id) };
-                        }
-                        return item;
-                    });
-                    
-                    return updatedList.sort((a, b) => (a.order || 0) - (b.order || 0));
-                });
-
-                // Persist to Cloud
-                if (user && isFirebaseInitialized && updates.length > 0) {
-                    try {
-                        await commitBatches(updates);
-                    } catch (e) {
-                        console.error("Batch update failed", e);
-                        alert("排序儲存失敗");
-                    }
-                }
-            };
-
-            // --- Helpers ---
             const getEffectiveDate = (item) => item.isPreorder ? item.shippingDate : item.date;
-
-            const getStackedItems = (sourceItems, mode) => {
-                const map = new Map();
-                const stacks = [];
-                sourceItems.forEach(item => {
-                    const key = item.name;
-                    if (!map.has(key)) {
-                        const stack = { ...item, instances: [item], totalCount: 1 };
-                        map.set(key, stack);
-                        stacks.push(stack);
-                    } else {
-                        const stack = map.get(key);
-                        stack.instances.push(item);
-                        stack.totalCount += 1;
-                    }
-                });
-                return stacks;
-            };
-
-            const toggleFilter = (filterState, setFilterState, value, multiSelectEnabled) => {
-                if (value === 'all') {
-                    setFilterState([]);
-                    return;
-                }
-                
-                if (multiSelectEnabled) {
-                    if (filterState.includes(value)) {
-                        setFilterState(prev => prev.filter(v => v !== value));
-                    } else {
-                        setFilterState(prev => [...prev, value]);
-                    }
-                } else {
-                     if (filterState.includes(value)) {
-                         setFilterState([]); 
-                     } else {
-                         setFilterState([value]);
-                     }
-                }
-            };
-
+            const getStackedItems = (sourceItems, mode) => { const map = new Map(); const stacks = []; sourceItems.forEach(item => { const key = item.name; if (!map.has(key)) { const stack = { ...item, instances: [item], totalCount: 1 }; map.set(key, stack); stacks.push(stack); } else { const stack = map.get(key); stack.instances.push(item); stack.totalCount += 1; } }); return stacks; };
+            const toggleFilter = (filterState, setFilterState, value, multiSelectEnabled) => { if (value === 'all') { setFilterState([]); return; } if (multiSelectEnabled) { if (filterState.includes(value)) { setFilterState(prev => prev.filter(v => v !== value)); } else { setFilterState(prev => [...prev, value]); } } else { if (filterState.includes(value)) { setFilterState([]); } else { setFilterState([value]); } } };
+            
             const getFilteredList = (list, mode, typeFilters, charFilters, dateFilters, seriesFilters) => {
                 let processed = list.filter(i => appSettings.visibleCharacters.includes(i.character));
-
-                if (mode === 'type' && typeFilters.length > 0) {
-                    processed = processed.filter(i => typeFilters.includes(i.type));
-                }
-                if (mode === 'character' && charFilters.length > 0) {
-                    processed = processed.filter(i => charFilters.includes(i.character));
-                }
-                if (mode === 'date' && dateFilters.length > 0) {
-                    processed = processed.filter(i => {
-                        const effDate = getEffectiveDate(i);
-                        return dateFilters.includes(effDate);
-                    });
-                }
-                if (mode === 'series' && seriesFilters.length > 0) {
-                    processed = processed.filter(i => seriesFilters.includes(i.series));
-                }
-
+                if (mode === 'type' && typeFilters.length > 0) processed = processed.filter(i => typeFilters.includes(i.type));
+                if (mode === 'character' && charFilters.length > 0) processed = processed.filter(i => charFilters.includes(i.character));
+                if (mode === 'date' && dateFilters.length > 0) processed = processed.filter(i => { const effDate = getEffectiveDate(i); return dateFilters.includes(effDate); });
+                if (mode === 'series' && seriesFilters.length > 0) processed = processed.filter(i => seriesFilters.includes(i.series));
                 return processed;
             };
 
@@ -1396,59 +1087,32 @@
                 const visibleItems = items.filter(i => appSettings.visibleCharacters.includes(i.character));
                 const totalCount = visibleItems.length;
                 let totalNT = 0, totalR = 0;
+                
+                // Item Costs
                 visibleItems.forEach(item => {
                     const price = Number(item.acquiredPrice || 0);
-                    const shipping = Number(item.shippingFee || 0);
-                    const cost = price + shipping;
-                    if (item.currency === 'r') totalR += cost; else totalNT += cost;
+                    if (item.currency === 'r') totalR += price; else totalNT += price;
                 });
+
+                // Shipping Fees (Assume NT$ for simplicity or based on context)
+                const totalShipping = Object.values(dailyFees).reduce((a, b) => a + Number(b), 0);
+                totalNT += totalShipping; // Adding shipping to NT total
+
                 const grandTotal = totalNT + (totalR * exchangeRate);
                 const byChar = visibleItems.reduce((acc, item) => { acc[item.character] = (acc[item.character] || 0) + 1; return acc; }, {});
                 return { totalCount, totalNT, totalR, grandTotal, byChar };
-            }, [items, appSettings.visibleCharacters, exchangeRate]);
+            }, [items, dailyFees, appSettings.visibleCharacters, exchangeRate]);
 
-            const availableTypes = useMemo(() => {
-                const source = activeTab === 'templates' ? catalogItems : items; 
-                const types = new Set(source.map(i => i.type).filter(Boolean));
-                // Ensure customTypes come first, then others
-                return appSettings.customTypes.filter(t => types.has(t)).concat(Array.from(types).filter(t => !appSettings.customTypes.includes(t)));
-            }, [items, catalogItems, appSettings.customTypes, activeTab]);
-
-            const availableSeries = useMemo(() => {
-                const source = activeTab === 'collection' ? items : catalogItems;
-                const series = new Set(source.map(i => i.series).filter(Boolean));
-                // Use customSeries order
-                return (appSettings.customSeries || []).filter(s => series.has(s)).concat(Array.from(series).filter(s => !(appSettings.customSeries || []).includes(s)));
-            }, [items, catalogItems, appSettings.customSeries, activeTab]);
-
-            const availableDates = useMemo(() => {
-                const dates = new Set(items.map(i => getEffectiveDate(i)).filter(Boolean));
-                return Array.from(dates).sort((a, b) => {
-                    return dateSortOrder === 'desc' ? new Date(b) - new Date(a) : new Date(a) - new Date(b);
-                });
-            }, [items, dateSortOrder]);
-
-            const preorderDates = useMemo(() => {
-                const set = new Set();
-                items.forEach(i => { if (i.isPreorder && i.shippingDate) set.add(i.shippingDate); });
-                return set;
-            }, [items]);
+            const availableTypes = useMemo(() => { const source = activeTab === 'templates' ? catalogItems : items; const types = new Set(source.map(i => i.type).filter(Boolean)); return appSettings.customTypes.filter(t => types.has(t)).concat(Array.from(types).filter(t => !appSettings.customTypes.includes(t))); }, [items, catalogItems, appSettings.customTypes, activeTab]);
+            const availableSeries = useMemo(() => { const source = activeTab === 'collection' ? items : catalogItems; const series = new Set(source.map(i => i.series).filter(Boolean)); return (appSettings.customSeries || []).filter(s => series.has(s)).concat(Array.from(series).filter(s => !(appSettings.customSeries || []).includes(s))); }, [items, catalogItems, appSettings.customSeries, activeTab]);
+            const availableDates = useMemo(() => { const dates = new Set(items.map(i => getEffectiveDate(i)).filter(Boolean)); return Array.from(dates).sort((a, b) => { return dateSortOrder === 'desc' ? new Date(b) - new Date(a) : new Date(a) - new Date(b); }); }, [items, dateSortOrder]);
+            const preorderDates = useMemo(() => { const set = new Set(); items.forEach(i => { if (i.isPreorder && i.shippingDate) set.add(i.shippingDate); }); return set; }, [items]);
 
             const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters, dateFilters, seriesFilters) => {
                 const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters, seriesFilters);
-
-                const isAllSelected = (mode === 'type' && typeFilters.length === 0) || 
-                                      (mode === 'character' && charFilters.length === 0) || 
-                                      (mode === 'series' && seriesFilters.length === 0) || 
-                                      (mode === 'date' && dateFilters.length === 0);
-
-                if (mode === 'none') {
-                     return { '全部': processedList };
-                }
-                
-                if (isAllSelected && !appSettings.groupAllInFilterMode) {
-                    return { '全部': processedList };
-                }
+                const isAllSelected = (mode === 'type' && typeFilters.length === 0) || (mode === 'character' && charFilters.length === 0) || (mode === 'series' && seriesFilters.length === 0) || (mode === 'date' && dateFilters.length === 0);
+                if (mode === 'none') { return { '全部': processedList }; }
+                if (isAllSelected && !appSettings.groupAllInFilterMode) { return { '全部': processedList }; }
                 
                 const grouped = processedList.reduce((acc, item) => {
                     let key = '';
@@ -1456,43 +1120,17 @@
                     else if (mode === 'type') key = item.type || '其他類型';
                     else if (mode === 'character') key = item.character || '其他角色';
                     else if (mode === 'date') key = getEffectiveDate(item) || '未知日期';
-                    
-                    if (!acc[key]) acc[key] = [];
-                    acc[key].push(item);
-                    return acc;
+                    if (!acc[key]) acc[key] = []; acc[key].push(item); return acc;
                 }, {});
 
                 if (mode === 'date') {
-                    const keys = Object.keys(grouped).sort((a,b) => {
-                        if(a==='未知日期') return 1; if(b==='未知日期') return -1;
-                        return sortOrder==='desc' ? new Date(b)-new Date(a) : new Date(a)-new Date(b);
-                    });
+                    const keys = Object.keys(grouped).sort((a,b) => { if(a==='未知日期') return 1; if(b==='未知日期') return -1; return sortOrder==='desc' ? new Date(b)-new Date(a) : new Date(a)-new Date(b); });
                     const sorted = {}; keys.forEach(k=>sorted[k]=grouped[k]); return sorted;
                 }
                 
-                // Sort by Custom Order (Type)
-                if (mode === 'type') {
-                    const sorted = {};
-                    appSettings.customTypes.forEach(t => { if (grouped[t]) sorted[t] = grouped[t]; });
-                    Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; });
-                    return sorted;
-                }
-
-                // Sort by Custom Order (Series)
-                if (mode === 'series') {
-                    const sorted = {};
-                    (appSettings.customSeries || []).forEach(s => { if (grouped[s]) sorted[s] = grouped[s]; });
-                    Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; });
-                    return sorted;
-                }
-                
-                // Sort by Custom Order (Character)
-                if (mode === 'character') {
-                    const sorted = {};
-                    appSettings.customCharacters.forEach(char => { if (grouped[char]) sorted[char] = grouped[char]; });
-                    Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; });
-                    return sorted;
-                }
+                if (mode === 'type') { const sorted = {}; appSettings.customTypes.forEach(t => { if (grouped[t]) sorted[t] = grouped[t]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; }
+                if (mode === 'series') { const sorted = {}; (appSettings.customSeries || []).forEach(s => { if (grouped[s]) sorted[s] = grouped[s]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; }
+                if (mode === 'character') { const sorted = {}; appSettings.customCharacters.forEach(char => { if (grouped[char]) sorted[char] = grouped[char]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; }
                 
                 return grouped;
             };
@@ -1559,18 +1197,47 @@
                                         if (collectionGroupingMode === 'date' && gName !== '全部') {
                                             const dayStats = gItems.reduce((acc, item) => {
                                                 const p = Number(item.acquiredPrice || 0);
-                                                const s = Number(item.shippingFee || 0);
-                                                const cost = p + s;
-                                                if (item.currency === 'r') acc.r += cost; else acc.nt += cost;
+                                                if (item.currency === 'r') acc.r += p; else acc.nt += p;
                                                 return acc;
                                             }, { nt: 0, r: 0 });
-                                            const total = dayStats.nt + (dayStats.r * exchangeRate);
+                                            
+                                            // Get shipping fee for this day
+                                            const shipping = dailyFees[gName] || 0;
+                                            
+                                            const total = dayStats.nt + (dayStats.r * exchangeRate) + shipping;
+                                            
                                             // Always show even if 0
                                             dayTotalDisplay = (
-                                                <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                                                    <Icon name="Banknote" size={14}/>
-                                                    NT$ {Math.round(total).toLocaleString()}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                                        <Icon name="Banknote" size={14}/>
+                                                        NT$ {Math.round(total).toLocaleString()}
+                                                    </span>
+                                                    {editingFeeDate === gName ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <input 
+                                                                ref={feeInputRef}
+                                                                type="number" 
+                                                                className="w-20 px-2 py-0.5 text-sm border rounded"
+                                                                value={editingFeeValue}
+                                                                onChange={(e) => setEditingFeeValue(e.target.value)}
+                                                                onKeyDown={(e) => e.key === 'Enter' && handleSaveShippingFee(gName, editingFeeValue)}
+                                                                autoFocus
+                                                                placeholder="運費"
+                                                            />
+                                                            <button onClick={() => handleSaveShippingFee(gName, editingFeeValue)} className="text-green-600"><Icon name="Check" size={16}/></button>
+                                                            <button onClick={() => setEditingFeeDate(null)} className="text-gray-400"><Icon name="X" size={16}/></button>
+                                                        </div>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={() => { setEditingFeeDate(gName); setEditingFeeValue(shipping || ''); }}
+                                                            className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}
+                                                        >
+                                                            {shipping > 0 ? `+ 運費 ${shipping}` : '+ 運費'}
+                                                            <Icon name="Edit2" size={10} />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             );
                                         }
 
@@ -1581,8 +1248,8 @@
                                                     <h3 className="font-bold text-lg text-gray-700 flex items-center">
                                                         {gName} 
                                                         <span className="text-xs text-gray-400 font-normal ml-1">({stacks.length})</span>
-                                                        {dayTotalDisplay}
                                                     </h3>
+                                                    {dayTotalDisplay}
                                                 </div>
                                             )}
                                             <div style={gridStyle}>
@@ -1785,12 +1452,6 @@
                                                 <input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
                                                 <select className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0" value={formData.currency || (formData.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency)} onChange={e=>setFormData({...formData, currency: e.target.value})}><option value="NT$">NT$</option><option value="r">r</option></select>
                                             </div>
-                                            <div className="relative">
-                                                <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500">運費</span>
-                                                <input type="number" className="border p-2 rounded w-full" placeholder="0" value={formData.shippingFee} onChange={e=>setFormData({...formData,shippingFee:e.target.value})}/>
-                                            </div>
-                                        </div>
-                                        <div className="mt-2">
                                             {formData.isPreorder ? (
                                                 <div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span><input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/></div>
                                             ) : (

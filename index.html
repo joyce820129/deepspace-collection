@@ -25,6 +25,17 @@
         .cursor-move { cursor: grab; }
         .cursor-move:active { cursor: grabbing; }
         .dragging { opacity: 0.4; border: 2px dashed #3b82f6; }
+
+        /* 隱藏數字輸入框的上下箭頭 (Chrome, Safari, Edge, Opera) */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        /* 隱藏數字輸入框的上下箭頭 (Firefox) */
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -143,7 +154,7 @@
             const consolidated = useMemo(() => {
                 const map = new Map();
                 stack.instances.forEach(inst => {
-                    const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}-${inst.currency}`;
+                    const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}-${inst.currency}-${inst.shippingFee}`;
                     if (!map.has(key)) map.set(key, { ...inst, count: 1 }); else map.get(key).count++;
                 });
                 // Sort instances by date (Oldest first)
@@ -204,6 +215,7 @@
                                                 {inst.currency === 'r' ? `${inst.acquiredPrice}r` : `NT$ ${inst.acquiredPrice}`}
                                             </span>
                                             {inst.officialPrice && <span className="text-[11px] text-gray-500 font-medium ml-1">({inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}
+                                            {Number(inst.shippingFee) > 0 && <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1 rounded ml-1">+運 {inst.shippingFee}</span>}
                                         </div>
                                     </div>
                                     
@@ -316,6 +328,7 @@
                             acquiredPrice: detail.price,
                             currency: detail.currency,
                             note: commonNote,
+                            shippingFee: '', // Batch add currently doesn't support individual shipping fee to keep it simple, or we can add it later
                             quantity: 1 // Each saved item is a single unit
                         });
                     }
@@ -1141,6 +1154,7 @@
                     quantity: 1,
                     isPreorder: false, 
                     shippingDate: '',
+                    shippingFee: '', // Added shippingFee default
                     currency: appSettings.defaultCurrency 
                 };
                 
@@ -1156,6 +1170,7 @@
                             quantity: 1,
                             isPreorder: item.isPreorder || false,
                             shippingDate: item.shippingDate || '',
+                            shippingFee: item.shippingFee || '', // Load shippingFee
                             currency: item.currency || (item.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency) 
                         }); 
                     }
@@ -1168,6 +1183,7 @@
                             id: Date.now().toString(),
                             isPreorder: false,
                             shippingDate: '',
+                            shippingFee: '',
                             currency: appSettings.defaultCurrency 
                         }); 
                     }
@@ -1208,6 +1224,7 @@
                     delete itemToSave.isPreorder;
                     delete itemToSave.shippingDate;
                     delete itemToSave.currency;
+                    delete itemToSave.shippingFee; // Catalog doesn't store personal shipping fee
                     await saveToCatalog(itemToSave);
                 } else {
                     const qty = Math.max(1, parseInt(formData.quantity) || 1);
@@ -1381,7 +1398,9 @@
                 let totalNT = 0, totalR = 0;
                 visibleItems.forEach(item => {
                     const price = Number(item.acquiredPrice || 0);
-                    if (item.currency === 'r') totalR += price; else totalNT += price;
+                    const shipping = Number(item.shippingFee || 0);
+                    const cost = price + shipping;
+                    if (item.currency === 'r') totalR += cost; else totalNT += cost;
                 });
                 const grandTotal = totalNT + (totalR * exchangeRate);
                 const byChar = visibleItems.reduce((acc, item) => { acc[item.character] = (acc[item.character] || 0) + 1; return acc; }, {});
@@ -1540,18 +1559,19 @@
                                         if (collectionGroupingMode === 'date' && gName !== '全部') {
                                             const dayStats = gItems.reduce((acc, item) => {
                                                 const p = Number(item.acquiredPrice || 0);
-                                                if (item.currency === 'r') acc.r += p; else acc.nt += p;
+                                                const s = Number(item.shippingFee || 0);
+                                                const cost = p + s;
+                                                if (item.currency === 'r') acc.r += cost; else acc.nt += cost;
                                                 return acc;
                                             }, { nt: 0, r: 0 });
                                             const total = dayStats.nt + (dayStats.r * exchangeRate);
-                                            if (total > 0) {
-                                                dayTotalDisplay = (
-                                                    <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                                                        <Icon name="Banknote" size={14}/>
-                                                        NT$ {Math.round(total).toLocaleString()}
-                                                    </span>
-                                                );
-                                            }
+                                            // Always show even if 0
+                                            dayTotalDisplay = (
+                                                <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                                    <Icon name="Banknote" size={14}/>
+                                                    NT$ {Math.round(total).toLocaleString()}
+                                                </span>
+                                            );
                                         }
 
                                         return <div key={gName} className="animate-fade-in">
@@ -1765,14 +1785,20 @@
                                                 <input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
                                                 <select className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0" value={formData.currency || (formData.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency)} onChange={e=>setFormData({...formData, currency: e.target.value})}><option value="NT$">NT$</option><option value="r">r</option></select>
                                             </div>
+                                            <div className="relative">
+                                                <span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500">運費</span>
+                                                <input type="number" className="border p-2 rounded w-full" placeholder="0" value={formData.shippingFee} onChange={e=>setFormData({...formData,shippingFee:e.target.value})}/>
+                                            </div>
+                                        </div>
+                                        <div className="mt-2">
                                             {formData.isPreorder ? (
                                                 <div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span><input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/></div>
                                             ) : (
                                                 <div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500">收物日期</span><input type="date" className="border p-2 rounded w-full" value={formData.date} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,date:e.target.value})}/></div>
                                             )}
                                         </div>
-                                        {!editingItem && <div className="flex items-center gap-2"><label>數量:</label><input type="number" className="border p-1 w-16" value={formData.quantity} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div>}
-                                        <textarea className="w-full border p-2 rounded h-20" placeholder="備註..." value={formData.note} onChange={e=>setFormData({...formData,note:e.target.value})}/>
+                                        {!editingItem && <div className="flex items-center gap-2 mt-2"><label>數量:</label><input type="number" className="border p-1 w-16" value={formData.quantity} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div>}
+                                        <textarea className="w-full border p-2 rounded h-20 mt-2" placeholder="備註..." value={formData.note} onChange={e=>setFormData({...formData,note:e.target.value})}/>
                                     </>
                                 )}
                                 <div className="flex gap-2 mt-4">

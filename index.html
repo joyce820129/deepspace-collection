@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>深空收藏艙 | 獵人週邊管理</title>
+    <title>深空收藏艙 | 獵人週邊管理 (自訂排序增強版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -374,8 +374,18 @@
                         const parsed = JSON.parse(savedSettings);
                         if (!parsed.visibleCharacters) parsed.visibleCharacters = CHARACTERS;
                         if (!parsed.customCharacters) parsed.customCharacters = CHARACTERS;
+                        
                         // Auto-inject "全員" if it's missing (legacy support)
-                        if (parsed.customCharacters && !parsed.customCharacters.includes("全員")) { parsed.customCharacters.push("全員"); }
+                        if (parsed.customCharacters && !parsed.customCharacters.includes("全員")) {
+                            parsed.customCharacters.push("全員");
+                        }
+                        
+                        // FIX: Ensure "全員" is in visibleCharacters if missing
+                        // This fixes the issue where existing users wouldn't see "全員" items because the filter list was stale
+                        if (parsed.visibleCharacters && !parsed.visibleCharacters.includes("全員")) {
+                            parsed.visibleCharacters.push("全員");
+                        }
+
                         if (!parsed.multiSelect) parsed.multiSelect = defaults.multiSelect;
                         if (typeof parsed.multiSelect.series === 'undefined') parsed.multiSelect.series = false;
                         if (!parsed.defaultPreorderCurrency) parsed.defaultPreorderCurrency = 'NT$';

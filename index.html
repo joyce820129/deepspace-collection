@@ -84,7 +84,9 @@
             } catch(e) { console.log("Preview env init failed", e); }
         }
 
-        const CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝"];
+        // Updated CHARACTERS list with "全員" at the end
+        const CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝", "全員"];
+        
         const DEFAULT_MERCH_TYPES = [
             "徽章", "立牌", "拍立得", "小卡", "相卡", "明信片", "雷射票", "書籤", 
             "透卡", "貼紙", "色紙", "簽名板", "杯墊", "吊飾", "公仔", "娃娃", "卡冊", "其他"
@@ -96,6 +98,7 @@
             "祁煜": { bg: "bg-pink-50", text: "text-pink-700", border: "border-pink-200", badge: "bg-pink-100 text-pink-800" },
             "秦徹": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", badge: "bg-red-100 text-red-800" },
             "夏以晝": { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", badge: "bg-orange-100 text-orange-800" },
+            "全員": { bg: "bg-slate-100", text: "text-slate-700", border: "border-slate-300", badge: "bg-slate-200 text-slate-800" },
             "其他": { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200", badge: "bg-gray-100 text-gray-800" }
         };
 
@@ -147,7 +150,7 @@
                                             ? 'bg-blue-100 text-blue-700 border-blue-300' 
                                             : (isHighlight ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')
                                         }`}
-                                >
+                                    >
                                     {opt}
                                 </button>
                             );
@@ -185,11 +188,9 @@
             const consolidated = useMemo(() => {
                 const map = new Map();
                 stack.instances.forEach(inst => {
-                    // Removed shippingFee from key as it's now handled daily
                     const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}-${inst.currency}`;
                     if (!map.has(key)) map.set(key, { ...inst, count: 1 }); else map.get(key).count++;
                 });
-                // Sort instances by date (Oldest first)
                 const result = Array.from(map.values());
                 result.sort((a, b) => {
                     const dateA = a.isPreorder ? a.shippingDate : a.date;
@@ -204,7 +205,6 @@
 
             const handleDragStartInternal = (e) => {
                 if(!isDraggable) return;
-                // Add dragging class for visual feedback
                 e.target.classList.add('dragging');
                 onDragStart(e, index);
             };
@@ -253,7 +253,6 @@
                                     <div className="flex items-center gap-1 ml-auto pl-2 border-l border-gray-100">
                                         {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">x{inst.count}</span>}
                                         <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all"><Icon name="Edit3" size={12}/></button>
-                                        {/* Trash button removed from here */}
                                     </div>
                                 </div>
                             ))}
@@ -285,7 +284,6 @@
                     <div className="aspect-square bg-gray-50 relative overflow-hidden">
                         <img src={item.image} alt={item.name} className="w-full h-full object-cover pointer-events-none" />
                         
-                        {/* Batch Mode Overlay */}
                         {isBatchMode && (
                             <div className={`absolute inset-0 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500/20' : 'bg-black/0 group-hover:bg-black/5'}`}>
                                 <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white/80 border-gray-300'}`}>
@@ -294,7 +292,6 @@
                             </div>
                         )}
 
-                        {/* Normal Mode Buttons */}
                         {!isBatchMode && (
                             <>
                                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
@@ -322,11 +319,8 @@
             const [isPreorder, setIsPreorder] = useState(false);
             const [commonShippingDate, setCommonShippingDate] = useState('');
             const [commonNote, setCommonNote] = useState(''); 
-            
-            // Unified state for items: { [id]: { price, currency, quantity } }
             const [itemsDetails, setItemsDetails] = useState({});
 
-            // Initialize state when opening
             useEffect(() => {
                 if (isOpen && selectedItems.length > 0) {
                     const initial = {};
@@ -356,10 +350,10 @@
                             date: !isPreorder ? commonDate : '',
                             isPreorder: isPreorder,
                             shippingDate: isPreorder ? (commonShippingDate || commonDate) : '',
-                            acquiredPrice: detail.price, // Will check for empty later in save, or here? Batch save goes to handleBatchSave
+                            acquiredPrice: detail.price,
                             currency: detail.currency,
                             note: commonNote,
-                            quantity: 1 // Each saved item is a single unit
+                            quantity: 1
                         });
                     }
                 });
@@ -377,7 +371,6 @@
                         </div>
 
                         <div className="space-y-4 flex-1 overflow-y-auto p-1">
-                            {/* Common Fields */}
                             <div className="bg-gray-50 p-4 rounded-xl space-y-3 border border-gray-100">
                                 <h4 className="font-bold text-sm text-gray-700">共同資訊</h4>
                                 <div className="flex items-center gap-4">
@@ -392,7 +385,6 @@
                                 </div>
                             </div>
 
-                            {/* Individual Fields */}
                             <div className="space-y-2">
                                 <h4 className="font-bold text-sm text-gray-700">個別設定 ({selectedItems.length})</h4>
                                 {selectedItems.map(item => {
@@ -407,7 +399,6 @@
                                                 <p className="text-xs text-gray-500">{item.character} · {item.type}</p>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                {/* Quantity Input */}
                                                 <div className="flex items-center gap-1 bg-white border rounded px-1">
                                                     <span className="text-xs text-gray-400">x</span>
                                                     <input 
@@ -417,8 +408,6 @@
                                                         onChange={e => updateDetail(item.id, 'quantity', e.target.value)}
                                                     />
                                                 </div>
-
-                                                {/* Price & Currency Input */}
                                                 <div className="flex items-center border rounded bg-white overflow-hidden w-36">
                                                     <input 
                                                         type="number" 
@@ -442,7 +431,6 @@
                                 })}
                             </div>
 
-                            {/* Common Note (Moved to Bottom) */}
                             <div>
                                 <h4 className="font-bold text-sm text-gray-700 mb-2">備註</h4>
                                 <textarea className="w-full border p-2 rounded h-16 text-sm bg-white" placeholder="共同備註 (選填)..." value={commonNote} onChange={e=>setCommonNote(e.target.value)}/>
@@ -458,7 +446,6 @@
             );
         };
 
-        // SettingsModal (Unchanged logic, just keeping for context)
         const SettingsModal = ({ 
             isOpen, onClose, appSettings, setAppSettings, 
             importJson, setImportJson, handleBulkImport, handleExportCatalog, handleResetData,
@@ -579,6 +566,12 @@
                         const parsed = JSON.parse(savedSettings);
                         if (!parsed.visibleCharacters) parsed.visibleCharacters = CHARACTERS;
                         if (!parsed.customCharacters) parsed.customCharacters = CHARACTERS;
+                        
+                        // Auto-inject "全員" if it's missing from custom characters (legacy support)
+                        if (parsed.customCharacters && !parsed.customCharacters.includes("全員")) {
+                            parsed.customCharacters.push("全員");
+                        }
+
                         if (!parsed.multiSelect) parsed.multiSelect = defaults.multiSelect;
                         if (typeof parsed.multiSelect.series === 'undefined') parsed.multiSelect.series = false;
                         if (!parsed.defaultPreorderCurrency) parsed.defaultPreorderCurrency = 'NT$';
@@ -596,10 +589,8 @@
 
             const [items, setItems] = useState([]); 
             const [catalogItems, setCatalogItems] = useState([]); 
-            // New State for Daily Fees
             const [dailyFees, setDailyFees] = useState({}); 
 
-            // --- Auto Sync Types and Series Effect ---
             useEffect(() => {
                 const allItems = [...items, ...catalogItems];
                 const validTypes = allItems.map(i => i.type ? i.type.trim() : '').filter(t => t !== '');
@@ -646,7 +637,6 @@
             const [batchSelection, setBatchSelection] = useState(new Set());
             const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
-            // Edit Fee State - Changed to object to track both date and type (shipping/handling)
             const [editingFeeTarget, setEditingFeeTarget] = useState({ date: null, type: null });
             const [editingFeeValue, setEditingFeeValue] = useState('');
 
@@ -673,7 +663,6 @@
                 setSelectedTypeFilters([]); setSelectedCharFilters([]); setSelectedDateFilters([]); setSelectedSeriesFilters([]);
             }, [collectionGroupingMode, groupingMode]);
 
-            // --- Load Daily Fees ---
             useEffect(() => {
                 if (!isFirebaseInitialized) {
                     const localFees = localStorage.getItem('deepspace_daily_fees_local');
@@ -723,13 +712,11 @@
                         setItems(cloudItems);
                     }, console.error);
 
-                    // Load Daily Fees with handling fee support
                     const feesColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'daily_fees');
                     unsubFees = onSnapshot(feesColl, (snapshot) => {
                         const feesMap = {};
                         snapshot.docs.forEach(doc => {
                             const data = doc.data();
-                            // Handle both old format (data.amount only) and new format
                             feesMap[doc.id] = { 
                                 shipping: data.amount || 0,
                                 handling: data.handling || 0
@@ -777,37 +764,21 @@
             const saveToCatalog = async (newItem) => { if (!isFirebaseInitialized) { setCatalogItems(prev => { const exists = prev.find(i => i.id === newItem.id); return exists ? prev.map(i => i.id === newItem.id ? newItem : i) : [...prev, newItem]; }); return; } let order = newItem.order || Date.now(); await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, newItem.id), { ...newItem, order }, { merge: true }); };
             const deleteFromCatalog = async (itemId) => { if (confirm("警告：確定要從共用圖鑑刪除嗎？")) { if (isFirebaseInitialized) await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, itemId)); else setCatalogItems(prev => prev.filter(i => i.id !== itemId)); } };
 
-            // Save Fee (Shipping or Handling)
             const handleSaveFee = async (date, type, amount) => {
                 const numAmount = parseInt(amount) || 0;
-                
-                // Construct the update object. 
-                // Note: For Firestore, we merge. For local, we spread.
-                
                 if (user && isFirebaseInitialized) {
-                    // Map 'shipping' to 'amount' for backward compatibility in DB if needed, or stick to new schema.
-                    // Let's use 'amount' for shipping and 'handling' for handling to keep backward compat with v2.
                     const field = type === 'shipping' ? 'amount' : 'handling';
                     await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/daily_fees`, date), { [field]: numAmount }, { merge: true });
                 } else {
                     setDailyFees(prev => {
                         const existing = prev[date] || { shipping: 0, handling: 0 };
-                        // Handle legacy local data which might be just a number
                         const safeExisting = typeof existing === 'number' ? { shipping: existing, handling: 0 } : existing;
-                        
-                        return { 
-                            ...prev, 
-                            [date]: { 
-                                ...safeExisting,
-                                [type]: numAmount 
-                            } 
-                        };
+                        return { ...prev, [date]: { ...safeExisting, [type]: numAmount } };
                     });
                 }
                 setEditingFeeTarget({ date: null, type: null });
             };
 
-            // ... [Type/Series Management functions remain same] ...
             const handleAddType = () => { if (newTypeInput && !appSettings.customTypes.includes(newTypeInput)) { setAppSettings(prev => ({...prev, customTypes: [...prev.customTypes, newTypeInput]})); setNewTypeInput(''); } };
             const handleDeleteType = (t) => { if (confirm(`確定要刪除類型「${t}」嗎？`)) { setAppSettings(prev => ({...prev, customTypes: prev.customTypes.filter(type => type !== t)})); } };
             const handleManualSyncTypes = () => { const allItems = [...items, ...catalogItems]; const validTypes = allItems.map(i => i.type ? i.type.trim() : '').filter(t => t !== ''); const usedTypes = new Set(validTypes); setAppSettings(prev => { const currentTypes = prev.customTypes || []; const newTypes = Array.from(usedTypes).filter(t => !currentTypes.includes(t)); if (newTypes.length > 0) { alert(`已同步 ${newTypes.length} 個新類型！`); return { ...prev, customTypes: [...currentTypes, ...newTypes] }; } else { alert('目前沒有發現新類型。'); return prev; } }); };
@@ -861,7 +832,6 @@
                     }
                     else if (template) { 
                         setEditingItem(null); 
-                        // Modified: acquiredPrice starts empty so user can type immediately
                         setFormData({ 
                             ...defaultData, 
                             ...template, 
@@ -893,7 +863,6 @@
                     await saveToCatalog(itemToSave);
                 } else {
                     const qty = Math.max(1, parseInt(formData.quantity) || 1);
-                    // Default to 0 if empty
                     const finalAcquiredPrice = formData.acquiredPrice === '' || formData.acquiredPrice === undefined || formData.acquiredPrice === null ? 0 : formData.acquiredPrice;
                     
                     if (editingItem) {
@@ -915,8 +884,8 @@
             const handleKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); handleSave(); } };
             const handleDragStart = (e, position) => { dragItem.current = position; };
             const handleDragEnter = (e, position) => { dragOverItem.current = position; };
-            const commitBatches = async (batchArray) => { /* ... */ const chunkSize = 400; for (let i = 0; i < batchArray.length; i += chunkSize) { const batch = writeBatch(db); const chunk = batchArray.slice(i, i + chunkSize); chunk.forEach(op => batch.update(op.ref, op.data)); await batch.commit(); } };
-            const handleSort = async () => { /* ... */ if (collectionGroupingMode !== 'none') return; const stacks = groupedData.collection['全部'] ? getStackedItems(groupedData.collection['全部'], 'none') : []; const copyStacks = [...stacks]; const dragItemContent = copyStacks[dragItem.current]; copyStacks.splice(dragItem.current, 1); copyStacks.splice(dragOverItem.current, 0, dragItemContent); dragItem.current = null; dragOverItem.current = null; const newItems = []; const updates = []; copyStacks.forEach((stack, index) => { stack.instances.forEach(inst => { const newOrder = index; const updatedItem = { ...inst, order: newOrder }; newItems.push(updatedItem); if (user && isFirebaseInitialized) { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, inst.id); updates.push({ ref, data: { order: newOrder } }); } }); }); setItems(prevItems => { const orderMap = new Map(); newItems.forEach(i => orderMap.set(i.id, i.order)); const updatedList = prevItems.map(item => { if (orderMap.has(item.id)) { return { ...item, order: orderMap.get(item.id) }; } return item; }); return updatedList.sort((a, b) => (a.order || 0) - (b.order || 0)); }); if (user && isFirebaseInitialized && updates.length > 0) { try { await commitBatches(updates); } catch (e) { console.error("Batch update failed", e); alert("排序儲存失敗"); } } };
+            const commitBatches = async (batchArray) => { const chunkSize = 400; for (let i = 0; i < batchArray.length; i += chunkSize) { const batch = writeBatch(db); const chunk = batchArray.slice(i, i + chunkSize); chunk.forEach(op => batch.update(op.ref, op.data)); await batch.commit(); } };
+            const handleSort = async () => { if (collectionGroupingMode !== 'none') return; const stacks = groupedData.collection['全部'] ? getStackedItems(groupedData.collection['全部'], 'none') : []; const copyStacks = [...stacks]; const dragItemContent = copyStacks[dragItem.current]; copyStacks.splice(dragItem.current, 1); copyStacks.splice(dragOverItem.current, 0, dragItemContent); dragItem.current = null; dragOverItem.current = null; const newItems = []; const updates = []; copyStacks.forEach((stack, index) => { stack.instances.forEach(inst => { const newOrder = index; const updatedItem = { ...inst, order: newOrder }; newItems.push(updatedItem); if (user && isFirebaseInitialized) { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, inst.id); updates.push({ ref, data: { order: newOrder } }); } }); }); setItems(prevItems => { const orderMap = new Map(); newItems.forEach(i => orderMap.set(i.id, i.order)); const updatedList = prevItems.map(item => { if (orderMap.has(item.id)) { return { ...item, order: orderMap.get(item.id) }; } return item; }); return updatedList.sort((a, b) => (a.order || 0) - (b.order || 0)); }); if (user && isFirebaseInitialized && updates.length > 0) { try { await commitBatches(updates); } catch (e) { console.error("Batch update failed", e); alert("排序儲存失敗"); } } };
 
             const getEffectiveDate = (item) => item.isPreorder ? item.shippingDate : item.date;
             const getStackedItems = (sourceItems, mode) => { const map = new Map(); const stacks = []; sourceItems.forEach(item => { const key = item.name; if (!map.has(key)) { const stack = { ...item, instances: [item], totalCount: 1 }; map.set(key, stack); stacks.push(stack); } else { const stack = map.get(key); stack.instances.push(item); stack.totalCount += 1; } }); return stacks; };
@@ -936,20 +905,16 @@
                 const totalCount = visibleItems.length;
                 let totalNT = 0, totalR = 0;
                 
-                // Item Costs
                 visibleItems.forEach(item => {
                     const price = Number(item.acquiredPrice || 0);
                     if (item.currency === 'r') totalR += price; else totalNT += price;
                 });
 
-                // Shipping Fees & Handling Fees (Assume NT$ for simplicity)
-                // dailyFees is now { date: { shipping, handling } } or legacy { date: amount }
                 Object.values(dailyFees).forEach(feeObj => {
                     if (typeof feeObj === 'object') {
                         totalNT += Number(feeObj.shipping || 0);
                         totalNT += Number(feeObj.handling || 0);
                     } else {
-                        // Legacy support for pure number
                         totalNT += Number(feeObj || 0);
                     }
                 });
@@ -1048,7 +1013,6 @@
                                     {Object.entries(groupedData.collection).map(([gName, gItems]) => {
                                         const stacks = getStackedItems(gItems, collectionGroupingMode);
                                         
-                                        // Calculate daily total
                                         let dayTotalDisplay = null;
                                         if (collectionGroupingMode === 'date' && gName !== '全部') {
                                             const dayStats = gItems.reduce((acc, item) => {
@@ -1057,15 +1021,12 @@
                                                 return acc;
                                             }, { nt: 0, r: 0 });
                                             
-                                            // Get shipping fee and handling fee for this day
                                             const dayFee = dailyFees[gName];
-                                            // Support legacy structure where dailyFees[gName] was a number
                                             const shipping = (typeof dayFee === 'object' ? dayFee.shipping : dayFee) || 0;
                                             const handling = (typeof dayFee === 'object' ? dayFee.handling : 0) || 0;
                                             
                                             const total = dayStats.nt + (dayStats.r * exchangeRate) + shipping + handling;
                                             
-                                            // Always show even if 0
                                             dayTotalDisplay = (
                                                 <div className="flex items-center gap-2">
                                                     <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
@@ -1073,7 +1034,6 @@
                                                         NT$ {Math.round(total).toLocaleString()}
                                                     </span>
                                                     
-                                                    {/* Shipping Fee Button */}
                                                     {editingFeeTarget.date === gName && editingFeeTarget.type === 'shipping' ? (
                                                         <div className="flex items-center gap-1">
                                                             <input 
@@ -1099,7 +1059,6 @@
                                                         </button>
                                                     )}
 
-                                                    {/* Handling Fee Button */}
                                                     {editingFeeTarget.date === gName && editingFeeTarget.type === 'handling' ? (
                                                         <div className="flex items-center gap-1">
                                                             <input 
@@ -1164,7 +1123,7 @@
                         {activeTab === 'templates' && (
                             <div className="space-y-6 animate-fade-in pb-20 md:pb-0">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                    <div><h2 className="text-2xl font-bold text-gray-800">共用週邊圖鑑</h2><p className="text-xs text-gray-400">資料共用，歡迎匯入分享</p></div>
+                                    <div><h2 className="text-2xl font-bold text-gray-800">週邊圖鑑</h2></div>
                                     <div className="flex gap-2 items-center">
                                         <button 
                                             onClick={toggleBatchMode} 
@@ -1204,7 +1163,6 @@
                                     {catalogItems.length===0 && <div className="text-center py-20 text-gray-400">圖鑑目前是空的</div>}
                                 </div>
                                 
-                                {/* Batch Mode Floating Bar */}
                                 {isBatchMode && (
                                     <div className="fixed bottom-20 md:bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-4 animate-fade-in">
                                         <span className="font-bold text-sm">已選擇 {batchSelection.size} 項</span>
@@ -1291,8 +1249,6 @@
                         newTypeInput={newTypeInput}
                         setNewTypeInput={setNewTypeInput}
                         handleManualSyncTypes={handleManualSyncTypes}
-                        
-                        // Series Props
                         handleAddSeries={handleAddSeries}
                         handleDeleteSeries={handleDeleteSeries}
                         newSeriesInput={newSeriesInput}
@@ -1318,7 +1274,6 @@
                                 </div>
                                 <div onClick={()=>fileInputRef.current.click()} className="w-32 h-32 mx-auto border-2 border-dashed rounded flex items-center justify-center cursor-pointer">{formData.image?<img src={formData.image} className="w-full h-full object-cover"/>:<Icon name="Upload"/>}<input type="file" ref={fileInputRef} className="hidden" onChange={(e)=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=()=>setFormData(p=>({...p,image:r.result}));r.readAsDataURL(f);}}}/></div>
                                 
-                                {/* Name Input: Auto-focus if it's a new custom item (not editing, not from template) */}
                                 <input 
                                     className="w-full border p-2 rounded" 
                                     placeholder="名稱" 
@@ -1346,7 +1301,6 @@
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
                                             <div className="relative">
-                                                {/* Acquired Price Input: Auto-focus if adding from template (name pre-filled) */}
                                                 <input 
                                                     type="number" 
                                                     className="border p-2 rounded w-full pr-12" 

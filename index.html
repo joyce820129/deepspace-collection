@@ -325,7 +325,7 @@
                             date: !isPreorder ? commonDate : '',
                             isPreorder: isPreorder,
                             shippingDate: isPreorder ? (commonShippingDate || commonDate) : '',
-                            acquiredPrice: detail.price,
+                            acquiredPrice: detail.price, // Will check for empty later in save, or here? Batch save goes to handleBatchSave
                             currency: detail.currency,
                             note: commonNote,
                             quantity: 1 // Each saved item is a single unit
@@ -427,18 +427,15 @@
             );
         };
 
-        // SettingsModal
+        // SettingsModal (Unchanged logic, just keeping for context)
         const SettingsModal = ({ 
             isOpen, onClose, appSettings, setAppSettings, 
             importJson, setImportJson, handleBulkImport, handleExportCatalog, handleResetData,
             handleAddType, handleDeleteType, newTypeInput, setNewTypeInput,
             handleManualSyncTypes,
-            // New Props for Series
             handleAddSeries, handleDeleteSeries, newSeriesInput, setNewSeriesInput, handleManualSyncSeries
         }) => {
             const [settingsTab, setSettingsTab] = useState('layout');
-            
-            // Refs for DnD
             const dragTypeItem = useRef(null);
             const dragTypeOverItem = useRef(null);
             const dragSeriesItem = useRef(null);
@@ -448,7 +445,7 @@
 
             const toggleCharacterVisibility = (char) => {
                 setAppSettings(prev => {
-                    const current = prev.visibleCharacters || []; // Safety check
+                    const current = prev.visibleCharacters || [];
                     if (char === "ALL") {
                          const allMainSelected = CHARACTERS.every(c => current.includes(c));
                          return allMainSelected ? { ...prev, visibleCharacters: [] } : { ...prev, visibleCharacters: [...CHARACTERS] };
@@ -463,10 +460,7 @@
             const toggleMultiSelect = (key) => {
                 setAppSettings(prev => ({ 
                     ...prev, 
-                    multiSelect: { 
-                        ...(prev.multiSelect || {}), // Safety check
-                        [key]: !prev.multiSelect?.[key] 
-                    } 
+                    multiSelect: { ...(prev.multiSelect || {}), [key]: !prev.multiSelect?.[key] } 
                 }));
             };
 
@@ -474,15 +468,11 @@
                 const _customTypes = [...(appSettings.customTypes || DEFAULT_MERCH_TYPES)];
                 const dragIndex = dragTypeItem.current;
                 const dragOverIndex = dragTypeOverItem.current;
-
                 if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return;
-
                 const dragItemContent = _customTypes[dragIndex];
                 _customTypes.splice(dragIndex, 1);
                 _customTypes.splice(dragOverIndex, 0, dragItemContent);
-                
                 setAppSettings(prev => ({ ...prev, customTypes: _customTypes }));
-                
                 dragTypeItem.current = null;
                 dragTypeOverItem.current = null;
             };
@@ -491,20 +481,15 @@
                 const _customSeries = [...(appSettings.customSeries || [])];
                 const dragIndex = dragSeriesItem.current;
                 const dragOverIndex = dragSeriesOverItem.current;
-
                 if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return;
-
                 const dragItemContent = _customSeries[dragIndex];
                 _customSeries.splice(dragIndex, 1);
                 _customSeries.splice(dragOverIndex, 0, dragItemContent);
-                
                 setAppSettings(prev => ({ ...prev, customSeries: _customSeries }));
-                
                 dragSeriesItem.current = null;
                 dragSeriesOverItem.current = null;
             };
             
-            // Safety access for arrays
             const customCharacters = appSettings.customCharacters || CHARACTERS;
             const customTypes = appSettings.customTypes || DEFAULT_MERCH_TYPES;
             const customSeries = appSettings.customSeries || [];
@@ -516,7 +501,6 @@
                             <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icon name="Settings" /> 設定</h3>
                             <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button>
                         </div>
-                        
                         <div className="flex gap-2 border-b pb-2 overflow-x-auto">
                             {['layout', 'filter', 'filters_config', 'types', 'series', 'data'].map(t => (
                                 <button key={t} onClick={()=>setSettingsTab(t)} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${settingsTab===t ? 'bg-slate-900 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
@@ -524,168 +508,19 @@
                                 </button>
                             ))}
                         </div>
-
                         {settingsTab === 'layout' && (
                             <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">每行顯示數量</label>
-                                    <div className="flex gap-2">
-                                        {[2,3,4,5].map(cols => (
-                                            <button key={cols} onClick={()=>setAppSettings(prev=>({...prev, layoutCols: cols}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.layoutCols===cols ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{cols}</button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">預設幣值 (非預購)</label>
-                                    <div className="flex gap-2">
-                                        {['NT$', 'r'].map(curr => (
-                                            <button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.defaultCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{curr}</button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">預購預設幣值</label>
-                                    <div className="flex gap-2">
-                                        {['NT$', 'r'].map(curr => (
-                                            <button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultPreorderCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.defaultPreorderCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{curr}</button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
-                                        <input 
-                                            type="checkbox" 
-                                            className="w-5 h-5 text-blue-600 rounded"
-                                            checked={appSettings.groupAllInFilterMode}
-                                            onChange={(e) => setAppSettings(prev => ({...prev, groupAllInFilterMode: e.target.checked}))}
-                                        />
-                                        <span className="text-sm font-medium">顯示分類大標題 (全部模式)</span>
-                                    </label>
-                                    <p className="text-xs text-gray-400 mt-1 ml-1">在「全部」檢視下，是否依據當前模式顯示分組標題。</p>
-                                </div>
+                                <div><label className="block text-sm font-medium text-gray-700 mb-2">每行顯示數量</label><div className="flex gap-2">{[2,3,4,5].map(cols => (<button key={cols} onClick={()=>setAppSettings(prev=>({...prev, layoutCols: cols}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.layoutCols===cols ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{cols}</button>))}</div></div>
+                                <div><label className="block text-sm font-medium text-gray-700 mb-2">預設幣值 (非預購)</label><div className="flex gap-2">{['NT$', 'r'].map(curr => (<button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.defaultCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{curr}</button>))}</div></div>
+                                <div><label className="block text-sm font-medium text-gray-700 mb-2">預購預設幣值</label><div className="flex gap-2">{['NT$', 'r'].map(curr => (<button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultPreorderCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.defaultPreorderCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{curr}</button>))}</div></div>
+                                <div><label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.groupAllInFilterMode} onChange={(e) => setAppSettings(prev => ({...prev, groupAllInFilterMode: e.target.checked}))}/><span className="text-sm font-medium">顯示分類大標題 (全部模式)</span></label><p className="text-xs text-gray-400 mt-1 ml-1">在「全部」檢視下，是否依據當前模式顯示分組標題。</p></div>
                             </div>
                         )}
-
-                        {settingsTab === 'filter' && (
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <p className="text-sm text-gray-500">勾選角色以顯示週邊。</p>
-                                    <button onClick={() => toggleCharacterVisibility('ALL')} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700">我全都要</button>
-                                </div>
-                                <div className="space-y-2">
-                                    {customCharacters.map((char, index) => {
-                                        const isChecked = (appSettings.visibleCharacters || []).includes(char);
-                                        return (
-                                            <div 
-                                                key={char} 
-                                                className="flex items-center justify-between p-3 border rounded-xl bg-white hover:bg-gray-50"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <span className={`text-sm font-medium ${CHARACTER_THEMES[char]?.text}`}>{char}</span>
-                                                </div>
-                                                <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer" checked={isChecked} onChange={() => toggleCharacterVisibility(char)} />
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        {settingsTab === 'filters_config' && (
-                            <div className="space-y-4">
-                                <p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p>
-                                <div className="space-y-3">
-                                    {['series', 'type', 'character', 'date'].map(key => (
-                                        <label key={key} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50">
-                                            <input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.multiSelect?.[key]} onChange={() => toggleMultiSelect(key)} />
-                                            <span className="text-sm font-medium">依{key==='series'?'系列':key==='type'?'類型':key==='character'?'角色':'收物日'} - 多選</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {settingsTab === 'types' && (
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label>
-                                    <div className="flex gap-2">
-                                        <input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} />
-                                        <button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button>
-                                    </div>
-                                </div>
-                                <div className="flex justify-between items-end">
-                                    <label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label>
-                                    <button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button>
-                                </div>
-                                <div>
-                                    <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">
-                                        {customTypes.map((t, index) => (
-                                            <div 
-                                                key={t} 
-                                                draggable
-                                                onDragStart={(e) => { dragTypeItem.current = index; e.target.classList.add('opacity-50'); }}
-                                                onDragEnter={(e) => { dragTypeOverItem.current = index; }}
-                                                onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleTypeSort(); }}
-                                                onDragOver={(e) => e.preventDefault()}
-                                                className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"
-                                            >
-                                                <span className="text-sm font-medium">{t}</span>
-                                                <button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {settingsTab === 'series' && (
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">新增系列</label>
-                                    <div className="flex gap-2">
-                                        <input className="border p-2 rounded flex-1" placeholder="輸入新系列名稱..." value={newSeriesInput} onKeyDown={(e) => e.key === 'Enter' && handleAddSeries()} onChange={e=>setNewSeriesInput(e.target.value)} />
-                                        <button onClick={handleAddSeries} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button>
-                                    </div>
-                                </div>
-                                <div className="flex justify-between items-end">
-                                    <label className="block text-sm font-medium text-gray-700">目前系列列表 (拖曳可排序)</label>
-                                    <button onClick={handleManualSyncSeries} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步系列</button>
-                                </div>
-                                <div>
-                                    <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100 min-h-[50px]">
-                                        {customSeries.length === 0 && <span className="text-xs text-gray-400 p-2">暫無系列，請同步或新增</span>}
-                                        {customSeries.map((s, index) => (
-                                            <div 
-                                                key={s} 
-                                                draggable
-                                                onDragStart={(e) => { dragSeriesItem.current = index; e.target.classList.add('opacity-50'); }}
-                                                onDragEnter={(e) => { dragSeriesOverItem.current = index; }}
-                                                onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleSeriesSort(); }}
-                                                onDragOver={(e) => e.preventDefault()}
-                                                className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"
-                                            >
-                                                <span className="text-sm font-medium">{s}</span>
-                                                <button onClick={(e)=>{e.stopPropagation(); handleDeleteSeries(s);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {settingsTab === 'data' && (
-                            <div className="space-y-4">
-                                <div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800"><p className="font-bold mb-1">批次匯入：</p><p>貼上 Excel 或 JSON。匯入後將存入共用圖鑑。</p></div>
-                                <textarea className="w-full h-32 p-3 border rounded-xl text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea>
-                                <div className="flex gap-2">
-                                    <button onClick={handleBulkImport} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">匯入</button>
-                                    <button onClick={handleExportCatalog} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded hover:bg-gray-50">匯出</button>
-                                </div>
-                                <hr />
-                                <button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-2 rounded hover:bg-red-50 text-sm">⚠️ 清空本地快取資料</button>
-                            </div>
-                        )}
+                        {settingsTab === 'filter' && (<div className="space-y-4"><div className="flex justify-between items-center"><p className="text-sm text-gray-500">勾選角色以顯示週邊。</p><button onClick={() => toggleCharacterVisibility('ALL')} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700">我全都要</button></div><div className="space-y-2">{customCharacters.map((char, index) => { const isChecked = (appSettings.visibleCharacters || []).includes(char); return (<div key={char} className="flex items-center justify-between p-3 border rounded-xl bg-white hover:bg-gray-50"><div className="flex items-center gap-3"><span className={`text-sm font-medium ${CHARACTER_THEMES[char]?.text}`}>{char}</span></div><input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer" checked={isChecked} onChange={() => toggleCharacterVisibility(char)} /></div>); })}</div></div>)}
+                        {settingsTab === 'filters_config' && (<div className="space-y-4"><p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p><div className="space-y-3">{['series', 'type', 'character', 'date'].map(key => (<label key={key} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.multiSelect?.[key]} onChange={() => toggleMultiSelect(key)} /><span className="text-sm font-medium">依{key==='series'?'系列':key==='type'?'類型':key==='character'?'角色':'收物日'} - 多選</span></label>))}</div></div>)}
+                        {settingsTab === 'types' && (<div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} /><button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label><button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">{customTypes.map((t, index) => (<div key={t} draggable onDragStart={(e) => { dragTypeItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragTypeOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleTypeSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{t}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
+                        {settingsTab === 'series' && (<div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增系列</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新系列名稱..." value={newSeriesInput} onKeyDown={(e) => e.key === 'Enter' && handleAddSeries()} onChange={e=>setNewSeriesInput(e.target.value)} /><button onClick={handleAddSeries} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前系列列表 (拖曳可排序)</label><button onClick={handleManualSyncSeries} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步系列</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100 min-h-[50px]">{customSeries.map((s, index) => (<div key={s} draggable onDragStart={(e) => { dragSeriesItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragSeriesOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleSeriesSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{s}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteSeries(s);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
+                        {settingsTab === 'data' && (<div className="space-y-4"><div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800"><p className="font-bold mb-1">批次匯入：</p><p>貼上 Excel 或 JSON。匯入後將存入共用圖鑑。</p></div><textarea className="w-full h-32 p-3 border rounded-xl text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea><div className="flex gap-2"><button onClick={handleBulkImport} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">匯入</button><button onClick={handleExportCatalog} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded hover:bg-gray-50">匯出</button></div><hr /><button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-2 rounded hover:bg-red-50 text-sm">⚠️ 清空本地快取資料</button></div>)}
                     </div>
                 </div>
             );
@@ -736,38 +571,19 @@
             // --- Auto Sync Types and Series Effect ---
             useEffect(() => {
                 const allItems = [...items, ...catalogItems];
-                
-                // Sync Types
-                const validTypes = allItems
-                    .map(i => i.type ? i.type.trim() : '')
-                    .filter(t => t !== '');
+                const validTypes = allItems.map(i => i.type ? i.type.trim() : '').filter(t => t !== '');
                 const usedTypes = new Set(validTypes);
-
-                // Sync Series
-                const validSeries = allItems
-                    .map(i => i.series ? i.series.trim() : '')
-                    .filter(s => s !== '');
+                const validSeries = allItems.map(i => i.series ? i.series.trim() : '').filter(s => s !== '');
                 const usedSeries = new Set(validSeries);
-                
                 setAppSettings(prev => {
                     let nextSettings = { ...prev };
                     let changed = false;
-
                     const currentTypes = nextSettings.customTypes || [];
                     const newTypes = Array.from(usedTypes).filter(t => !currentTypes.includes(t));
-                    
-                    if (newTypes.length > 0) {
-                        nextSettings.customTypes = [...currentTypes, ...newTypes];
-                        changed = true;
-                    }
-
+                    if (newTypes.length > 0) { nextSettings.customTypes = [...currentTypes, ...newTypes]; changed = true; }
                     const currentSeries = nextSettings.customSeries || [];
                     const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s));
-                    if (newSeries.length > 0) {
-                        nextSettings.customSeries = [...currentSeries, ...newSeries];
-                        changed = true;
-                    }
-
+                    if (newSeries.length > 0) { nextSettings.customSeries = [...currentSeries, ...newSeries]; changed = true; }
                     return changed ? nextSettings : prev;
                 });
             }, [items, catalogItems]); 
@@ -795,19 +611,17 @@
             const [newTypeInput, setNewTypeInput] = useState(''); 
             const [newSeriesInput, setNewSeriesInput] = useState(''); 
 
-            // Batch Add States
             const [isBatchMode, setIsBatchMode] = useState(false);
             const [batchSelection, setBatchSelection] = useState(new Set());
             const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
-            // Edit Fee State (Temp)
-            const [editingFeeDate, setEditingFeeDate] = useState(null);
+            // Edit Fee State - Changed to object to track both date and type (shipping/handling)
+            const [editingFeeTarget, setEditingFeeTarget] = useState({ date: null, type: null });
             const [editingFeeValue, setEditingFeeValue] = useState('');
 
             const fileInputRef = useRef(null);
             const feeInputRef = useRef(null);
             
-            // Drag and Drop Refs
             const dragItem = useRef();
             const dragOverItem = useRef();
 
@@ -878,12 +692,17 @@
                         setItems(cloudItems);
                     }, console.error);
 
-                    // Load Daily Fees
+                    // Load Daily Fees with handling fee support
                     const feesColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'daily_fees');
                     unsubFees = onSnapshot(feesColl, (snapshot) => {
                         const feesMap = {};
                         snapshot.docs.forEach(doc => {
-                            feesMap[doc.id] = doc.data().amount || 0;
+                            const data = doc.data();
+                            // Handle both old format (data.amount only) and new format
+                            feesMap[doc.id] = { 
+                                shipping: data.amount || 0,
+                                handling: data.handling || 0
+                            };
                         });
                         setDailyFees(feesMap);
                     });
@@ -921,58 +740,51 @@
             const saveToCollection = async (newItem) => {
                 const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0;
                 const itemWithOrder = { ...newItem, order: newItem.order || (maxOrder + 1) };
+                if (user && isFirebaseInitialized) { await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, newItem.id), itemWithOrder); } else { setItems(prev => { const exists = prev.find(i => i.id === newItem.id); const list = exists ? prev.map(i => i.id === newItem.id ? itemWithOrder : i) : [...prev, itemWithOrder]; return list.sort((a, b) => (a.order || 0) - (b.order || 0)); }); }
+            };
+            const deleteFromCollection = async (itemId) => { if (user && isFirebaseInitialized) { await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, itemId)); } else { setItems(prev => prev.filter(i => i.id !== itemId)); } };
+            const saveToCatalog = async (newItem) => { if (!isFirebaseInitialized) { setCatalogItems(prev => { const exists = prev.find(i => i.id === newItem.id); return exists ? prev.map(i => i.id === newItem.id ? newItem : i) : [...prev, newItem]; }); return; } let order = newItem.order || Date.now(); await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, newItem.id), { ...newItem, order }, { merge: true }); };
+            const deleteFromCatalog = async (itemId) => { if (confirm("警告：確定要從共用圖鑑刪除嗎？")) { if (isFirebaseInitialized) await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, itemId)); else setCatalogItems(prev => prev.filter(i => i.id !== itemId)); } };
+
+            // Save Fee (Shipping or Handling)
+            const handleSaveFee = async (date, type, amount) => {
+                const numAmount = parseInt(amount) || 0;
+                
+                // Construct the update object. 
+                // Note: For Firestore, we merge. For local, we spread.
                 
                 if (user && isFirebaseInitialized) {
-                    await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, newItem.id), itemWithOrder);
+                    // Map 'shipping' to 'amount' for backward compatibility in DB if needed, or stick to new schema.
+                    // Let's use 'amount' for shipping and 'handling' for handling to keep backward compat with v2.
+                    const field = type === 'shipping' ? 'amount' : 'handling';
+                    await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/daily_fees`, date), { [field]: numAmount }, { merge: true });
                 } else {
-                    setItems(prev => {
-                        const exists = prev.find(i => i.id === newItem.id);
-                        const list = exists ? prev.map(i => i.id === newItem.id ? itemWithOrder : i) : [...prev, itemWithOrder];
-                        return list.sort((a, b) => (a.order || 0) - (b.order || 0));
+                    setDailyFees(prev => {
+                        const existing = prev[date] || { shipping: 0, handling: 0 };
+                        // Handle legacy local data which might be just a number
+                        const safeExisting = typeof existing === 'number' ? { shipping: existing, handling: 0 } : existing;
+                        
+                        return { 
+                            ...prev, 
+                            [date]: { 
+                                ...safeExisting,
+                                [type]: numAmount 
+                            } 
+                        };
                     });
                 }
-            };
-            const deleteFromCollection = async (itemId) => {
-                if (user && isFirebaseInitialized) {
-                    await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, itemId));
-                } else { setItems(prev => prev.filter(i => i.id !== itemId)); }
-            };
-            const saveToCatalog = async (newItem) => {
-                if (!isFirebaseInitialized) {
-                    setCatalogItems(prev => {
-                        const exists = prev.find(i => i.id === newItem.id);
-                        return exists ? prev.map(i => i.id === newItem.id ? newItem : i) : [...prev, newItem];
-                    }); return;
-                }
-                let order = newItem.order || Date.now();
-                await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, newItem.id), { ...newItem, order }, { merge: true });
-            };
-            const deleteFromCatalog = async (itemId) => {
-                if (confirm("警告：確定要從共用圖鑑刪除嗎？")) {
-                    if (isFirebaseInitialized) await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, itemId));
-                    else setCatalogItems(prev => prev.filter(i => i.id !== itemId));
-                }
-            };
-
-            const handleSaveShippingFee = async (date, amount) => {
-                const numAmount = parseInt(amount) || 0;
-                if (user && isFirebaseInitialized) {
-                    await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/daily_fees`, date), { amount: numAmount });
-                } else {
-                    setDailyFees(prev => ({ ...prev, [date]: numAmount }));
-                }
-                setEditingFeeDate(null);
+                setEditingFeeTarget({ date: null, type: null });
             };
 
             // ... [Type/Series Management functions remain same] ...
             const handleAddType = () => { if (newTypeInput && !appSettings.customTypes.includes(newTypeInput)) { setAppSettings(prev => ({...prev, customTypes: [...prev.customTypes, newTypeInput]})); setNewTypeInput(''); } };
             const handleDeleteType = (t) => { if (confirm(`確定要刪除類型「${t}」嗎？`)) { setAppSettings(prev => ({...prev, customTypes: prev.customTypes.filter(type => type !== t)})); } };
-            const handleManualSyncTypes = () => { /* ... */ const allItems = [...items, ...catalogItems]; const validTypes = allItems.map(i => i.type ? i.type.trim() : '').filter(t => t !== ''); const usedTypes = new Set(validTypes); setAppSettings(prev => { const currentTypes = prev.customTypes || []; const newTypes = Array.from(usedTypes).filter(t => !currentTypes.includes(t)); if (newTypes.length > 0) { alert(`已同步 ${newTypes.length} 個新類型！`); return { ...prev, customTypes: [...currentTypes, ...newTypes] }; } else { alert('目前沒有發現新類型。'); return prev; } }); };
+            const handleManualSyncTypes = () => { const allItems = [...items, ...catalogItems]; const validTypes = allItems.map(i => i.type ? i.type.trim() : '').filter(t => t !== ''); const usedTypes = new Set(validTypes); setAppSettings(prev => { const currentTypes = prev.customTypes || []; const newTypes = Array.from(usedTypes).filter(t => !currentTypes.includes(t)); if (newTypes.length > 0) { alert(`已同步 ${newTypes.length} 個新類型！`); return { ...prev, customTypes: [...currentTypes, ...newTypes] }; } else { alert('目前沒有發現新類型。'); return prev; } }); };
             const handleAddSeries = () => { if (newSeriesInput && !appSettings.customSeries.includes(newSeriesInput)) { setAppSettings(prev => ({...prev, customSeries: [...(prev.customSeries || []), newSeriesInput]})); setNewSeriesInput(''); } };
             const handleDeleteSeries = (s) => { if (confirm(`確定要刪除系列「${s}」嗎？`)) { setAppSettings(prev => ({...prev, customSeries: prev.customSeries.filter(series => series !== s)})); } };
-            const handleManualSyncSeries = () => { /* ... */ const allItems = [...items, ...catalogItems]; const validSeries = allItems.map(i => i.series ? i.series.trim() : '').filter(s => s !== ''); const usedSeries = new Set(validSeries); setAppSettings(prev => { const currentSeries = prev.customSeries || []; const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s)); if (newSeries.length > 0) { alert(`已同步 ${newSeries.length} 個新系列！`); return { ...prev, customSeries: [...currentSeries, ...newSeries] }; } else { alert('目前沒有發現新系列。'); return prev; } }); };
+            const handleManualSyncSeries = () => { const allItems = [...items, ...catalogItems]; const validSeries = allItems.map(i => i.series ? i.series.trim() : '').filter(s => s !== ''); const usedSeries = new Set(validSeries); setAppSettings(prev => { const currentSeries = prev.customSeries || []; const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s)); if (newSeries.length > 0) { alert(`已同步 ${newSeries.length} 個新系列！`); return { ...prev, customSeries: [...currentSeries, ...newSeries] }; } else { alert('目前沒有發現新系列。'); return prev; } }); };
 
-            const handleBulkImport = async () => { /* ... */ if (!importJson.trim()) return; try { let parsedData = []; const text = importJson.trim(); if (text.startsWith('[')) { parsedData = JSON.parse(text); } else { const rows = text.split('\n').map(r=>r.trim()).filter(r=>r); const header = rows[0].toLowerCase(); const sep = header.includes('\t') ? '\t' : ','; const cols = rows[0].split(sep).map(s=>s.trim()); const mapKey = { 'name': 'name', '名稱': 'name', 'character': 'character', '角色': 'character', 'type': 'type', '類型': 'type', 'series': 'series', '系列': 'series', 'officialprice': 'officialPrice', '原價': 'officialPrice', 'image': 'image', '圖片': 'image' }; const keys = cols.map(c => mapKey[c.toLowerCase()] || c); if (!keys.includes('name')) throw new Error("缺少 'name' 或 '名稱' 欄位"); parsedData = rows.slice(1).map(row => { const vals = row.split(sep); let obj = {}; keys.forEach((k, i) => { if (vals[i]) obj[k] = vals[i].trim(); }); return obj; }).filter(o => o.name); } if (parsedData.length === 0) throw new Error("無有效資料"); const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== '')); const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== '')); setAppSettings(prev => { const currentTypes = prev.customTypes || []; const newTypesToAdd = Array.from(importedTypes).filter(t => !currentTypes.includes(t)); const currentSeries = prev.customSeries || []; const newSeriesToAdd = Array.from(importedSeries).filter(s => !currentSeries.includes(s)); let next = { ...prev }; let changed = false; if (newTypesToAdd.length > 0) { next.customTypes = [...currentTypes, ...newTypesToAdd]; changed = true; } if (newSeriesToAdd.length > 0) { next.customSeries = [...currentSeries, ...newSeriesToAdd]; changed = true; } return changed ? next : prev; }); let count = 0; const timestamp = Date.now(); for (const item of parsedData) { const newItem = { id: item.id || `imp_${timestamp}_${count}`, name: item.name, character: item.character || '其他', type: item.type || '未分類', series: item.series || '', officialPrice: item.officialPrice || '', image: item.image || null, order: timestamp + count }; if(isFirebaseInitialized) await saveToCatalog(newItem); else setCatalogItems(prev => [...prev, newItem]); count++; } alert(`匯入成功 ${parsedData.length} 筆`); setImportJson(''); } catch (e) { alert("匯入失敗: " + e.message); } };
+            const handleBulkImport = async () => { if (!importJson.trim()) return; try { let parsedData = []; const text = importJson.trim(); if (text.startsWith('[')) { parsedData = JSON.parse(text); } else { const rows = text.split('\n').map(r=>r.trim()).filter(r=>r); const header = rows[0].toLowerCase(); const sep = header.includes('\t') ? '\t' : ','; const cols = rows[0].split(sep).map(s=>s.trim()); const mapKey = { 'name': 'name', '名稱': 'name', 'character': 'character', '角色': 'character', 'type': 'type', '類型': 'type', 'series': 'series', '系列': 'series', 'officialprice': 'officialPrice', '原價': 'officialPrice', 'image': 'image', '圖片': 'image' }; const keys = cols.map(c => mapKey[c.toLowerCase()] || c); if (!keys.includes('name')) throw new Error("缺少 'name' 或 '名稱' 欄位"); parsedData = rows.slice(1).map(row => { const vals = row.split(sep); let obj = {}; keys.forEach((k, i) => { if (vals[i]) obj[k] = vals[i].trim(); }); return obj; }).filter(o => o.name); } if (parsedData.length === 0) throw new Error("無有效資料"); const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== '')); const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== '')); setAppSettings(prev => { const currentTypes = prev.customTypes || []; const newTypesToAdd = Array.from(importedTypes).filter(t => !currentTypes.includes(t)); const currentSeries = prev.customSeries || []; const newSeriesToAdd = Array.from(importedSeries).filter(s => !currentSeries.includes(s)); let next = { ...prev }; let changed = false; if (newTypesToAdd.length > 0) { next.customTypes = [...currentTypes, ...newTypesToAdd]; changed = true; } if (newSeriesToAdd.length > 0) { next.customSeries = [...currentSeries, ...newSeriesToAdd]; changed = true; } return changed ? next : prev; }); let count = 0; const timestamp = Date.now(); for (const item of parsedData) { const newItem = { id: item.id || `imp_${timestamp}_${count}`, name: item.name, character: item.character || '其他', type: item.type || '未分類', series: item.series || '', officialPrice: item.officialPrice || '', image: item.image || null, order: timestamp + count }; if(isFirebaseInitialized) await saveToCatalog(newItem); else setCatalogItems(prev => [...prev, newItem]); count++; } alert(`匯入成功 ${parsedData.length} 筆`); setImportJson(''); } catch (e) { alert("匯入失敗: " + e.message); } };
             const handleExportCatalog = () => { const dataStr = JSON.stringify(catalogItems, null, 2); setImportJson(dataStr); };
             const handleResetData = () => { if (confirm("確定要清空本地資料嗎？此操作無法復原。")) { setItems([]); setCatalogItems([]); setDailyFees({}); localStorage.removeItem('deepspace_items_v7_local'); localStorage.removeItem('deepspace_catalog_v7_local'); localStorage.removeItem('deepspace_daily_fees_local'); alert("已清空。"); } };
             const toggleCharacterVisibility = (char) => { setAppSettings(prev => { const current = prev.visibleCharacters; if (char === "ALL") { const allMainSelected = CHARACTERS.every(c => current.includes(c)); if (allMainSelected) { return { ...prev, visibleCharacters: [] }; } else { return { ...prev, visibleCharacters: [...CHARACTERS] }; } } else { if (current.includes(char)) { return { ...prev, visibleCharacters: current.filter(c => c !== char) }; } else { return { ...prev, visibleCharacters: [...current, char] }; } } }); };
@@ -1018,6 +830,8 @@
                     }
                     else if (template) { 
                         setEditingItem(null); 
+                        // Point 1: Pre-fill acquiredPrice with officialPrice if available, else empty (so user can type)
+                        // If officialPrice is present, we use it as default.
                         setFormData({ 
                             ...defaultData, 
                             ...template, 
@@ -1025,7 +839,8 @@
                             id: Date.now().toString(),
                             isPreorder: false,
                             shippingDate: '',
-                            currency: appSettings.defaultCurrency 
+                            currency: appSettings.defaultCurrency,
+                            acquiredPrice: template.officialPrice || '' 
                         }); 
                     }
                     else { 
@@ -1048,14 +863,17 @@
                     await saveToCatalog(itemToSave);
                 } else {
                     const qty = Math.max(1, parseInt(formData.quantity) || 1);
+                    // Point 2: If acquiredPrice is empty or undefined, default to 0
+                    const finalAcquiredPrice = formData.acquiredPrice === '' || formData.acquiredPrice === undefined || formData.acquiredPrice === null ? 0 : formData.acquiredPrice;
+                    
                     if (editingItem) {
-                        const itemToSave = { ...formData };
+                        const itemToSave = { ...formData, acquiredPrice: finalAcquiredPrice };
                         delete itemToSave.quantity;
                         await saveToCollection(itemToSave);
                     } else {
                         const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0;
                         for (let i = 0; i < qty; i++) {
-                            const newItem = { ...formData, id: timestamp + '-' + i, order: maxOrder + i + 1 };
+                            const newItem = { ...formData, acquiredPrice: finalAcquiredPrice, id: timestamp + '-' + i, order: maxOrder + i + 1 };
                             delete newItem.quantity;
                             await saveToCollection(newItem);
                         }
@@ -1094,9 +912,17 @@
                     if (item.currency === 'r') totalR += price; else totalNT += price;
                 });
 
-                // Shipping Fees (Assume NT$ for simplicity or based on context)
-                const totalShipping = Object.values(dailyFees).reduce((a, b) => a + Number(b), 0);
-                totalNT += totalShipping; // Adding shipping to NT total
+                // Shipping Fees & Handling Fees (Assume NT$ for simplicity)
+                // dailyFees is now { date: { shipping, handling } } or legacy { date: amount }
+                Object.values(dailyFees).forEach(feeObj => {
+                    if (typeof feeObj === 'object') {
+                        totalNT += Number(feeObj.shipping || 0);
+                        totalNT += Number(feeObj.handling || 0);
+                    } else {
+                        // Legacy support for pure number
+                        totalNT += Number(feeObj || 0);
+                    }
+                });
 
                 const grandTotal = totalNT + (totalR * exchangeRate);
                 const byChar = visibleItems.reduce((acc, item) => { acc[item.character] = (acc[item.character] || 0) + 1; return acc; }, {});
@@ -1201,10 +1027,13 @@
                                                 return acc;
                                             }, { nt: 0, r: 0 });
                                             
-                                            // Get shipping fee for this day
-                                            const shipping = dailyFees[gName] || 0;
+                                            // Get shipping fee and handling fee for this day
+                                            const dayFee = dailyFees[gName];
+                                            // Support legacy structure where dailyFees[gName] was a number
+                                            const shipping = (typeof dayFee === 'object' ? dayFee.shipping : dayFee) || 0;
+                                            const handling = (typeof dayFee === 'object' ? dayFee.handling : 0) || 0;
                                             
-                                            const total = dayStats.nt + (dayStats.r * exchangeRate) + shipping;
+                                            const total = dayStats.nt + (dayStats.r * exchangeRate) + shipping + handling;
                                             
                                             // Always show even if 0
                                             dayTotalDisplay = (
@@ -1213,28 +1042,56 @@
                                                         <Icon name="Banknote" size={14}/>
                                                         NT$ {Math.round(total).toLocaleString()}
                                                     </span>
-                                                    {editingFeeDate === gName ? (
+                                                    
+                                                    {/* Shipping Fee Button */}
+                                                    {editingFeeTarget.date === gName && editingFeeTarget.type === 'shipping' ? (
                                                         <div className="flex items-center gap-1">
                                                             <input 
                                                                 ref={feeInputRef}
                                                                 type="number" 
-                                                                className="w-20 px-2 py-0.5 text-sm border rounded"
+                                                                className="w-16 px-1 py-0.5 text-sm border rounded"
                                                                 value={editingFeeValue}
                                                                 onChange={(e) => setEditingFeeValue(e.target.value)}
-                                                                onKeyDown={(e) => e.key === 'Enter' && handleSaveShippingFee(gName, editingFeeValue)}
+                                                                onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(gName, 'shipping', editingFeeValue)}
                                                                 autoFocus
                                                                 placeholder="運費"
                                                             />
-                                                            <button onClick={() => handleSaveShippingFee(gName, editingFeeValue)} className="text-green-600"><Icon name="Check" size={16}/></button>
-                                                            <button onClick={() => setEditingFeeDate(null)} className="text-gray-400"><Icon name="X" size={16}/></button>
+                                                            <button onClick={() => handleSaveFee(gName, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button>
+                                                            <button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button>
                                                         </div>
                                                     ) : (
                                                         <button 
-                                                            onClick={() => { setEditingFeeDate(gName); setEditingFeeValue(shipping || ''); }}
+                                                            onClick={() => { setEditingFeeTarget({date: gName, type: 'shipping'}); setEditingFeeValue(shipping || ''); }}
                                                             className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}
                                                         >
-                                                            {shipping > 0 ? `+ 運費 ${shipping}` : '+ 運費'}
-                                                            <Icon name="Edit2" size={10} />
+                                                            {shipping > 0 ? `運費 ${shipping}` : '+ 運費'}
+                                                            <Icon name="Truck" size={10} />
+                                                        </button>
+                                                    )}
+
+                                                    {/* Handling Fee Button */}
+                                                    {editingFeeTarget.date === gName && editingFeeTarget.type === 'handling' ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <input 
+                                                                ref={feeInputRef}
+                                                                type="number" 
+                                                                className="w-16 px-1 py-0.5 text-sm border rounded"
+                                                                value={editingFeeValue}
+                                                                onChange={(e) => setEditingFeeValue(e.target.value)}
+                                                                onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(gName, 'handling', editingFeeValue)}
+                                                                autoFocus
+                                                                placeholder="包手"
+                                                            />
+                                                            <button onClick={() => handleSaveFee(gName, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button>
+                                                            <button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button>
+                                                        </div>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={() => { setEditingFeeTarget({date: gName, type: 'handling'}); setEditingFeeValue(handling || ''); }}
+                                                            className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}
+                                                        >
+                                                            {handling > 0 ? `包手 ${handling}` : '+ 包手'}
+                                                            <Icon name="Package" size={10} />
                                                         </button>
                                                     )}
                                                 </div>

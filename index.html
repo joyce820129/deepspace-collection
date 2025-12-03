@@ -498,6 +498,14 @@
                                     </div>
                                 </div>
                                 <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">預設幣值 (非預購)</label>
+                                    <div className="flex gap-2">
+                                        {['NT$', 'r'].map(curr => (
+                                            <button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${appSettings.defaultCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{curr}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">預購預設幣值</label>
                                     <div className="flex gap-2">
                                         {['NT$', 'r'].map(curr => (
@@ -620,6 +628,7 @@
                     visibleCharacters: CHARACTERS,
                     multiSelect: { type: true, character: false, date: false, series: false },
                     defaultPreorderCurrency: 'NT$',
+                    defaultCurrency: 'NT$', // Added defaultCurrency
                     groupAllInFilterMode: true
                 };
                 if (savedSettings) {
@@ -630,6 +639,7 @@
                         if (!parsed.multiSelect) parsed.multiSelect = defaults.multiSelect;
                         if (typeof parsed.multiSelect.series === 'undefined') parsed.multiSelect.series = false;
                         if (!parsed.defaultPreorderCurrency) parsed.defaultPreorderCurrency = 'NT$';
+                        if (!parsed.defaultCurrency) parsed.defaultCurrency = 'NT$'; // Backwards compatibility
                         if (typeof parsed.groupAllInFilterMode === 'undefined') parsed.groupAllInFilterMode = true;
                         if (!parsed.customTypes) parsed.customTypes = DEFAULT_MERCH_TYPES;
                         return parsed;
@@ -951,7 +961,7 @@
                     quantity: 1,
                     isPreorder: false, 
                     shippingDate: '',
-                    currency: appSettings.defaultPreorderCurrency 
+                    currency: appSettings.defaultCurrency 
                 };
                 
                 if (mode === 'catalog' && item) { 
@@ -966,7 +976,7 @@
                             quantity: 1,
                             isPreorder: item.isPreorder || false,
                             shippingDate: item.shippingDate || '',
-                            currency: item.currency || 'NT$' 
+                            currency: item.currency || (item.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency) 
                         }); 
                     }
                     else if (template) { 
@@ -978,7 +988,7 @@
                             id: Date.now().toString(),
                             isPreorder: false,
                             shippingDate: '',
-                            currency: appSettings.defaultPreorderCurrency
+                            currency: appSettings.defaultCurrency 
                         }); 
                     }
                     else { 
@@ -1510,8 +1520,7 @@
                                         <div className="grid grid-cols-2 gap-2">
                                             <div className="relative">
                                                 <input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
-                                                {formData.isPreorder && <select className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0" value={formData.currency || appSettings.defaultPreorderCurrency} onChange={e=>setFormData({...formData, currency: e.target.value})}><option value="NT$">NT$</option><option value="r">r</option></select>}
-                                                {!formData.isPreorder && <span className="absolute right-3 top-2 text-gray-500 text-sm">NT$</span>}
+                                                <select className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0" value={formData.currency || (formData.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency)} onChange={e=>setFormData({...formData, currency: e.target.value})}><option value="NT$">NT$</option><option value="r">r</option></select>
                                             </div>
                                             {formData.isPreorder ? (
                                                 <div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span><input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/></div>

@@ -418,7 +418,8 @@
         const SettingsModal = ({ 
             isOpen, onClose, appSettings, setAppSettings, 
             importJson, setImportJson, handleBulkImport, handleExportCatalog, handleResetData,
-            handleAddType, handleDeleteType, newTypeInput, setNewTypeInput
+            handleAddType, handleDeleteType, newTypeInput, setNewTypeInput,
+            handleManualSyncTypes // NEW PROP
         }) => {
             const [settingsTab, setSettingsTab] = useState('layout');
             const dragTypeItem = useRef(null);
@@ -576,22 +577,25 @@
                                         <button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button>
                                     </div>
                                 </div>
+                                <div className="flex justify-between items-end">
+                                    <label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label>
+                                    <button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button>
+                                </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">目前類型列表 (拖曳可排序)</label>
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">
                                         {customTypes.map((t, index) => (
-                                            <span 
+                                            <div 
                                                 key={t} 
                                                 draggable
                                                 onDragStart={(e) => { dragTypeItem.current = index; e.target.classList.add('opacity-50'); }}
                                                 onDragEnter={(e) => { dragTypeOverItem.current = index; }}
                                                 onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleTypeSort(); }}
                                                 onDragOver={(e) => e.preventDefault()}
-                                                className="px-3 py-1 bg-gray-100 rounded-full text-xs flex items-center gap-1 group cursor-move hover:bg-gray-200 transition-all"
+                                                className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"
                                             >
-                                                {t}
-                                                <button onClick={()=>handleDeleteType(t)} className="text-gray-400 hover:text-red-500"><Icon name="X" size={12}/></button>
-                                            </span>
+                                                <span className="text-sm font-medium">{t}</span>
+                                                <button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button>
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
@@ -649,6 +653,29 @@
                 }
                 return defaults;
             });
+
+            // --- Auto Sync Types Effect ---
+            useEffect(() => {
+                const allItems = [...items, ...catalogItems];
+                const validTypes = allItems
+                    .map(i => i.type ? i.type.trim() : '')
+                    .filter(t => t !== '');
+                const usedTypes = new Set(validTypes);
+                
+                setAppSettings(prev => {
+                    const currentTypes = prev.customTypes || [];
+                    // Find types that are in data but not in settings
+                    const newTypes = Array.from(usedTypes).filter(t => !currentTypes.includes(t));
+                    
+                    if (newTypes.length > 0) {
+                        return {
+                            ...prev,
+                            customTypes: [...currentTypes, ...newTypes]
+                        };
+                    }
+                    return prev;
+                });
+            }, [items, catalogItems]); // Only run when data changes
 
             useEffect(() => { localStorage.setItem('deepspace_settings', JSON.stringify(appSettings)); }, [appSettings]);
             useEffect(() => { localStorage.setItem('deepspace_active_tab', activeTab); }, [activeTab]);
@@ -820,6 +847,30 @@
                 if (confirm(`確定要刪除類型「${t}」嗎？`)) {
                     setAppSettings(prev => ({...prev, customTypes: prev.customTypes.filter(type => type !== t)}));
                 }
+            };
+
+            const handleManualSyncTypes = () => {
+                const allItems = [...items, ...catalogItems];
+                const validTypes = allItems
+                    .map(i => i.type ? i.type.trim() : '')
+                    .filter(t => t !== '');
+                const usedTypes = new Set(validTypes);
+                
+                setAppSettings(prev => {
+                    const currentTypes = prev.customTypes || [];
+                    const newTypes = Array.from(usedTypes).filter(t => !currentTypes.includes(t));
+                    
+                    if (newTypes.length > 0) {
+                        alert(`已同步 ${newTypes.length} 個新類型！`);
+                        return {
+                            ...prev,
+                            customTypes: [...currentTypes, ...newTypes]
+                        };
+                    } else {
+                        alert('目前沒有發現新類型。');
+                        return prev;
+                    }
+                });
             };
 
             const handleBulkImport = async () => {
@@ -1496,6 +1547,7 @@
                         handleDeleteType={handleDeleteType}
                         newTypeInput={newTypeInput}
                         setNewTypeInput={setNewTypeInput}
+                        handleManualSyncTypes={handleManualSyncTypes} // PASSED HERE
                     />}
 
                     {isBatchModalOpen && (

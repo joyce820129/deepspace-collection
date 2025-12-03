@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>深空收藏艙 | 獵人週邊管理 (可拖曳排序版)</title>
+    <title>深空收藏艙 | 獵人週邊管理 (自訂排序增強版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -119,12 +119,13 @@
                 </button>
                 {options.map(opt => {
                     const isHighlight = highlightSet && highlightSet.has(opt);
+                    const isSelected = selected.includes(opt);
                     return (
                         <button 
                             key={opt}
                             onClick={() => toggle(opt)}
                             className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border 
-                                ${selected.includes(opt) 
+                                ${isSelected 
                                     ? 'bg-blue-100 text-blue-700 border-blue-300' 
                                     : (isHighlight ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')
                                 }`}
@@ -414,16 +415,22 @@
             );
         };
 
-        // SettingsModal: Removed memo to force updates, increased z-index
+        // SettingsModal
         const SettingsModal = ({ 
             isOpen, onClose, appSettings, setAppSettings, 
             importJson, setImportJson, handleBulkImport, handleExportCatalog, handleResetData,
             handleAddType, handleDeleteType, newTypeInput, setNewTypeInput,
-            handleManualSyncTypes // NEW PROP
+            handleManualSyncTypes,
+            // New Props for Series
+            handleAddSeries, handleDeleteSeries, newSeriesInput, setNewSeriesInput, handleManualSyncSeries
         }) => {
             const [settingsTab, setSettingsTab] = useState('layout');
+            
+            // Refs for DnD
             const dragTypeItem = useRef(null);
             const dragTypeOverItem = useRef(null);
+            const dragSeriesItem = useRef(null);
+            const dragSeriesOverItem = useRef(null);
             
             if (!isOpen) return null;
 
@@ -467,10 +474,28 @@
                 dragTypeItem.current = null;
                 dragTypeOverItem.current = null;
             };
+
+            const handleSeriesSort = () => {
+                const _customSeries = [...(appSettings.customSeries || [])];
+                const dragIndex = dragSeriesItem.current;
+                const dragOverIndex = dragSeriesOverItem.current;
+
+                if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return;
+
+                const dragItemContent = _customSeries[dragIndex];
+                _customSeries.splice(dragIndex, 1);
+                _customSeries.splice(dragOverIndex, 0, dragItemContent);
+                
+                setAppSettings(prev => ({ ...prev, customSeries: _customSeries }));
+                
+                dragSeriesItem.current = null;
+                dragSeriesOverItem.current = null;
+            };
             
             // Safety access for arrays
             const customCharacters = appSettings.customCharacters || CHARACTERS;
             const customTypes = appSettings.customTypes || DEFAULT_MERCH_TYPES;
+            const customSeries = appSettings.customSeries || [];
             
             return (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
@@ -481,9 +506,9 @@
                         </div>
                         
                         <div className="flex gap-2 border-b pb-2 overflow-x-auto">
-                            {['layout', 'filter', 'filters_config', 'types', 'data'].map(t => (
+                            {['layout', 'filter', 'filters_config', 'types', 'series', 'data'].map(t => (
                                 <button key={t} onClick={()=>setSettingsTab(t)} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${settingsTab===t ? 'bg-slate-900 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
-                                    {t==='layout' ? '版面' : t==='filter' ? '角色管理' : t==='filters_config' ? '篩選設定' : t==='types' ? '類型' : '資料'}
+                                    {t==='layout' ? '版面' : t==='filter' ? '角色管理' : t==='filters_config' ? '篩選設定' : t==='types' ? '類型' : t==='series' ? '系列' : '資料'}
                                 </button>
                             ))}
                         </div>
@@ -602,6 +627,41 @@
                             </div>
                         )}
 
+                        {settingsTab === 'series' && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">新增系列</label>
+                                    <div className="flex gap-2">
+                                        <input className="border p-2 rounded flex-1" placeholder="輸入新系列名稱..." value={newSeriesInput} onKeyDown={(e) => e.key === 'Enter' && handleAddSeries()} onChange={e=>setNewSeriesInput(e.target.value)} />
+                                        <button onClick={handleAddSeries} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button>
+                                    </div>
+                                </div>
+                                <div className="flex justify-between items-end">
+                                    <label className="block text-sm font-medium text-gray-700">目前系列列表 (拖曳可排序)</label>
+                                    <button onClick={handleManualSyncSeries} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步系列</button>
+                                </div>
+                                <div>
+                                    <div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100 min-h-[50px]">
+                                        {customSeries.length === 0 && <span className="text-xs text-gray-400 p-2">暫無系列，請同步或新增</span>}
+                                        {customSeries.map((s, index) => (
+                                            <div 
+                                                key={s} 
+                                                draggable
+                                                onDragStart={(e) => { dragSeriesItem.current = index; e.target.classList.add('opacity-50'); }}
+                                                onDragEnter={(e) => { dragSeriesOverItem.current = index; }}
+                                                onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleSeriesSort(); }}
+                                                onDragOver={(e) => e.preventDefault()}
+                                                className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"
+                                            >
+                                                <span className="text-sm font-medium">{s}</span>
+                                                <button onClick={(e)=>{e.stopPropagation(); handleDeleteSeries(s);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {settingsTab === 'data' && (
                             <div className="space-y-4">
                                 <div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800"><p className="font-bold mb-1">批次匯入：</p><p>貼上 Excel 或 JSON。匯入後將存入共用圖鑑。</p></div>
@@ -628,11 +688,12 @@
                 const defaults = {
                     layoutCols: 4, 
                     customTypes: DEFAULT_MERCH_TYPES,
+                    customSeries: [], // New Field for Series Order
                     customCharacters: CHARACTERS,
                     visibleCharacters: CHARACTERS,
                     multiSelect: { type: true, character: false, date: false, series: false },
                     defaultPreorderCurrency: 'NT$',
-                    defaultCurrency: 'NT$', // Added defaultCurrency
+                    defaultCurrency: 'NT$',
                     groupAllInFilterMode: true
                 };
                 if (savedSettings) {
@@ -643,9 +704,10 @@
                         if (!parsed.multiSelect) parsed.multiSelect = defaults.multiSelect;
                         if (typeof parsed.multiSelect.series === 'undefined') parsed.multiSelect.series = false;
                         if (!parsed.defaultPreorderCurrency) parsed.defaultPreorderCurrency = 'NT$';
-                        if (!parsed.defaultCurrency) parsed.defaultCurrency = 'NT$'; // Backwards compatibility
+                        if (!parsed.defaultCurrency) parsed.defaultCurrency = 'NT$';
                         if (typeof parsed.groupAllInFilterMode === 'undefined') parsed.groupAllInFilterMode = true;
                         if (!parsed.customTypes) parsed.customTypes = DEFAULT_MERCH_TYPES;
+                        if (!parsed.customSeries) parsed.customSeries = []; // Ensure customSeries exists
                         return parsed;
                     } catch (e) {
                         return defaults;
@@ -654,28 +716,47 @@
                 return defaults;
             });
 
-            // --- Auto Sync Types Effect ---
+            const [items, setItems] = useState([]); 
+            const [catalogItems, setCatalogItems] = useState([]); 
+
+            // --- Auto Sync Types and Series Effect ---
             useEffect(() => {
                 const allItems = [...items, ...catalogItems];
+                
+                // Sync Types
                 const validTypes = allItems
                     .map(i => i.type ? i.type.trim() : '')
                     .filter(t => t !== '');
                 const usedTypes = new Set(validTypes);
+
+                // Sync Series
+                const validSeries = allItems
+                    .map(i => i.series ? i.series.trim() : '')
+                    .filter(s => s !== '');
+                const usedSeries = new Set(validSeries);
                 
                 setAppSettings(prev => {
-                    const currentTypes = prev.customTypes || [];
-                    // Find types that are in data but not in settings
+                    let nextSettings = { ...prev };
+                    let changed = false;
+
+                    const currentTypes = nextSettings.customTypes || [];
                     const newTypes = Array.from(usedTypes).filter(t => !currentTypes.includes(t));
                     
                     if (newTypes.length > 0) {
-                        return {
-                            ...prev,
-                            customTypes: [...currentTypes, ...newTypes]
-                        };
+                        nextSettings.customTypes = [...currentTypes, ...newTypes];
+                        changed = true;
                     }
-                    return prev;
+
+                    const currentSeries = nextSettings.customSeries || [];
+                    const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s));
+                    if (newSeries.length > 0) {
+                        nextSettings.customSeries = [...currentSeries, ...newSeries];
+                        changed = true;
+                    }
+
+                    return changed ? nextSettings : prev;
                 });
-            }, [items, catalogItems]); // Only run when data changes
+            }, [items, catalogItems]); 
 
             useEffect(() => { localStorage.setItem('deepspace_settings', JSON.stringify(appSettings)); }, [appSettings]);
             useEffect(() => { localStorage.setItem('deepspace_active_tab', activeTab); }, [activeTab]);
@@ -691,8 +772,6 @@
             const [exchangeRateTimestamp, setExchangeRateTimestamp] = useState(null);
             const [showRmbDetail, setShowRmbDetail] = useState(false);
             
-            const [items, setItems] = useState([]); 
-            const [catalogItems, setCatalogItems] = useState([]); 
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false); 
             const [editingItem, setEditingItem] = useState(null); 
@@ -700,6 +779,7 @@
             const [formData, setFormData] = useState({});
             const [importJson, setImportJson] = useState('');
             const [newTypeInput, setNewTypeInput] = useState(''); 
+            const [newSeriesInput, setNewSeriesInput] = useState(''); // New input for Series
 
             // Batch Add States
             const [isBatchMode, setIsBatchMode] = useState(false);
@@ -837,6 +917,7 @@
                 }
             };
 
+            // --- Type Management ---
             const handleAddType = () => {
                 if (newTypeInput && !appSettings.customTypes.includes(newTypeInput)) {
                     setAppSettings(prev => ({...prev, customTypes: [...prev.customTypes, newTypeInput]}));
@@ -848,7 +929,6 @@
                     setAppSettings(prev => ({...prev, customTypes: prev.customTypes.filter(type => type !== t)}));
                 }
             };
-
             const handleManualSyncTypes = () => {
                 const allItems = [...items, ...catalogItems];
                 const validTypes = allItems
@@ -862,12 +942,42 @@
                     
                     if (newTypes.length > 0) {
                         alert(`已同步 ${newTypes.length} 個新類型！`);
-                        return {
-                            ...prev,
-                            customTypes: [...currentTypes, ...newTypes]
-                        };
+                        return { ...prev, customTypes: [...currentTypes, ...newTypes] };
                     } else {
                         alert('目前沒有發現新類型。');
+                        return prev;
+                    }
+                });
+            };
+
+            // --- Series Management (NEW) ---
+            const handleAddSeries = () => {
+                if (newSeriesInput && !appSettings.customSeries.includes(newSeriesInput)) {
+                    setAppSettings(prev => ({...prev, customSeries: [...(prev.customSeries || []), newSeriesInput]}));
+                    setNewSeriesInput('');
+                }
+            };
+            const handleDeleteSeries = (s) => {
+                if (confirm(`確定要刪除系列「${s}」嗎？`)) {
+                    setAppSettings(prev => ({...prev, customSeries: prev.customSeries.filter(series => series !== s)}));
+                }
+            };
+            const handleManualSyncSeries = () => {
+                const allItems = [...items, ...catalogItems];
+                const validSeries = allItems
+                    .map(i => i.series ? i.series.trim() : '')
+                    .filter(s => s !== '');
+                const usedSeries = new Set(validSeries);
+                
+                setAppSettings(prev => {
+                    const currentSeries = prev.customSeries || [];
+                    const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s));
+                    
+                    if (newSeries.length > 0) {
+                        alert(`已同步 ${newSeries.length} 個新系列！`);
+                        return { ...prev, customSeries: [...currentSeries, ...newSeries] };
+                    } else {
+                        alert('目前沒有發現新系列。');
                         return prev;
                     }
                 });
@@ -897,18 +1007,24 @@
                     }
                     if (parsedData.length === 0) throw new Error("無有效資料");
 
-                    // --- NEW LOGIC START ---
-                    // Identify new types from import and add to settings
+                    // Sync Types and Series during import
                     const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== ''));
+                    const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== ''));
+
                     setAppSettings(prev => {
                         const currentTypes = prev.customTypes || [];
                         const newTypesToAdd = Array.from(importedTypes).filter(t => !currentTypes.includes(t));
-                        if (newTypesToAdd.length > 0) {
-                            return { ...prev, customTypes: [...currentTypes, ...newTypesToAdd] };
-                        }
-                        return prev;
+                        
+                        const currentSeries = prev.customSeries || [];
+                        const newSeriesToAdd = Array.from(importedSeries).filter(s => !currentSeries.includes(s));
+
+                        let next = { ...prev };
+                        let changed = false;
+                        if (newTypesToAdd.length > 0) { next.customTypes = [...currentTypes, ...newTypesToAdd]; changed = true; }
+                        if (newSeriesToAdd.length > 0) { next.customSeries = [...currentSeries, ...newSeriesToAdd]; changed = true; }
+                        
+                        return changed ? next : prev;
                     });
-                    // --- NEW LOGIC END ---
 
                     let count = 0;
                     const timestamp = Date.now();
@@ -1007,7 +1123,6 @@
                 setIsBatchModalOpen(false);
                 setIsBatchMode(false);
                 setBatchSelection(new Set());
-                // Alert removed as requested
             };
 
             const openModal = (item = null, template = null, mode = 'collection') => {
@@ -1067,9 +1182,22 @@
             const handleSave = async () => {
                 if (!formData.name) return alert("請輸入名稱");
                 const timestamp = Date.now();
-                if (formData.type && !appSettings.customTypes.includes(formData.type)) {
-                    setAppSettings(prev => ({...prev, customTypes: [...prev.customTypes, formData.type]}));
-                }
+                
+                // Add new types/series to settings on save if not exists
+                setAppSettings(prev => {
+                    let next = { ...prev };
+                    let changed = false;
+                    
+                    if (formData.type && !prev.customTypes.includes(formData.type)) {
+                        next.customTypes = [...prev.customTypes, formData.type];
+                        changed = true;
+                    }
+                    if (formData.series && !prev.customSeries.includes(formData.series)) {
+                        next.customSeries = [...prev.customSeries, formData.series];
+                        changed = true;
+                    }
+                    return changed ? next : prev;
+                });
 
                 if (modalMode === 'catalog') {
                     const itemToSave = { ...formData };
@@ -1142,7 +1270,6 @@
                 dragOverItem.current = null;
         
                 // We now need to update the actual 'items' array.
-                // Each stack contains instances. We will assign new order values based on stack index.
                 const newItems = [];
                 const updates = [];
 
@@ -1159,11 +1286,6 @@
                     });
                 });
 
-                // Update local state immediately for visual feedback
-                // We need to keep items that are NOT visible (filtered out by character settings) untouched?
-                // Actually, "All" view typically shows visible characters. 
-                // Let's assume we merge the new orders into the existing items list.
-                
                 setItems(prevItems => {
                     const orderMap = new Map();
                     newItems.forEach(i => orderMap.set(i.id, i.order));
@@ -1180,12 +1302,12 @@
 
                 // Persist to Cloud
                 if (user && isFirebaseInitialized && updates.length > 0) {
-                   try {
-                       await commitBatches(updates);
-                   } catch (e) {
-                       console.error("Batch update failed", e);
-                       alert("排序儲存失敗");
-                   }
+                    try {
+                        await commitBatches(updates);
+                    } catch (e) {
+                        console.error("Batch update failed", e);
+                        alert("排序儲存失敗");
+                    }
                 }
             };
 
@@ -1267,10 +1389,18 @@
             }, [items, appSettings.visibleCharacters, exchangeRate]);
 
             const availableTypes = useMemo(() => {
-                const source = activeTab === 'templates' ? catalogItems : items; // Changed source logic
+                const source = activeTab === 'templates' ? catalogItems : items; 
                 const types = new Set(source.map(i => i.type).filter(Boolean));
+                // Ensure customTypes come first, then others
                 return appSettings.customTypes.filter(t => types.has(t)).concat(Array.from(types).filter(t => !appSettings.customTypes.includes(t)));
-            }, [items, catalogItems, appSettings.customTypes, activeTab]); // Added dependencies
+            }, [items, catalogItems, appSettings.customTypes, activeTab]);
+
+            const availableSeries = useMemo(() => {
+                const source = activeTab === 'collection' ? items : catalogItems;
+                const series = new Set(source.map(i => i.series).filter(Boolean));
+                // Use customSeries order
+                return (appSettings.customSeries || []).filter(s => series.has(s)).concat(Array.from(series).filter(s => !(appSettings.customSeries || []).includes(s)));
+            }, [items, catalogItems, appSettings.customSeries, activeTab]);
 
             const availableDates = useMemo(() => {
                 const dates = new Set(items.map(i => getEffectiveDate(i)).filter(Boolean));
@@ -1284,12 +1414,6 @@
                 items.forEach(i => { if (i.isPreorder && i.shippingDate) set.add(i.shippingDate); });
                 return set;
             }, [items]);
-
-            const availableSeries = useMemo(() => {
-                const source = activeTab === 'collection' ? items : catalogItems;
-                const series = new Set(source.map(i => i.series).filter(Boolean));
-                return Array.from(series).sort();
-            }, [items, catalogItems, activeTab]);
 
             const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters, dateFilters, seriesFilters) => {
                 const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters, seriesFilters);
@@ -1327,7 +1451,23 @@
                     const sorted = {}; keys.forEach(k=>sorted[k]=grouped[k]); return sorted;
                 }
                 
-                // Custom sort order for Character grouping
+                // Sort by Custom Order (Type)
+                if (mode === 'type') {
+                    const sorted = {};
+                    appSettings.customTypes.forEach(t => { if (grouped[t]) sorted[t] = grouped[t]; });
+                    Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; });
+                    return sorted;
+                }
+
+                // Sort by Custom Order (Series)
+                if (mode === 'series') {
+                    const sorted = {};
+                    (appSettings.customSeries || []).forEach(s => { if (grouped[s]) sorted[s] = grouped[s]; });
+                    Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; });
+                    return sorted;
+                }
+                
+                // Sort by Custom Order (Character)
                 if (mode === 'character') {
                     const sorted = {};
                     appSettings.customCharacters.forEach(char => { if (grouped[char]) sorted[char] = grouped[char]; });
@@ -1341,7 +1481,7 @@
             const groupedData = useMemo(() => ({
                 collection: getGroupedData(items, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters),
                 catalog: getGroupedData(catalogItems, groupingMode, 'desc', selectedTypeFilters, selectedCharFilters, [], selectedSeriesFilters)
-            }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters, appSettings.visibleCharacters, appSettings.groupAllInFilterMode, appSettings.customCharacters]);
+            }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters, appSettings.visibleCharacters, appSettings.groupAllInFilterMode, appSettings.customCharacters, appSettings.customTypes, appSettings.customSeries]);
 
             const gridStyle = { display: 'grid', gridTemplateColumns: `repeat(${appSettings.layoutCols}, minmax(0, 1fr))`, gap: '1rem' };
 
@@ -1547,7 +1687,14 @@
                         handleDeleteType={handleDeleteType}
                         newTypeInput={newTypeInput}
                         setNewTypeInput={setNewTypeInput}
-                        handleManualSyncTypes={handleManualSyncTypes} // PASSED HERE
+                        handleManualSyncTypes={handleManualSyncTypes}
+                        
+                        // Series Props
+                        handleAddSeries={handleAddSeries}
+                        handleDeleteSeries={handleDeleteSeries}
+                        newSeriesInput={newSeriesInput}
+                        setNewSeriesInput={setNewSeriesInput}
+                        handleManualSyncSeries={handleManualSyncSeries}
                     />}
 
                     {isBatchModalOpen && (

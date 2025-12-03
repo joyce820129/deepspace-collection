@@ -845,6 +845,20 @@
                         }).filter(o => o.name);
                     }
                     if (parsedData.length === 0) throw new Error("無有效資料");
+
+                    // --- NEW LOGIC START ---
+                    // Identify new types from import and add to settings
+                    const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== ''));
+                    setAppSettings(prev => {
+                        const currentTypes = prev.customTypes || [];
+                        const newTypesToAdd = Array.from(importedTypes).filter(t => !currentTypes.includes(t));
+                        if (newTypesToAdd.length > 0) {
+                            return { ...prev, customTypes: [...currentTypes, ...newTypesToAdd] };
+                        }
+                        return prev;
+                    });
+                    // --- NEW LOGIC END ---
+
                     let count = 0;
                     const timestamp = Date.now();
                     for (const item of parsedData) {
@@ -1202,9 +1216,10 @@
             }, [items, appSettings.visibleCharacters, exchangeRate]);
 
             const availableTypes = useMemo(() => {
-                const types = new Set(items.map(i => i.type).filter(Boolean));
+                const source = activeTab === 'templates' ? catalogItems : items; // Changed source logic
+                const types = new Set(source.map(i => i.type).filter(Boolean));
                 return appSettings.customTypes.filter(t => types.has(t)).concat(Array.from(types).filter(t => !appSettings.customTypes.includes(t)));
-            }, [items, appSettings.customTypes]);
+            }, [items, catalogItems, appSettings.customTypes, activeTab]); // Added dependencies
 
             const availableDates = useMemo(() => {
                 const dates = new Set(items.map(i => getEffectiveDate(i)).filter(Boolean));

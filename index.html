@@ -580,7 +580,7 @@
         const App = () => {
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState(() => localStorage.getItem('deepspace_active_tab') || 'collection');
-            // ... (State initializers)
+
             const [appSettings, setAppSettings] = useState(() => {
                 const savedSettings = localStorage.getItem('deepspace_settings');
                 const defaults = {
@@ -634,7 +634,7 @@
             const [isBatchMode, setIsBatchMode] = useState(false);
             const [batchSelection, setBatchSelection] = useState(new Set());
             const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
-            const [editingFeeTarget, setEditingFeeTarget] = useState({ date: null, type: null });
+            const [editingFeeTarget, setEditingFeeTarget] = useState({ date: null, type: null }); // type can be 'shipping', 'handling', or 'set_shipping', 'set_handling'
             const [editingFeeValue, setEditingFeeValue] = useState('');
             const fileInputRef = useRef(null);
             const feeInputRef = useRef(null);
@@ -670,7 +670,25 @@
             const deleteFromCollection = async (itemId) => { if (user && isFirebaseInitialized) { await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, itemId)); } else { setItems(prev => prev.filter(i => i.id !== itemId)); } };
             const saveToCatalog = async (newItem) => { if (!isFirebaseInitialized) { setCatalogItems(prev => { const exists = prev.find(i => i.id === newItem.id); return exists ? prev.map(i => i.id === newItem.id ? newItem : i) : [...prev, newItem]; }); return; } let order = newItem.order || Date.now(); await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, newItem.id), { ...newItem, order }, { merge: true }); };
             const deleteFromCatalog = async (itemId) => { if (confirm("警告：確定要從共用圖鑑刪除嗎？")) { if (isFirebaseInitialized) await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, itemId)); else setCatalogItems(prev => prev.filter(i => i.id !== itemId)); } };
-            const handleSaveFee = async (date, type, amount) => { const numAmount = parseInt(amount) || 0; if (user && isFirebaseInitialized) { const field = type === 'shipping' ? 'amount' : 'handling'; await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/daily_fees`, date), { [field]: numAmount }, { merge: true }); } else { setDailyFees(prev => { const existing = prev[date] || { shipping: 0, handling: 0 }; const safeExisting = typeof existing === 'number' ? { shipping: existing, handling: 0 } : existing; return { ...prev, [date]: { ...safeExisting, [type]: numAmount } }; }); } setEditingFeeTarget({ date: null, type: null }); };
+            
+            // Updated handleSaveFee to support Set keys (date_setName)
+            const handleSaveFee = async (id, type, amount) => { 
+                const numAmount = parseInt(amount) || 0; 
+                if (user && isFirebaseInitialized) { 
+                    // Determine field based on type. If it's a set fee, we store it under the key "shipping" or "handling" in a document named "date_setName"
+                    // But wait, the 'id' here is already the key (e.g., "2023-10-27" or "2023-10-27_MySet").
+                    const field = type === 'shipping' ? 'amount' : 'handling'; 
+                    await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/daily_fees`, id), { [field]: numAmount }, { merge: true }); 
+                } else { 
+                    setDailyFees(prev => { 
+                        const existing = prev[id] || { shipping: 0, handling: 0 }; 
+                        const safeExisting = typeof existing === 'number' ? { shipping: existing, handling: 0 } : existing; 
+                        return { ...prev, [id]: { ...safeExisting, [type]: numAmount } }; 
+                    }); 
+                } 
+                setEditingFeeTarget({ date: null, type: null }); 
+            };
+
             const handleRemoveDuplicates = () => { if (confirm("這將移除「名稱+角色+類型+系列」完全相同的重複資料。\n\n(注意：如果是雲端模式，此操作目前僅會清理本地顯示，若要清理雲端資料庫請手動刪除)")) { setCatalogItems(prev => { const unique = getUniqueItems(prev); alert(`已清理重複資料。剩餘 ${unique.length} 筆 (原 ${prev.length} 筆)`); return unique; }); } };
             
             const handleAddType = () => { if (newTypeInput && !appSettings.customTypes.includes(newTypeInput)) { setAppSettings(prev => ({...prev, customTypes: [...prev.customTypes, newTypeInput]})); setNewTypeInput(''); } };
@@ -812,13 +830,7 @@
                             <div className="space-y-6 animate-fade-in">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                     <div className="flex-1 flex items-center gap-4"><h2 className="text-2xl font-bold text-gray-800">我的收藏庫 <span className="text-xs font-normal text-gray-400 ml-2">{user && !user.isAnonymous ? '(雲端私有)' : '(本機暫存)'}</span></h2><button onClick={()=>openModal(null, null, 'collection')} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-md"><Icon name="Plus" size={16}/> 新增</button></div>
-                                    <div className="flex gap-2 items-center">
-                                        <button onClick={toggleCollectionBatchMode} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${isCollectionBatchMode ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-                                            <Icon name={isCollectionBatchMode ? "CheckSquare" : "Square"} size={16}/> 批次管理
-                                        </button>
-                                        <div className="h-6 w-px bg-gray-300 mx-2"></div>
-                                        <div className="flex gap-2 overflow-x-auto scrollbar-hide">{collectionGroupingMode==='date' && <button onClick={()=>setDateSortOrder(p=>p==='desc'?'asc':'desc')} className="px-3 py-1.5 text-xs border rounded-lg bg-white text-blue-600 flex gap-1"><Icon name={dateSortOrder==='desc'?'ArrowDownNarrowWide':'ArrowUpNarrowWide'} size={14}/> {dateSortOrder==='desc'?'從新到舊':'從舊到新'}</button>}{[{id:'none',l:'全部'},{id:'series',l:'依系列'},{id:'type',l:'依類型'},{id:'character',l:'依角色'},{id:'date',l:'依收物日'}].map(m=><button key={m.id} onClick={()=>setCollectionGroupingMode(m.id)} className={`px-3 py-1.5 text-xs border rounded-lg whitespace-nowrap ${collectionGroupingMode===m.id?'bg-slate-900 text-white':'bg-white text-gray-500'}`}>{m.l}</button>)}</div>
-                                    </div>
+                                    <div className="flex gap-2 overflow-x-auto scrollbar-hide">{collectionGroupingMode==='date' && <button onClick={()=>setDateSortOrder(p=>p==='desc'?'asc':'desc')} className="px-3 py-1.5 text-xs border rounded-lg bg-white text-blue-600 flex gap-1"><Icon name={dateSortOrder==='desc'?'ArrowDownNarrowWide':'ArrowUpNarrowWide'} size={14}/> {dateSortOrder==='desc'?'從新到舊':'從舊到新'}</button>}{[{id:'none',l:'全部'},{id:'series',l:'依系列'},{id:'type',l:'依類型'},{id:'character',l:'依角色'},{id:'date',l:'依收物日'}].map(m=><button key={m.id} onClick={()=>setCollectionGroupingMode(m.id)} className={`px-3 py-1.5 text-xs border rounded-lg whitespace-nowrap ${collectionGroupingMode===m.id?'bg-slate-900 text-white':'bg-white text-gray-500'}`}>{m.l}</button>)}</div>
                                 </div>
                                 {collectionGroupingMode === 'series' && <FilterBar options={availableSeries} selected={selectedSeriesFilters} toggle={(val)=>toggleFilter(selectedSeriesFilters, setSelectedSeriesFilters, val, appSettings.multiSelect.series)} multi={appSettings.multiSelect.series} />}
                                 {collectionGroupingMode === 'type' && <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />}
@@ -835,10 +847,10 @@
                                             const total = dayStats.nt + (dayStats.r * exchangeRate) + shipping + handling;
                                             
                                             // 運費包手按鈕
-                                            const feeControls = (
+                                            const feeControls = (setKey) => (
                                                 <div className="flex items-center gap-2">
-                                                    {editingFeeTarget.date === gName && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(gName, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(gName, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: gName, type: 'shipping'}); setEditingFeeValue(shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{shipping > 0 ? `運費 ${shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
-                                                    {editingFeeTarget.date === gName && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(gName, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(gName, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: gName, type: 'handling'}); setEditingFeeValue(handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{handling > 0 ? `包手 ${handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); setEditingFeeValue(dailyFees[setKey]?.shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.shipping > 0 ? `運費 ${dailyFees[setKey].shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); setEditingFeeValue(dailyFees[setKey]?.handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.handling > 0 ? `包手 ${dailyFees[setKey].handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
                                                 </div>
                                             );
 
@@ -857,32 +869,44 @@
                                             // Determine where to show fee controls
                                             const hasSets = Object.keys(sets).length > 0;
                                             
+                                            // Calculate generic day total (including generic fees)
+                                            // Note: Set-specific fees are added to set totals, but we should also include them in the daily grand total if desired.
+                                            // For now, dayTotalDisplay shows the sum of all items + generic day fees. 
+                                            // If we want it to include set fees, we'd need to iterate all sets.
+                                            // Let's stick to showing generic day total here for simplicity unless requested.
+                                            // User requested: "Set amount display should include items total + shipping/handling". 
+                                            // This is handled in the Set rendering loop below.
+
                                             dayTotalDisplay = (
                                                 <div className="flex items-center gap-2">
                                                     <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100"><Icon name="Banknote" size={14}/>NT$ {Math.round(total).toLocaleString()}</span>
-                                                    {!hasSets && feeControls} 
+                                                    {!hasSets && feeControls(gName)} 
                                                 </div>
                                             );
 
                                             renderItems = (
                                                 <>
                                                     {Object.entries(sets).map(([setName, setItems], idx) => {
-                                                        // Calculate Set Total
-                                                        const setTotal = setItems.reduce((sum, item) => {
+                                                        const setKey = `${gName}_${setName}`;
+                                                        const setFee = dailyFees[setKey] || { shipping: 0, handling: 0 };
+                                                        
+                                                        // Calculate Set Total (Items + Fees)
+                                                        const setItemTotal = setItems.reduce((sum, item) => {
                                                             const p = Number(item.acquiredPrice || 0);
                                                             const q = item.quantity || 1;
                                                             return sum + (item.currency === 'r' ? p * exchangeRate * q : p * q);
                                                         }, 0);
+                                                        const setGrandTotal = setItemTotal + (Number(setFee.shipping)||0) + (Number(setFee.handling)||0);
 
                                                         return (
                                                             <div key={setName} className="col-span-full bg-blue-50/50 rounded-2xl border-2 border-dashed border-blue-200 p-4 relative mt-6 mb-2">
-                                                                <div className="absolute -top-3 left-4 flex items-center gap-2">
+                                                                <div className="absolute -top-3 left-4 flex items-center gap-2 flex-wrap">
                                                                     <div className="bg-blue-100 text-blue-700 px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm border border-blue-200">
                                                                         <Icon name="Package" size={12} /> {setName} 
-                                                                        <span className="ml-1 text-blue-500 border-l border-blue-200 pl-1">NT${Math.round(setTotal).toLocaleString()}</span>
+                                                                        <span className="ml-1 text-blue-500 border-l border-blue-200 pl-1">NT${Math.round(setGrandTotal).toLocaleString()}</span>
                                                                     </div>
-                                                                    {/* If this is the FIRST set of the day, show fee controls here as requested */}
-                                                                    {idx === 0 && feeControls}
+                                                                    {/* Fee controls for this specific set */}
+                                                                    {feeControls(setKey)}
                                                                 </div>
                                                                 <div style={gridStyle} className="mt-2">
                                                                     {getStackedItems(setItems, 'none').map((s, i) => (
@@ -895,14 +919,18 @@
                                                             </div>
                                                         );
                                                     })}
-                                                    <div style={gridStyle} className="mt-4">
-                                                        {getStackedItems(loose, collectionGroupingMode).map((s,i) => (
-                                                            <StackCard 
-                                                                key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'} onDragStart={handleDragStart} onDragEnter={handleDragEnter} onDragEnd={handleSort} openModal={openModal} deleteFromCollection={deleteFromCollection} 
-                                                                showAmount={appSettings.showAmount} isBatchMode={isCollectionBatchMode} isSelected={collectionBatchSelection.has(s.id)} onToggleSelect={handleCollectionBatchSelect} 
-                                                            />
-                                                        ))}
-                                                    </div>
+                                                    
+                                                    {/* Loose items (no set name) */}
+                                                    {loose.length > 0 && (
+                                                        <div style={gridStyle} className="mt-4">
+                                                            {getStackedItems(loose, collectionGroupingMode).map((s,i) => (
+                                                                <StackCard 
+                                                                    key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'} onDragStart={handleDragStart} onDragEnter={handleDragEnter} onDragEnd={handleSort} openModal={openModal} deleteFromCollection={deleteFromCollection} 
+                                                                    showAmount={appSettings.showAmount} isBatchMode={isCollectionBatchMode} isSelected={collectionBatchSelection.has(s.id)} onToggleSelect={handleCollectionBatchSelect} 
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </>
                                             );
                                         } else {
@@ -1123,6 +1151,17 @@
                         <button onClick={()=>setActiveTab('trade')}><Icon name="ArrowRightLeft"/><span className="text-xs">交易</span></button>
                         <button onClick={()=>setActiveTab('stats')}><Icon name="User"/><span className="text-xs">檔案</span></button>
                     </div>
+                    
+                    {/* Collection Batch Management Button (Floating, Bottom Right) */}
+                    {!isCollectionBatchMode && activeTab === 'collection' && (
+                        <button 
+                            onClick={toggleCollectionBatchMode}
+                            className="fixed bottom-24 md:bottom-10 right-6 bg-blue-600 text-white p-3 rounded-full shadow-lg z-40 hover:bg-blue-700 transition-all flex items-center gap-2"
+                            title="批次管理"
+                        >
+                            <Icon name="ListChecks" size={24} />
+                        </button>
+                    )}
                 </div>
             );
         };

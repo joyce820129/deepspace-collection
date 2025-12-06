@@ -360,10 +360,11 @@
             const dragSeriesItem = useRef(null); const dragSeriesOverItem = useRef(null);
             
             if (!isOpen) return null;
-            // ... (Same implementation as before) ...
+
             const toggleCharacterVisibility = (char) => { setAppSettings(prev => { const current = prev.visibleCharacters || []; if (char === "ALL") { const allMainSelected = CHARACTERS.every(c => current.includes(c)); return allMainSelected ? { ...prev, visibleCharacters: [] } : { ...prev, visibleCharacters: [...CHARACTERS] }; } else { return current.includes(char) ? { ...prev, visibleCharacters: current.filter(c => c !== char) } : { ...prev, visibleCharacters: [...current, char] }; } }); };
             const toggleMultiSelect = (key) => { setAppSettings(prev => ({ ...prev, multiSelect: { ...(prev.multiSelect || {}), [key]: !prev.multiSelect?.[key] } })); };
-            const handleTypeSort = () => { /* ... */ }; 
+            const handleTypeSort = () => { const _customTypes = [...(appSettings.customTypes || DEFAULT_MERCH_TYPES)]; const dragIndex = dragTypeItem.current; const dragOverIndex = dragTypeOverItem.current; if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return; const dragItemContent = _customTypes[dragIndex]; _customTypes.splice(dragIndex, 1); _customTypes.splice(dragOverIndex, 0, dragItemContent); setAppSettings(prev => ({ ...prev, customTypes: _customTypes })); dragTypeItem.current = null; dragTypeOverItem.current = null; };
+            const handleSeriesSort = () => { const _customSeries = [...(appSettings.customSeries || [])]; const dragIndex = dragSeriesItem.current; const dragOverIndex = dragSeriesOverItem.current; if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return; const dragItemContent = _customSeries[dragIndex]; _customSeries.splice(dragIndex, 1); _customSeries.splice(dragOverIndex, 0, dragItemContent); setAppSettings(prev => ({ ...prev, customSeries: _customSeries })); dragSeriesItem.current = null; dragSeriesOverItem.current = null; };
             
             const customCharacters = appSettings.customCharacters || CHARACTERS;
             const customTypes = appSettings.customTypes || DEFAULT_MERCH_TYPES;
@@ -405,8 +406,6 @@
                         </div>
                     </div>
                 </div>)}
-                {/* ... (Other tabs) ... */}
-                {/* (To keep code compact, omitting unchanged tabs content, but in full version they exist) */}
                 {settingsTab === 'filter' && (<div className="space-y-4 animate-fade-in"><div className="flex justify-between items-center"><p className="text-sm text-gray-500">勾選角色以顯示週邊。</p><button onClick={() => toggleCharacterVisibility('ALL')} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700">我全都要</button></div><div className="grid grid-cols-2 gap-2">{customCharacters.map((char, index) => { const isChecked = (appSettings.visibleCharacters || []).includes(char); return (<div key={char} className={`flex items-center justify-between p-3 border rounded-xl transition-colors ${isChecked ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50'}`} onClick={() => toggleCharacterVisibility(char)}><div className="flex items-center gap-3"><span className={`text-sm font-medium ${CHARACTER_THEMES[char]?.text || 'text-gray-700'}`}>{char}</span></div><div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>{isChecked && <Icon name="Check" size={12} className="text-white"/>}</div></div>); })}</div></div>)}
                 {settingsTab === 'filters_config' && (<div className="space-y-4 animate-fade-in"><p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p><div className="space-y-3">{['series', 'type', 'character', 'date'].map(key => (<label key={key} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.multiSelect?.[key]} onChange={() => toggleMultiSelect(key)} /><span className="text-sm font-medium">依{key==='series'?'系列':key==='type'?'類型':key==='character'?'角色':'收物日'} - 多選</span></label>))}</div></div>)}
                 {settingsTab === 'types' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} /><button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label><button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">{customTypes.map((t, index) => (<div key={t} draggable onDragStart={(e) => { dragTypeItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragTypeOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleTypeSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{t}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
@@ -562,8 +561,9 @@
                 setBatchItems(prev => prev.map(item => item.tempId === tempId ? { ...item, [field]: value } : item));
             };
 
+            // --- FIX: Optimized Batch Save Function ---
             const handleBatchSave = () => {
-                // Prepare all items in one go
+                // 1. Close Modal FIRST to prevent UI freeze perception
                 const tradesToAdd = batchItems.map(item => ({
                     id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
                     name: item.name,
@@ -579,7 +579,8 @@
                     quantity: item.quantity,
                     setName: batchCommonData.setName
                 }));
-                // Pass single array to handler
+
+                // 2. Pass single array to handler and close
                 onSave(tradesToAdd);
             };
 
@@ -907,44 +908,51 @@
             
             // --- FIX: Optimized Batch Save Function (Using reduce and chunking) ---
             const handleBatchSave = async (itemsToSave) => {
-                // 1. Calculate Max Order Efficiently (Avoid Spread Operator Stack Overflow)
-                const currentMaxOrder = items.reduce((max, item) => (item.order > max ? item.order : max), 0);
-                
-                // 2. Prepare new items
-                const newItems = itemsToSave.map((item, index) => ({
-                    ...item,
-                    id: `col_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 5)}`,
-                    order: currentMaxOrder + 1 + index
-                }));
-
-                if (user && isFirebaseInitialized) {
-                    // 3. Chunking for Firestore (Batch limit is 500)
-                    const BATCH_SIZE = 400; // Safety margin
-                    const chunks = [];
-                    for (let i = 0; i < newItems.length; i += BATCH_SIZE) {
-                        chunks.push(newItems.slice(i, i + BATCH_SIZE));
-                    }
-
-                    // Process chunks sequentially
-                    for (const chunk of chunks) {
-                        const batch = writeBatch(db);
-                        chunk.forEach(newItem => {
-                            const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, newItem.id);
-                            batch.set(ref, newItem);
-                        });
-                        await batch.commit();
-                    }
-                } else {
-                    // 4. Efficient Local State Update
-                    setItems(prev => {
-                        const updated = prev.concat(newItems);
-                        return updated.sort((a, b) => (a.order || 0) - (b.order || 0));
-                    });
-                }
-                
+                // 1. Close Modal FIRST to prevent UI freeze perception
                 setIsBatchModalOpen(false);
                 setIsBatchMode(false);
                 setBatchSelection(new Set());
+
+                // 2. Use setTimeout to defer the heavy lifting
+                setTimeout(async () => {
+                    try {
+                        const currentMaxOrder = items.reduce((max, item) => (item.order > max ? item.order : max), 0);
+                        
+                        const newItems = itemsToSave.map((item, index) => ({
+                            ...item,
+                            id: `col_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 5)}`,
+                            order: currentMaxOrder + 1 + index
+                        }));
+
+                        if (user && isFirebaseInitialized) {
+                            // 3. Chunking for Firestore (Batch limit is 500)
+                            const BATCH_SIZE = 400; // Safety margin
+                            const chunks = [];
+                            for (let i = 0; i < newItems.length; i += BATCH_SIZE) {
+                                chunks.push(newItems.slice(i, i + BATCH_SIZE));
+                            }
+
+                            // Process chunks sequentially
+                            for (const chunk of chunks) {
+                                const batch = writeBatch(db);
+                                chunk.forEach(newItem => {
+                                    const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, newItem.id);
+                                    batch.set(ref, newItem);
+                                });
+                                await batch.commit();
+                            }
+                        } else {
+                            // 4. Efficient Local State Update
+                            setItems(prev => {
+                                const updated = prev.concat(newItems);
+                                return updated.sort((a, b) => (a.order || 0) - (b.order || 0));
+                            });
+                        }
+                    } catch (e) {
+                        console.error("Batch save error", e);
+                        alert("新增失敗，請稍後再試");
+                    }
+                }, 100);
             };
             
             const openModal = (item = null, template = null, mode = 'collection') => { setModalMode(mode); const defaultData = { id: Date.now().toString(), name: '', character: '沈星回', type: '徽章', series: '', officialPrice: '', acquiredPrice: '', date: new Date().toISOString().split('T')[0], image: null, note: '', quantity: 1, isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency }; if (mode === 'catalog' && item) { setEditingItem(item); setFormData({ ...item }); } else if (mode === 'collection') { if (item) { setEditingItem(item); setFormData({ ...item, quantity: (item.quantity || 1), isPreorder: item.isPreorder || false, shippingDate: item.shippingDate || '', currency: item.currency || (item.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency), setName: item.setName || '' }); } else if (template) { setEditingItem(null); setFormData({ ...defaultData, ...template, quantity: 1, id: Date.now().toString(), isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency, acquiredPrice: '', setName: '' }); } else { setEditingItem(null); setFormData(defaultData); } } setIsModalOpen(true); };
@@ -1171,7 +1179,8 @@
                                             dayTotalDisplay = (
                                                 <div className="flex items-center gap-2">
                                                     <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100"><Icon name="Banknote" size={14}/>NT$ {Math.round(total).toLocaleString()}</span>
-                                                    {!hasSets && feeControls(gName)} 
+                                                    {/* Only show generic day fee controls if there are loose items */}
+                                                    {loose.length > 0 && feeControls(gName)} 
                                                 </div>
                                             );
 
@@ -1497,7 +1506,3 @@
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>

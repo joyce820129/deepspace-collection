@@ -505,10 +505,30 @@
                     if (localFees) setDailyFees(JSON.parse(localFees));
                     const localItems = localStorage.getItem('deepspace_items_v7_local');
                     if (localItems) setItems(JSON.parse(localItems));
+                    
+                    // Fix: Deduplicate Catalog Items on load (自動去重)
                     const localCatalog = localStorage.getItem('deepspace_catalog_v7_local');
-                    if (localCatalog) setCatalogItems(JSON.parse(localCatalog));
+                    if (localCatalog) {
+                        try {
+                            const parsed = JSON.parse(localCatalog);
+                            // 建立一個 Set 來記錄已經出現過的組合 (Name|Character|Type|Series)
+                            const seen = new Set();
+                            const uniqueCatalog = parsed.filter(item => {
+                                const key = `${item.name}|${item.character}|${item.type}|${item.series || ''}`;
+                                if (seen.has(key)) return false;
+                                seen.add(key);
+                                return true;
+                            });
+                            // 保持原本的排序 (如果原本有順序的話)
+                            setCatalogItems(uniqueCatalog);
+                        } catch (e) {
+                            console.error("Error parsing catalog", e);
+                            setCatalogItems([]);
+                        }
+                    }
                     return;
                 }
+                
                 setPersistence(auth, browserLocalPersistence).catch(console.error);
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
                     if (currentUser) { if (!currentUser.isAnonymous) setUser(currentUser); else setUser(null); } 
@@ -575,7 +595,55 @@
             const handleAddSeries = () => { if (newSeriesInput && !appSettings.customSeries.includes(newSeriesInput)) { setAppSettings(prev => ({...prev, customSeries: [...(prev.customSeries || []), newSeriesInput]})); setNewSeriesInput(''); } };
             const handleDeleteSeries = (s) => { if (confirm(`確定要刪除系列「${s}」嗎？`)) { setAppSettings(prev => ({...prev, customSeries: prev.customSeries.filter(series => series !== s)})); } };
             const handleManualSyncSeries = () => { const allItems = [...items, ...catalogItems]; const validSeries = allItems.map(i => i.series ? i.series.trim() : '').filter(s => s !== ''); const usedSeries = new Set(validSeries); setAppSettings(prev => { const currentSeries = prev.customSeries || []; const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s)); if (newSeries.length > 0) { alert(`已同步 ${newSeries.length} 個新系列！`); return { ...prev, customSeries: [...currentSeries, ...newSeries] }; } else { alert('目前沒有發現新系列。'); return prev; } }); };
-            const handleBulkImport = async () => { if (!importJson.trim()) return; try { let parsedData = []; const text = importJson.trim(); if (text.startsWith('[')) { parsedData = JSON.parse(text); } else { const rows = text.split('\n').map(r=>r.trim()).filter(r=>r); const header = rows[0].toLowerCase(); const sep = header.includes('\t') ? '\t' : ','; const cols = rows[0].split(sep).map(s=>s.trim()); const mapKey = { 'name': 'name', '名稱': 'name', 'character': 'character', '角色': 'character', 'type': 'type', '類型': 'type', 'series': 'series', '系列': 'series', 'officialprice': 'officialPrice', '原價': 'officialPrice', 'image': 'image', '圖片': 'image' }; const keys = cols.map(c => mapKey[c.toLowerCase()] || c); if (!keys.includes('name')) throw new Error("缺少 'name' 或 '名稱' 欄位"); parsedData = rows.slice(1).map(row => { const vals = row.split(sep); let obj = {}; keys.forEach((k, i) => { if (vals[i]) obj[k] = vals[i].trim(); }); return obj; }).filter(o => o.name); } if (parsedData.length === 0) throw new Error("無有效資料"); const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== '')); const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== '')); setAppSettings(prev => { const currentTypes = prev.customTypes || []; const newTypesToAdd = Array.from(importedTypes).filter(t => !currentTypes.includes(t)); const currentSeries = prev.customSeries || []; const newSeriesToAdd = Array.from(importedSeries).filter(s => !currentSeries.includes(s)); let next = { ...prev }; let changed = false; if (newTypesToAdd.length > 0) { next.customTypes = [...currentTypes, ...newTypesToAdd]; changed = true; } if (newSeriesToAdd.length > 0) { next.customSeries = [...currentSeries, ...newSeriesToAdd]; changed = true; } return changed ? next : prev; }); let count = 0; const timestamp = Date.now(); for (const item of parsedData) { const newItem = { id: item.id || `imp_${timestamp}_${count}`, name: item.name, character: item.character || '其他', type: item.type || '未分類', series: item.series || '', officialPrice: item.officialPrice || '', image: item.image || null, order: timestamp + count }; if(isFirebaseInitialized) await saveToCatalog(newItem); else setCatalogItems(prev => [...prev, newItem]); count++; } alert(`匯入成功 ${parsedData.length} 筆`); setImportJson(''); } catch (e) { alert("匯入失敗: " + e.message); } };
+            
+            // Updated Bulk Import to prevent adding duplicates in local mode
+            const handleBulkImport = async () => { 
+                if (!importJson.trim()) return; 
+                try { 
+                    let parsedData = []; 
+                    const text = importJson.trim(); 
+                    if (text.startsWith('[')) { parsedData = JSON.parse(text); } 
+                    else { const rows = text.split('\n').map(r=>r.trim()).filter(r=>r); const header = rows[0].toLowerCase(); const sep = header.includes('\t') ? '\t' : ','; const cols = rows[0].split(sep).map(s=>s.trim()); const mapKey = { 'name': 'name', '名稱': 'name', 'character': 'character', '角色': 'character', 'type': 'type', '類型': 'type', 'series': 'series', '系列': 'series', 'officialprice': 'officialPrice', '原價': 'officialPrice', 'image': 'image', '圖片': 'image' }; const keys = cols.map(c => mapKey[c.toLowerCase()] || c); if (!keys.includes('name')) throw new Error("缺少 'name' 或 '名稱' 欄位"); parsedData = rows.slice(1).map(row => { const vals = row.split(sep); let obj = {}; keys.forEach((k, i) => { if (vals[i]) obj[k] = vals[i].trim(); }); return obj; }).filter(o => o.name); } 
+                    if (parsedData.length === 0) throw new Error("無有效資料"); 
+                    
+                    const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== '')); 
+                    const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== '')); 
+                    setAppSettings(prev => { const currentTypes = prev.customTypes || []; const newTypesToAdd = Array.from(importedTypes).filter(t => !currentTypes.includes(t)); const currentSeries = prev.customSeries || []; const newSeriesToAdd = Array.from(importedSeries).filter(s => !currentSeries.includes(s)); let next = { ...prev }; let changed = false; if (newTypesToAdd.length > 0) { next.customTypes = [...currentTypes, ...newTypesToAdd]; changed = true; } if (newSeriesToAdd.length > 0) { next.customSeries = [...currentSeries, ...newSeriesToAdd]; changed = true; } return changed ? next : prev; }); 
+                    
+                    let count = 0; 
+                    const timestamp = Date.now(); 
+                    
+                    // For local mode batch update
+                    let newItemsBatch = [];
+
+                    for (const item of parsedData) { 
+                        const newItem = { id: item.id || `imp_${timestamp}_${count}`, name: item.name, character: item.character || '其他', type: item.type || '未分類', series: item.series || '', officialPrice: item.officialPrice || '', image: item.image || null, order: timestamp + count }; 
+                        if(isFirebaseInitialized) {
+                            await saveToCatalog(newItem); 
+                        } else {
+                            newItemsBatch.push(newItem);
+                        }
+                        count++; 
+                    } 
+                    
+                    if (!isFirebaseInitialized && newItemsBatch.length > 0) {
+                        setCatalogItems(prev => {
+                            const combined = [...prev, ...newItemsBatch];
+                            const seen = new Set();
+                            return combined.filter(item => {
+                                const key = `${item.name}|${item.character}|${item.type}|${item.series || ''}`;
+                                if (seen.has(key)) return false;
+                                seen.add(key);
+                                return true;
+                            });
+                        });
+                    }
+
+                    alert(`匯入成功 ${parsedData.length} 筆`); 
+                    setImportJson(''); 
+                } catch (e) { alert("匯入失敗: " + e.message); } 
+            };
+
             const handleExportCatalog = () => { const dataStr = JSON.stringify(catalogItems, null, 2); setImportJson(dataStr); };
             const handleResetData = () => { if (confirm("確定要清空本地資料嗎？此操作無法復原。")) { setItems([]); setCatalogItems([]); setDailyFees({}); localStorage.removeItem('deepspace_items_v7_local'); localStorage.removeItem('deepspace_catalog_v7_local'); localStorage.removeItem('deepspace_daily_fees_local'); alert("已清空。"); } };
             const toggleCharacterVisibility = (char) => { setAppSettings(prev => { const current = prev.visibleCharacters; if (char === "ALL") { const allMainSelected = CHARACTERS.every(c => current.includes(c)); if (allMainSelected) { return { ...prev, visibleCharacters: [] }; } else { return { ...prev, visibleCharacters: [...CHARACTERS] }; } } else { if (current.includes(char)) { return { ...prev, visibleCharacters: current.filter(c => c !== char) }; } else { return { ...prev, visibleCharacters: [...current, char] }; } } }); };

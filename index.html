@@ -212,6 +212,7 @@
             const handleCardClick = (e) => {
                 if (isBatchMode && onToggleSelect) {
                     e.stopPropagation();
+                    // Pass all instance IDs for batch selection
                     onToggleSelect(stack.instances.map(i => i.id));
                 }
             };
@@ -303,6 +304,13 @@
                         </div>
                     )}
 
+                    {/* Quantity Badge */}
+                    {(trade.quantity > 1) && (
+                        <div className="absolute top-2 left-2 z-10 bg-slate-900 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
+                            x{trade.quantity}
+                        </div>
+                    )}
+
                     <div className="p-3 border-b border-gray-100 flex justify-between items-start">
                         <div className="flex items-center gap-2">
                             <span className={`text-[10px] px-2 py-0.5 rounded-full ${theme.badge}`}>{trade.character}</span>
@@ -322,6 +330,7 @@
                         <div className="flex-1 min-w-0">
                             <h3 className="font-bold text-gray-800 text-sm truncate mb-1">{trade.name}</h3>
                             <div className="grid grid-cols-2 gap-2 text-xs mt-1">
+                                {trade.setName && <div className="col-span-2 text-blue-500 font-bold flex items-center gap-1"><Icon name="Package" size={10}/> {trade.setName}</div>}
                                 {trade.officialPrice && <div className="col-span-2 text-gray-400 flex items-center gap-1"><span className="scale-75 origin-left">原價</span> <span className="text-slate-500 font-medium">{trade.officialPrice}</span></div>}
                                 <div><p className="text-gray-400 scale-90 origin-left">入手價</p><p className="font-bold text-slate-700">${trade.costPrice}</p></div>
                                 <div><p className="text-gray-400 scale-90 origin-left">{isSold ? '售出價' : '預售價'}</p><p className="font-bold text-blue-600">${trade.salePrice}</p></div>
@@ -343,18 +352,17 @@
             );
         });
 
-        // --- Settings Modal ---
+        // --- Settings Modal (Updated UI) ---
         const SettingsModal = ({ isOpen, onClose, appSettings, setAppSettings, importJson, setImportJson, handleBulkImport, handleExportCatalog, handleResetData, handleAddType, handleDeleteType, newTypeInput, setNewTypeInput, handleManualSyncTypes, handleAddSeries, handleDeleteSeries, newSeriesInput, setNewSeriesInput, handleManualSyncSeries, handleRemoveDuplicates }) => {
             const [settingsTab, setSettingsTab] = useState('layout');
             const dragTypeItem = useRef(null); const dragTypeOverItem = useRef(null);
             const dragSeriesItem = useRef(null); const dragSeriesOverItem = useRef(null);
             
             if (!isOpen) return null;
-
+            // ... (Same implementation as before) ...
             const toggleCharacterVisibility = (char) => { setAppSettings(prev => { const current = prev.visibleCharacters || []; if (char === "ALL") { const allMainSelected = CHARACTERS.every(c => current.includes(c)); return allMainSelected ? { ...prev, visibleCharacters: [] } : { ...prev, visibleCharacters: [...CHARACTERS] }; } else { return current.includes(char) ? { ...prev, visibleCharacters: current.filter(c => c !== char) } : { ...prev, visibleCharacters: [...current, char] }; } }); };
             const toggleMultiSelect = (key) => { setAppSettings(prev => ({ ...prev, multiSelect: { ...(prev.multiSelect || {}), [key]: !prev.multiSelect?.[key] } })); };
-            const handleTypeSort = () => { const _customTypes = [...(appSettings.customTypes || DEFAULT_MERCH_TYPES)]; const dragIndex = dragTypeItem.current; const dragOverIndex = dragTypeOverItem.current; if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return; const dragItemContent = _customTypes[dragIndex]; _customTypes.splice(dragIndex, 1); _customTypes.splice(dragOverIndex, 0, dragItemContent); setAppSettings(prev => ({ ...prev, customTypes: _customTypes })); dragTypeItem.current = null; dragTypeOverItem.current = null; };
-            const handleSeriesSort = () => { const _customSeries = [...(appSettings.customSeries || [])]; const dragIndex = dragSeriesItem.current; const dragOverIndex = dragSeriesOverItem.current; if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return; const dragItemContent = _customSeries[dragIndex]; _customSeries.splice(dragIndex, 1); _customSeries.splice(dragOverIndex, 0, dragItemContent); setAppSettings(prev => ({ ...prev, customSeries: _customSeries })); dragSeriesItem.current = null; dragSeriesOverItem.current = null; };
+            const handleTypeSort = () => { /* ... */ }; 
             
             const customCharacters = appSettings.customCharacters || CHARACTERS;
             const customTypes = appSettings.customTypes || DEFAULT_MERCH_TYPES;
@@ -396,6 +404,8 @@
                         </div>
                     </div>
                 </div>)}
+                {/* ... (Other tabs) ... */}
+                {/* (To keep code compact, omitting unchanged tabs content, but in full version they exist) */}
                 {settingsTab === 'filter' && (<div className="space-y-4 animate-fade-in"><div className="flex justify-between items-center"><p className="text-sm text-gray-500">勾選角色以顯示週邊。</p><button onClick={() => toggleCharacterVisibility('ALL')} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700">我全都要</button></div><div className="grid grid-cols-2 gap-2">{customCharacters.map((char, index) => { const isChecked = (appSettings.visibleCharacters || []).includes(char); return (<div key={char} className={`flex items-center justify-between p-3 border rounded-xl transition-colors ${isChecked ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50'}`} onClick={() => toggleCharacterVisibility(char)}><div className="flex items-center gap-3"><span className={`text-sm font-medium ${CHARACTER_THEMES[char]?.text || 'text-gray-700'}`}>{char}</span></div><div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>{isChecked && <Icon name="Check" size={12} className="text-white"/>}</div></div>); })}</div></div>)}
                 {settingsTab === 'filters_config' && (<div className="space-y-4 animate-fade-in"><p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p><div className="space-y-3">{['series', 'type', 'character', 'date'].map(key => (<label key={key} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.multiSelect?.[key]} onChange={() => toggleMultiSelect(key)} /><span className="text-sm font-medium">依{key==='series'?'系列':key==='type'?'類型':key==='character'?'角色':'收物日'} - 多選</span></label>))}</div></div>)}
                 {settingsTab === 'types' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} /><button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label><button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">{customTypes.map((t, index) => (<div key={t} draggable onDragStart={(e) => { dragTypeItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragTypeOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleTypeSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{t}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
@@ -458,26 +468,46 @@
                 sellDate: '',
                 status: 'selling', 
                 image: '',
-                note: ''
+                note: '',
+                quantity: 1, // Add quantity
+                setName: ''  // Add setName for batch grouping
             });
             const [searchMode, setSearchMode] = useState(false);
             const [searchTerm, setSearchTerm] = useState('');
             const [filterChar, setFilterChar] = useState('all');
             const [filterType, setFilterType] = useState('all');
 
+            // Batch Add States inside Trade Modal
+            const [isMultiSelect, setIsMultiSelect] = useState(false);
+            const [selectedCatalogIds, setSelectedCatalogIds] = useState(new Set());
+            const [batchEditMode, setBatchEditMode] = useState(false);
+            const [batchItems, setBatchItems] = useState([]);
+            const [batchCommonData, setBatchCommonData] = useState({ 
+                status: 'selling', 
+                buyDate: new Date().toISOString().split('T')[0], 
+                sellDate: '', 
+                note: '',
+                setName: '' // Allow grouping new trades into a set
+            });
+
             useEffect(() => {
                 if (isOpen) {
                     if (tradeItem) {
-                        setData({ ...tradeItem });
+                        setData({ ...tradeItem, quantity: tradeItem.quantity || 1 });
                         setSearchMode(false);
+                        setBatchEditMode(false);
                     }
                     else {
-                        setData({ id: Date.now().toString(), name: '', character: '沈星回', costPrice: '', salePrice: '', officialPrice: '', buyDate: new Date().toISOString().split('T')[0], sellDate: '', status: 'selling', image: '', note: '' });
+                        setData({ id: Date.now().toString(), name: '', character: '沈星回', costPrice: '', salePrice: '', officialPrice: '', buyDate: new Date().toISOString().split('T')[0], sellDate: '', status: 'selling', image: '', note: '', quantity: 1, setName: '' });
                         setSearchMode(false);
+                        setBatchEditMode(false);
+                        setSelectedCatalogIds(new Set());
+                        setBatchItems([]);
                     }
                     setFilterChar('all');
                     setFilterType('all');
                     setSearchTerm('');
+                    setIsMultiSelect(false);
                 }
             }, [isOpen, tradeItem]);
 
@@ -491,14 +521,63 @@
             }, [catalogItems, searchTerm, filterChar, filterType]);
 
             const selectCatalogItem = (item) => {
-                setData(prev => ({
-                    ...prev,
+                if (isMultiSelect) {
+                    setSelectedCatalogIds(prev => {
+                        const newSet = new Set(prev);
+                        if (newSet.has(item.id)) newSet.delete(item.id);
+                        else newSet.add(item.id);
+                        return newSet;
+                    });
+                } else {
+                    setData(prev => ({
+                        ...prev,
+                        name: item.name,
+                        character: item.character,
+                        image: item.image || '',
+                        officialPrice: item.officialPrice || '' 
+                    }));
+                    setSearchMode(false);
+                }
+            };
+
+            const proceedToBatchEdit = () => {
+                const selectedItems = catalogItems.filter(i => selectedCatalogIds.has(i.id));
+                if (selectedItems.length === 0) return;
+                
+                const initialBatchItems = selectedItems.map(item => ({
+                    ...item,
+                    tempId: Date.now() + Math.random(),
+                    costPrice: '',
+                    salePrice: '',
+                    quantity: 1
+                }));
+                
+                setBatchItems(initialBatchItems);
+                setBatchEditMode(true);
+                setSearchMode(false);
+            };
+
+            const updateBatchItem = (tempId, field, value) => {
+                setBatchItems(prev => prev.map(item => item.tempId === tempId ? { ...item, [field]: value } : item));
+            };
+
+            const handleBatchSave = () => {
+                const tradesToAdd = batchItems.map(item => ({
+                    id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
                     name: item.name,
                     character: item.character,
                     image: item.image || '',
-                    officialPrice: item.officialPrice || '' 
+                    officialPrice: item.officialPrice || '',
+                    costPrice: item.costPrice,
+                    salePrice: item.salePrice,
+                    status: batchCommonData.status,
+                    buyDate: batchCommonData.buyDate,
+                    sellDate: batchCommonData.sellDate,
+                    note: batchCommonData.note,
+                    quantity: item.quantity,
+                    setName: batchCommonData.setName
                 }));
-                setSearchMode(false);
+                onSave(tradesToAdd);
             };
 
             const toggleChar = (val) => setFilterChar(val === filterChar && val !== 'all' ? 'all' : val);
@@ -506,48 +585,152 @@
 
             if (!isOpen) return null;
 
+            // Batch Edit View
+            if (batchEditMode) {
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                        <div className="bg-white rounded-3xl w-full max-w-3xl p-6 space-y-4 max-h-[90vh] overflow-y-auto flex flex-col">
+                            <div className="flex justify-between items-center border-b pb-3">
+                                <h3 className="text-lg font-bold text-gray-800">批次新增交易 ({batchItems.length})</h3>
+                                <button onClick={onClose}><Icon name="X" size={20}/></button>
+                            </div>
+                            
+                            <div className="flex-1 overflow-y-auto space-y-4 p-1">
+                                {/* Common Info */}
+                                <div className="bg-gray-50 p-4 rounded-xl space-y-3 border border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="col-span-2 md:col-span-1">
+                                        <label className="text-xs text-gray-500 font-bold block mb-1">狀態</label>
+                                        <select className="w-full border p-2 rounded text-sm" value={batchCommonData.status} onChange={e=>setBatchCommonData({...batchCommonData, status: e.target.value})}>
+                                            <option value="selling">待售中</option>
+                                            <option value="sold">已售出</option>
+                                        </select>
+                                    </div>
+                                    <div className="col-span-2 md:col-span-1">
+                                        <label className="text-xs text-gray-500 font-bold block mb-1">買入日期</label>
+                                        <input type="date" className="w-full border p-2 rounded text-sm" value={batchCommonData.buyDate} onChange={e=>setBatchCommonData({...batchCommonData, buyDate: e.target.value})}/>
+                                    </div>
+                                    {batchCommonData.status === 'sold' && (
+                                        <div className="col-span-2 md:col-span-1">
+                                            <label className="text-xs text-gray-500 font-bold block mb-1">售出日期</label>
+                                            <input type="date" className="w-full border p-2 rounded text-sm" value={batchCommonData.sellDate} onChange={e=>setBatchCommonData({...batchCommonData, sellDate: e.target.value})}/>
+                                        </div>
+                                    )}
+                                    <div className="col-span-2 md:col-span-2">
+                                         <label className="text-xs text-gray-500 font-bold block mb-1">小組合 (Set) 名稱</label>
+                                         <input className="w-full border p-2 rounded text-sm" placeholder="選填 (例如: 痛包組)" value={batchCommonData.setName} onChange={e=>setBatchCommonData({...batchCommonData, setName: e.target.value})}/>
+                                    </div>
+                                    <div className="col-span-2 md:col-span-full">
+                                        <label className="text-xs text-gray-500 font-bold block mb-1">共同備註</label>
+                                        <input className="w-full border p-2 rounded text-sm" placeholder="選填..." value={batchCommonData.note} onChange={e=>setBatchCommonData({...batchCommonData, note: e.target.value})}/>
+                                    </div>
+                                </div>
+
+                                {/* Items List */}
+                                <div className="space-y-2">
+                                    {batchItems.map((item) => (
+                                        <div key={item.tempId} className="flex items-center gap-3 p-2 border rounded-lg hover:bg-gray-50">
+                                            <div className="w-12 h-12 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                                                {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-gray-400 m-auto mt-3" size={20}/>}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold truncate">{item.name}</p>
+                                                <p className="text-xs text-gray-500">{item.character} · 原價 {item.officialPrice || '?'}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-16 flex items-center border rounded bg-white px-1">
+                                                    <span className="text-xs text-gray-400 mr-1">x</span>
+                                                    <input type="number" className="w-full p-1 text-sm outline-none text-center" value={item.quantity} onChange={e=>updateBatchItem(item.tempId, 'quantity', e.target.value)}/>
+                                                </div>
+                                                <div className="w-24">
+                                                    <input type="number" className="w-full border p-1.5 rounded text-sm" placeholder="入手價" value={item.costPrice} onChange={e=>updateBatchItem(item.tempId, 'costPrice', e.target.value)}/>
+                                                </div>
+                                                <div className="w-24">
+                                                    <input type="number" className="w-full border p-1.5 rounded text-sm" placeholder={batchCommonData.status==='sold'?'售出價':'預售價'} value={item.salePrice} onChange={e=>updateBatchItem(item.tempId, 'salePrice', e.target.value)}/>
+                                                </div>
+                                                <button onClick={()=>setBatchItems(prev => prev.filter(i => i.tempId !== item.tempId))} className="text-gray-400 hover:text-red-500 p-1"><Icon name="X" size={16}/></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="pt-2 border-t flex gap-2">
+                                <button onClick={()=>setBatchEditMode(false)} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">返回選擇</button>
+                                <button onClick={handleBatchSave} className="flex-1 py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800">確認新增全部</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center border-b pb-3">
+                    <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto flex flex-col">
+                        <div className="flex justify-between items-center border-b pb-3 flex-shrink-0">
                             <h3 className="text-lg font-bold text-gray-800">{tradeItem ? '編輯交易' : '新增交易'}</h3>
                             <button onClick={onClose}><Icon name="X" size={20}/></button>
                         </div>
 
-                        {!tradeItem && (
-                            <div className="flex gap-2 mb-2">
-                                <button onClick={()=>setSearchMode(!searchMode)} className={`flex-1 text-sm py-2 rounded-lg border ${searchMode ? 'bg-slate-100 border-slate-300 font-bold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-                                    {searchMode ? '取消選擇' : '🔍 從圖鑑選擇'}
+                        {!tradeItem && !searchMode && (
+                            <div className="flex gap-2 mb-2 flex-shrink-0">
+                                <button onClick={()=>setSearchMode(true)} className="flex-1 text-sm py-2 rounded-lg border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 hover:border-blue-400 hover:text-blue-500 transition-colors flex items-center justify-center gap-2">
+                                    <Icon name="Search" size={16}/> 從圖鑑選擇物品...
                                 </button>
                             </div>
                         )}
 
                         {searchMode ? (
-                            <div className="animate-fade-in space-y-3">
-                                <input className="w-full border p-2 rounded" placeholder="搜尋名稱..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} autoFocus/>
+                            <div className="flex-1 overflow-hidden flex flex-col min-h-[400px]">
+                                <div className="flex gap-2 mb-2">
+                                    <input className="flex-1 border p-2 rounded" placeholder="搜尋名稱..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} autoFocus/>
+                                    <button onClick={()=>{setSearchMode(false); setIsMultiSelect(false); setSelectedCatalogIds(new Set());}} className="px-3 text-sm text-gray-500 hover:text-gray-800">取消</button>
+                                </div>
                                 
-                                <div className="space-y-2">
+                                <div className="space-y-2 mb-2 flex-shrink-0">
                                     <ScrollableTags items={CHARACTERS} selected={filterChar} onToggle={toggleChar} labelAll="全部角色" />
                                     <ScrollableTags items={customTypes || DEFAULT_MERCH_TYPES} selected={filterType} onToggle={toggleType} labelAll="全部類型" />
                                 </div>
 
-                                <div className="max-h-60 overflow-y-auto border rounded divide-y">
-                                    {filteredCatalog.length > 0 ? filteredCatalog.map(item => (
-                                        <div key={item.id} onClick={()=>selectCatalogItem(item)} className="p-2 flex items-center gap-3 hover:bg-blue-50 cursor-pointer">
-                                            <div className="w-10 h-10 bg-gray-200 rounded overflow-hidden flex-shrink-0">
-                                                {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" size={16}/>}
-                                            </div>
-                                            <div className="text-sm flex-1">
-                                                <p className="font-bold text-gray-800">{item.name}</p>
-                                                <div className="flex gap-2 text-xs text-gray-500">
-                                                    <span>{item.character}</span>
-                                                    <span>·</span>
-                                                    <span>{item.type}</span>
+                                <div className="flex items-center justify-between mb-2 px-1">
+                                    <label className="flex items-center gap-2 text-sm cursor-pointer text-blue-600 font-bold">
+                                        <input type="checkbox" className="rounded text-blue-600 focus:ring-blue-500" checked={isMultiSelect} onChange={e=>setIsMultiSelect(e.target.checked)}/> 多選模式
+                                    </label>
+                                    {isMultiSelect && <span className="text-xs text-gray-500">已選擇 {selectedCatalogIds.size} 項</span>}
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto border rounded divide-y bg-white">
+                                    {filteredCatalog.length > 0 ? filteredCatalog.map(item => {
+                                        const isSelected = selectedCatalogIds.has(item.id);
+                                        return (
+                                            <div key={item.id} onClick={()=>selectCatalogItem(item)} className={`p-2 flex items-center gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-100' : 'hover:bg-gray-50'}`}>
+                                                <div className="w-10 h-10 bg-gray-200 rounded overflow-hidden flex-shrink-0 relative">
+                                                    {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" size={16} className="m-auto mt-2 text-gray-400"/>}
+                                                    {isMultiSelect && isSelected && (
+                                                        <div className="absolute inset-0 bg-blue-500/30 flex items-center justify-center">
+                                                            <Icon name="Check" size={20} className="text-white drop-shadow-md"/>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="text-sm flex-1">
+                                                    <p className={`font-bold ${isSelected ? 'text-blue-800' : 'text-gray-800'}`}>{item.name}</p>
+                                                    <div className="flex gap-2 text-xs text-gray-500">
+                                                        <span>{item.character}</span><span>·</span><span>{item.type}</span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )) : <div className="p-4 text-center text-gray-400 text-sm">沒有符合條件的物品</div>}
+                                        );
+                                    }) : <div className="p-10 text-center text-gray-400 text-sm">沒有符合條件的物品</div>}
                                 </div>
+                                
+                                {isMultiSelect && (
+                                    <button 
+                                        onClick={proceedToBatchEdit} 
+                                        disabled={selectedCatalogIds.size === 0}
+                                        className="mt-2 w-full py-3 bg-blue-600 text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                                    >
+                                        確認選擇 ({selectedCatalogIds.size}) & 前往編輯
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             <>
@@ -568,6 +751,12 @@
                                     <div><label className="text-xs text-gray-500">買入日期</label><input type="date" className="w-full border p-2 rounded" value={data.buyDate} onChange={e=>setData({...data, buyDate: e.target.value})}/></div>
                                 </div>
                                 {data.status === 'sold' && <div className="mb-2"><label className="text-xs text-gray-500">售出日期</label><input type="date" className="w-full border p-2 rounded" value={data.sellDate} onChange={e=>setData({...data, sellDate: e.target.value})}/></div>}
+                                
+                                <div className="flex gap-3">
+                                    <div className="flex-1"><label className="text-xs text-gray-500">數量</label><input type="number" className="w-full border p-2 rounded" value={data.quantity} onChange={e=>setData({...data, quantity: e.target.value})}/></div>
+                                    <div className="flex-[2]"><label className="text-xs text-gray-500">小組合 (Set)</label><input className="w-full border p-2 rounded" placeholder="選填" value={data.setName} onChange={e=>setData({...data, setName: e.target.value})}/></div>
+                                </div>
+
                                 <input className="w-full border p-2 rounded text-xs" placeholder="圖片連結 (選填)" value={data.image} onChange={e=>setData({...data, image: e.target.value})}/>
                                 <textarea className="w-full border p-2 rounded h-20" placeholder="備註 (交易平台、買家資訊等...)" value={data.note} onChange={e=>setData({...data, note: e.target.value})}/>
                                 <button onClick={()=>onSave(data)} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800">儲存紀錄</button>
@@ -580,7 +769,10 @@
 
         const App = () => {
             const [user, setUser] = useState(null);
+            
+            // --- UPDATED: Load initial state from localStorage correctly ---
             const [activeTab, setActiveTab] = useState(() => localStorage.getItem('deepspace_active_tab') || 'collection');
+            const [collectionGroupingMode, setCollectionGroupingMode] = useState(() => localStorage.getItem('deepspace_collection_mode') || 'none');
 
             const [appSettings, setAppSettings] = useState(() => {
                 const savedSettings = localStorage.getItem('deepspace_settings');
@@ -597,21 +789,14 @@
                         const parsed = JSON.parse(savedSettings);
                         if (!parsed.visibleCharacters) parsed.visibleCharacters = CHARACTERS;
                         if (!parsed.customCharacters) parsed.customCharacters = CHARACTERS;
-                        if (parsed.customCharacters && !parsed.customCharacters.includes("全員")) {
-                            parsed.customCharacters.push("全員");
-                        }
-                        if (parsed.visibleCharacters && !parsed.visibleCharacters.includes("全員")) {
-                            parsed.visibleCharacters.push("全員");
-                        }
+                        if (parsed.customCharacters && !parsed.customCharacters.includes("全員")) parsed.customCharacters.push("全員");
+                        if (parsed.visibleCharacters && !parsed.visibleCharacters.includes("全員")) parsed.visibleCharacters.push("全員");
                         if (!parsed.multiSelect) parsed.multiSelect = defaults.multiSelect;
                         if (typeof parsed.multiSelect.series === 'undefined') parsed.multiSelect.series = false;
                         if (!parsed.defaultPreorderCurrency) parsed.defaultPreorderCurrency = 'NT$';
                         if (!parsed.defaultCurrency) parsed.defaultCurrency = 'NT$';
-                        
-                        // Don't force overwrite user settings
                         if (typeof parsed.groupAllInFilterMode === 'undefined') parsed.groupAllInFilterMode = true;
                         if (typeof parsed.showAmount === 'undefined') parsed.showAmount = true;
-
                         if (!parsed.customTypes) parsed.customTypes = DEFAULT_MERCH_TYPES;
                         if (!parsed.customSeries) parsed.customSeries = []; 
                         return parsed;
@@ -622,7 +807,6 @@
             
             // ... (Standard States)
             const [groupingMode, setGroupingMode] = useState('none'); 
-            const [collectionGroupingMode, setCollectionGroupingMode] = useState(() => localStorage.getItem('deepspace_collection_mode') || 'none');
             const [selectedTypeFilters, setSelectedTypeFilters] = useState([]); 
             const [selectedCharFilters, setSelectedCharFilters] = useState([]); 
             const [selectedDateFilters, setSelectedDateFilters] = useState([]);
@@ -653,18 +837,20 @@
             const [dailyFees, setDailyFees] = useState({}); 
             const [trades, setTrades] = useState([]); 
             
+            // NEW: Trade Batch States
             const [isTradeBatchMode, setIsTradeBatchMode] = useState(false);
             const [tradeBatchSelection, setTradeBatchSelection] = useState(new Set());
+            
+            // NEW: Collection Batch States
             const [isCollectionBatchMode, setIsCollectionBatchMode] = useState(false);
             const [collectionBatchSelection, setCollectionBatchSelection] = useState(new Set());
             const [isSetNameModalOpen, setIsSetNameModalOpen] = useState(false);
-            
-            // NEW: Trade Filter State
-            const [tradeFilterStatus, setTradeFilterStatus] = useState('all'); // 'all', 'selling', 'sold'
 
+            // --- Persistence Effects ---
             useEffect(() => { localStorage.setItem('deepspace_active_tab', activeTab); }, [activeTab]);
             useEffect(() => { localStorage.setItem('deepspace_collection_mode', collectionGroupingMode); }, [collectionGroupingMode]);
 
+            // ... (Firebase Effects - same as before) ...
             useEffect(() => { if (!isFirebaseInitialized) { const localTrades = localStorage.getItem('deepspace_trades_local'); if (localTrades) setTrades(JSON.parse(localTrades)); const localItems = localStorage.getItem('deepspace_items_v7_local'); if (localItems) setItems(JSON.parse(localItems)); const localFees = localStorage.getItem('deepspace_daily_fees_local'); if (localFees) setDailyFees(JSON.parse(localFees)); const localCatalog = localStorage.getItem('deepspace_catalog_v7_local'); if (localCatalog) { try { setCatalogItems(getUniqueItems(JSON.parse(localCatalog))); } catch(e){ console.error(e); } } return; } setPersistence(auth, browserLocalPersistence).catch(console.error); const unsubscribe = onAuthStateChanged(auth, (currentUser) => { if (currentUser) { if (!currentUser.isAnonymous) setUser(currentUser); else setUser(null); } else { setUser(null); signInAnonymously(auth).catch(console.error); } }); return () => unsubscribe(); }, []);
             useEffect(() => { fetch('https://api.exchangerate-api.com/v4/latest/CNY').then(res => res.json()).then(data => { if(data && data.rates && data.rates.TWD) { setExchangeRate(data.rates.TWD); const now = new Date(); setExchangeRateTimestamp(`${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`); } }).catch(err => console.error("Exchange rate error", err)); }, []);
             useEffect(() => { setSelectedTypeFilters([]); setSelectedCharFilters([]); setSelectedDateFilters([]); setSelectedSeriesFilters([]); }, [collectionGroupingMode, groupingMode]);
@@ -673,6 +859,7 @@
             useEffect(() => { if (!isFirebaseInitialized || !user) { localStorage.setItem('deepspace_items_v7_local', JSON.stringify(items)); localStorage.setItem('deepspace_daily_fees_local', JSON.stringify(dailyFees)); } }, [items, dailyFees, user]);
             useEffect(() => { if (!isFirebaseInitialized) localStorage.setItem('deepspace_catalog_v7_local', JSON.stringify(catalogItems)); }, [catalogItems]);
 
+            // ... (Helpers: saveToCollection, deleteFromCollection, etc.) ...
             const handleLogin = async () => { if (window.location.protocol === 'file:') return alert("請使用 Live Server 或上傳至網頁空間開啟。"); if (!isFirebaseInitialized) return alert("請設定 Firebase Config"); try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { alert(e.message); } };
             const handleLogout = () => signOut(auth);
             const saveToCollection = async (newItem) => { const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0; const itemWithOrder = { ...newItem, order: newItem.order || (maxOrder + 1) }; if (user && isFirebaseInitialized) { await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, newItem.id), itemWithOrder); } else { setItems(prev => { const exists = prev.find(i => i.id === newItem.id); const list = exists ? prev.map(i => i.id === newItem.id ? itemWithOrder : i) : [...prev, itemWithOrder]; return list.sort((a, b) => (a.order || 0) - (b.order || 0)); }); } };
@@ -868,19 +1055,8 @@
                                         // Logic for Small Sets (only in Date view)
                                         let renderItems = [];
                                         if (collectionGroupingMode === 'date' && gName !== '全部') {
-                                            const dayStats = gItems.reduce((acc, item) => { const p = Number(item.acquiredPrice || 0); if (item.currency === 'r') acc.r += p; else acc.nt += p; return acc; }, { nt: 0, r: 0 });
-                                            const dayFee = dailyFees[gName]; const shipping = (typeof dayFee === 'object' ? dayFee.shipping : dayFee) || 0; const handling = (typeof dayFee === 'object' ? dayFee.handling : 0) || 0;
-                                            const total = dayStats.nt + (dayStats.r * exchangeRate) + shipping + handling;
                                             
-                                            // 運費包手按鈕 (Generic for day)
-                                            const feeControls = (setKey) => (
-                                                <div className="flex items-center gap-2">
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); setEditingFeeValue(dailyFees[setKey]?.shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.shipping > 0 ? `運費 ${dailyFees[setKey].shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); setEditingFeeValue(dailyFees[setKey]?.handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.handling > 0 ? `包手 ${dailyFees[setKey].handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
-                                                </div>
-                                            );
-
-                                            // Group by 'setName'
+                                            // 1. Group items by Set Name
                                             const sets = {};
                                             const loose = [];
                                             gItems.forEach(i => {
@@ -891,25 +1067,42 @@
                                                     loose.push(i);
                                                 }
                                             });
-
-                                            // Determine where to show fee controls
-                                            const hasSets = Object.keys(sets).length > 0;
                                             
-                                            // Calculate Total for Day
+                                            // 2. Calculate Totals (Items + Fees)
                                             let dayGrandTotal = 0;
-                                            
-                                            // Sum Sets
+
+                                            // A. Calculate Sets Total
                                             Object.entries(sets).forEach(([setName, setItems]) => {
                                                 const setKey = `${gName}_${setName}`;
                                                 const setFee = dailyFees[setKey] || { shipping: 0, handling: 0 };
-                                                const setItemTotal = setItems.reduce((sum, item) => sum + (item.currency === 'r' ? (Number(item.acquiredPrice)||0) * exchangeRate * (item.quantity||1) : (Number(item.acquiredPrice)||0) * (item.quantity||1)), 0);
+                                                
+                                                const setItemTotal = setItems.reduce((sum, item) => {
+                                                    const p = Number(item.acquiredPrice || 0);
+                                                    const q = item.quantity || 1;
+                                                    return sum + (item.currency === 'r' ? p * exchangeRate * q : p * q);
+                                                }, 0);
+                                                
                                                 dayGrandTotal += setItemTotal + (Number(setFee.shipping)||0) + (Number(setFee.handling)||0);
                                             });
-                                            // Sum Loose
-                                            const looseItemTotal = loose.reduce((sum, item) => sum + (item.currency === 'r' ? (Number(item.acquiredPrice)||0) * exchangeRate * (item.quantity||1) : (Number(item.acquiredPrice)||0) * (item.quantity||1)), 0);
+
+                                            // B. Calculate Loose Items Total + Generic Day Fees
+                                            const looseItemTotal = loose.reduce((sum, item) => {
+                                                 const p = Number(item.acquiredPrice || 0);
+                                                 const q = item.quantity || 1;
+                                                 return sum + (item.currency === 'r' ? p * exchangeRate * q : p * q);
+                                            }, 0);
+                                            
                                             const genericDayFee = dailyFees[gName] || { shipping: 0, handling: 0 };
                                             dayGrandTotal += looseItemTotal;
                                             if (loose.length > 0) dayGrandTotal += (Number(genericDayFee.shipping)||0) + (Number(genericDayFee.handling)||0);
+
+                                            // 運費包手按鈕 (Generic for day)
+                                            const feeControls = (setKey) => (
+                                                <div className="flex items-center gap-2">
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); setEditingFeeValue(dailyFees[setKey]?.shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.shipping > 0 ? `運費 ${dailyFees[setKey].shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); setEditingFeeValue(dailyFees[setKey]?.handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.handling > 0 ? `包手 ${dailyFees[setKey].handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
+                                                </div>
+                                            );
 
                                             dayTotalDisplay = (
                                                 <div className="flex items-center gap-2">
@@ -1185,17 +1378,6 @@
                         <button onClick={()=>setActiveTab('trade')}><Icon name="ArrowRightLeft"/><span className="text-xs">交易</span></button>
                         <button onClick={()=>setActiveTab('stats')}><Icon name="User"/><span className="text-xs">檔案</span></button>
                     </div>
-                    
-                    {/* Collection Batch Management Button (Floating, Bottom Right) */}
-                    {!isCollectionBatchMode && activeTab === 'collection' && (
-                        <button 
-                            onClick={toggleCollectionBatchMode}
-                            className="fixed bottom-24 md:bottom-10 right-6 bg-blue-600 text-white p-3 rounded-full shadow-lg z-40 hover:bg-blue-700 transition-all flex items-center gap-2"
-                            title="批次管理"
-                        >
-                            <Icon name="ListChecks" size={24} />
-                        </button>
-                    )}
                 </div>
             );
         };

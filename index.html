@@ -172,7 +172,10 @@
                 const map = new Map();
                 stack.instances.forEach(inst => {
                     const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}-${inst.currency}`;
-                    if (!map.has(key)) map.set(key, { ...inst, count: 1 }); else map.get(key).count++;
+                    // Use the item's stored quantity, default to 1 if not present (legacy data)
+                    const itemQty = inst.quantity || 1;
+                    if (!map.has(key)) map.set(key, { ...inst, count: itemQty }); 
+                    else map.get(key).count += itemQty;
                 });
                 const result = Array.from(map.values());
                 result.sort((a, b) => {
@@ -290,9 +293,17 @@
                 selectedItems.forEach(item => {
                     const detail = itemsDetails[item.id] || { price: '', currency: 'NT$', quantity: 1 };
                     const qty = Math.max(1, parseInt(detail.quantity) || 1);
-                    for (let i = 0; i < qty; i++) {
-                        payload.push({ ...item, date: !isPreorder ? commonDate : '', isPreorder: isPreorder, shippingDate: isPreorder ? (commonShippingDate || commonDate) : '', acquiredPrice: detail.price, currency: detail.currency, note: commonNote, quantity: 1 });
-                    }
+                    // Updated: Batch add also pushes a single item with quantity instead of cloning
+                    payload.push({ 
+                        ...item, 
+                        date: !isPreorder ? commonDate : '', 
+                        isPreorder: isPreorder, 
+                        shippingDate: isPreorder ? (commonShippingDate || commonDate) : '', 
+                        acquiredPrice: detail.price, 
+                        currency: detail.currency, 
+                        note: commonNote, 
+                        quantity: qty 
+                    });
                 });
                 onSave(payload);
             };
@@ -573,7 +584,7 @@
             const handleBatchSelect = (itemId) => { setBatchSelection(prev => { const newSet = new Set(prev); if (newSet.has(itemId)) newSet.delete(itemId); else newSet.add(itemId); return newSet; }); };
             const openBatchModal = () => { if (batchSelection.size === 0) return alert("請至少選擇一個物品"); setIsBatchModalOpen(true); };
             const handleBatchSave = async (itemsToSave) => { for (const item of itemsToSave) { const uniqueItem = { ...item, id: Date.now() + Math.random().toString(36).substr(2, 9), order: Date.now() }; await saveToCollection(uniqueItem); } setIsBatchModalOpen(false); setIsBatchMode(false); setBatchSelection(new Set()); };
-            const openModal = (item = null, template = null, mode = 'collection') => { setModalMode(mode); const defaultData = { id: Date.now().toString(), name: '', character: '沈星回', type: '徽章', series: '', officialPrice: '', acquiredPrice: '', date: new Date().toISOString().split('T')[0], image: null, note: '', quantity: 1, isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency }; if (mode === 'catalog' && item) { setEditingItem(item); setFormData({ ...item }); } else if (mode === 'collection') { if (item) { setEditingItem(item); setFormData({ ...item, quantity: 1, isPreorder: item.isPreorder || false, shippingDate: item.shippingDate || '', currency: item.currency || (item.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency) }); } else if (template) { setEditingItem(null); setFormData({ ...defaultData, ...template, quantity: 1, id: Date.now().toString(), isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency, acquiredPrice: '' }); } else { setEditingItem(null); setFormData(defaultData); } } setIsModalOpen(true); };
+            const openModal = (item = null, template = null, mode = 'collection') => { setModalMode(mode); const defaultData = { id: Date.now().toString(), name: '', character: '沈星回', type: '徽章', series: '', officialPrice: '', acquiredPrice: '', date: new Date().toISOString().split('T')[0], image: null, note: '', quantity: 1, isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency }; if (mode === 'catalog' && item) { setEditingItem(item); setFormData({ ...item }); } else if (mode === 'collection') { if (item) { setEditingItem(item); setFormData({ ...item, quantity: (item.quantity || 1), isPreorder: item.isPreorder || false, shippingDate: item.shippingDate || '', currency: item.currency || (item.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency) }); } else if (template) { setEditingItem(null); setFormData({ ...defaultData, ...template, quantity: 1, id: Date.now().toString(), isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency, acquiredPrice: '' }); } else { setEditingItem(null); setFormData(defaultData); } } setIsModalOpen(true); };
             
             const handleSave = async () => {
                 if (!formData.name) return alert("請輸入名稱");
@@ -589,35 +600,24 @@
                     delete itemToSave.quantity; delete itemToSave.acquiredPrice; delete itemToSave.date; delete itemToSave.note; delete itemToSave.isPreorder; delete itemToSave.shippingDate; delete itemToSave.currency;
                     await saveToCatalog(itemToSave);
                 } else {
-                    if (editingItem) {
-                        // 1. Update the existing item
-                        const itemToSave = { ...formData, acquiredPrice: finalAcquiredPrice };
-                        delete itemToSave.quantity;
-                        await saveToCollection(itemToSave);
+                    // Update: Save 'quantity' directly in the document, don't clone.
+                    const itemToSave = { 
+                        ...formData, 
+                        acquiredPrice: finalAcquiredPrice,
+                        quantity: qty 
+                    };
 
-                        // 2. If quantity > 1, treat it as "Add X more copies" (cloning)
-                        if (qty > 1) {
-                            const currentMaxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0;
-                            // Loop qty-1 times because we already have the original one
-                            for (let i = 0; i < qty - 1; i++) {
-                                const newItem = { 
-                                    ...formData, 
-                                    acquiredPrice: finalAcquiredPrice, 
-                                    id: timestamp + '-clone-' + i, 
-                                    order: currentMaxOrder + i + 1 
-                                };
-                                delete newItem.quantity;
-                                await saveToCollection(newItem);
-                            }
-                        }
+                    if (editingItem) {
+                        await saveToCollection(itemToSave);
                     } else {
-                        // New Items
+                        // New Item
                         const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0;
-                        for (let i = 0; i < qty; i++) {
-                            const newItem = { ...formData, acquiredPrice: finalAcquiredPrice, id: timestamp + '-' + i, order: maxOrder + i + 1 };
-                            delete newItem.quantity;
-                            await saveToCollection(newItem);
-                        }
+                        const newItem = { 
+                            ...itemToSave, 
+                            id: timestamp.toString(), // Single ID
+                            order: maxOrder + 1 
+                        };
+                        await saveToCollection(newItem);
                     }
                 }
                 setIsModalOpen(false);
@@ -630,7 +630,7 @@
             const handleSort = async () => { if (collectionGroupingMode !== 'none') return; const stacks = groupedData.collection['全部'] ? getStackedItems(groupedData.collection['全部'], 'none') : []; const copyStacks = [...stacks]; const dragItemContent = copyStacks[dragItem.current]; copyStacks.splice(dragItem.current, 1); copyStacks.splice(dragOverItem.current, 0, dragItemContent); dragItem.current = null; dragOverItem.current = null; const newItems = []; const updates = []; copyStacks.forEach((stack, index) => { stack.instances.forEach(inst => { const newOrder = index; const updatedItem = { ...inst, order: newOrder }; newItems.push(updatedItem); if (user && isFirebaseInitialized) { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, inst.id); updates.push({ ref, data: { order: newOrder } }); } }); }); setItems(prevItems => { const orderMap = new Map(); newItems.forEach(i => orderMap.set(i.id, i.order)); const updatedList = prevItems.map(item => { if (orderMap.has(item.id)) { return { ...item, order: orderMap.get(item.id) }; } return item; }); return updatedList.sort((a, b) => (a.order || 0) - (b.order || 0)); }); if (user && isFirebaseInitialized && updates.length > 0) { try { await commitBatches(updates); } catch (e) { console.error("Batch update failed", e); alert("排序儲存失敗"); } } };
 
             const getEffectiveDate = (item) => item.isPreorder ? item.shippingDate : item.date;
-            const getStackedItems = (sourceItems, mode) => { const map = new Map(); const stacks = []; sourceItems.forEach(item => { const key = item.name; if (!map.has(key)) { const stack = { ...item, instances: [item], totalCount: 1 }; map.set(key, stack); stacks.push(stack); } else { const stack = map.get(key); stack.instances.push(item); stack.totalCount += 1; } }); return stacks; };
+            const getStackedItems = (sourceItems, mode) => { const map = new Map(); const stacks = []; sourceItems.forEach(item => { const key = item.name; if (!map.has(key)) { const stack = { ...item, instances: [item], totalCount: (item.quantity || 1) }; map.set(key, stack); stacks.push(stack); } else { const stack = map.get(key); stack.instances.push(item); stack.totalCount += (item.quantity || 1); } }); return stacks; };
             const toggleFilter = (filterState, setFilterState, value, multiSelectEnabled) => { if (value === 'all') { setFilterState([]); return; } if (multiSelectEnabled) { if (filterState.includes(value)) { setFilterState(prev => prev.filter(v => v !== value)); } else { setFilterState(prev => [...prev, value]); } } else { if (filterState.includes(value)) { setFilterState([]); } else { setFilterState([value]); } } };
             const getFilteredList = (list, mode, typeFilters, charFilters, dateFilters, seriesFilters) => { let processed = list.filter(i => appSettings.visibleCharacters.includes(i.character)); if (mode === 'type' && typeFilters.length > 0) processed = processed.filter(i => typeFilters.includes(i.type)); if (mode === 'character' && charFilters.length > 0) processed = processed.filter(i => charFilters.includes(i.character)); if (mode === 'date' && dateFilters.length > 0) processed = processed.filter(i => { const effDate = getEffectiveDate(i); return dateFilters.includes(effDate); }); if (mode === 'series' && seriesFilters.length > 0) processed = processed.filter(i => seriesFilters.includes(i.series)); return processed; };
 
@@ -646,12 +646,13 @@
 
                 visibleItems.forEach(item => {
                     const price = Number(item.acquiredPrice || 0);
+                    const qty = item.quantity || 1; // Handle quantity > 1
                     if (item.currency === 'r') {
-                        totalR += price;
-                        charCost[item.character] = (charCost[item.character] || 0) + (price * exchangeRate);
+                        totalR += price * qty;
+                        charCost[item.character] = (charCost[item.character] || 0) + (price * exchangeRate * qty);
                     } else {
-                        totalNT += price;
-                        charCost[item.character] = (charCost[item.character] || 0) + price;
+                        totalNT += price * qty;
+                        charCost[item.character] = (charCost[item.character] || 0) + (price * qty);
                     }
                 });
 
@@ -665,7 +666,7 @@
                 });
 
                 const grandTotal = totalNT + (totalR * exchangeRate);
-                const byChar = visibleItems.reduce((acc, item) => { acc[item.character] = (acc[item.character] || 0) + 1; return acc; }, {});
+                const byChar = visibleItems.reduce((acc, item) => { acc[item.character] = (acc[item.character] || 0) + (item.quantity || 1); return acc; }, {});
                 
                 return { totalCount, totalNT, totalR, grandTotal, byChar, charCost };
             }, [items, dailyFees, appSettings.visibleCharacters, exchangeRate]);
@@ -811,7 +812,7 @@
 
                     {isSettingsOpen && <SettingsModal isOpen={isSettingsOpen} onClose={()=>setIsSettingsOpen(false)} appSettings={appSettings} setAppSettings={setAppSettings} importJson={importJson} setImportJson={setImportJson} handleBulkImport={handleBulkImport} handleExportCatalog={handleExportCatalog} handleResetData={handleResetData} handleAddType={handleAddType} handleDeleteType={handleDeleteType} newTypeInput={newTypeInput} setNewTypeInput={setNewTypeInput} handleManualSyncTypes={handleManualSyncTypes} handleAddSeries={handleAddSeries} handleDeleteSeries={handleDeleteSeries} newSeriesInput={newSeriesInput} setNewSeriesInput={setNewSeriesInput} handleManualSyncSeries={handleManualSyncSeries} />}
                     {isBatchModalOpen && <BatchAddModal isOpen={isBatchModalOpen} onClose={() => setIsBatchModalOpen(false)} selectedItems={catalogItems.filter(i => batchSelection.has(i.id))} onSave={handleBatchSave} />}
-                    {isModalOpen && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"><div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"><div className="flex justify-between items-center"><h3 className="font-bold">{modalMode === 'catalog' ? (editingItem ? '編輯公開圖鑑' : '新增公開圖鑑') : (editingItem ? '編輯我的收藏' : '加入我的收藏')}</h3><button onClick={()=>setIsModalOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button></div><div onClick={()=>fileInputRef.current.click()} className="w-32 h-32 mx-auto border-2 border-dashed rounded flex items-center justify-center cursor-pointer">{formData.image?<img src={formData.image} className="w-full h-full object-cover"/>:<Icon name="Upload"/>}<input type="file" ref={fileInputRef} className="hidden" onChange={(e)=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=()=>setFormData(p=>({...p,image:r.result}));r.readAsDataURL(f);}}}/></div><input type="text" className="w-full border p-2 rounded mt-2 text-xs text-gray-500" placeholder="或貼上圖片連結..." value={formData.image || ''} onChange={e=>setFormData({...formData, image: e.target.value})} /><input className="w-full border p-2 rounded mt-2" placeholder="名稱" value={formData.name} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,name:e.target.value})} autoFocus={!editingItem && !formData.name} /><div className="grid grid-cols-2 gap-2 mt-2"><select className="border p-2 rounded" value={formData.character} onChange={e=>setFormData({...formData,character:e.target.value})}>{CHARACTERS.map(c=><option key={c}>{c}</option>)}</select><input className="border p-2 rounded" placeholder="系列" value={formData.series} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,series:e.target.value})}/></div><div className="grid grid-cols-2 gap-2 mt-2"><input className="border p-2 rounded" list="types-list" placeholder="類型" value={formData.type} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,type:e.target.value})}/><datalist id="types-list">{appSettings.customTypes.map(t=><option key={t} value={t}/>)}</datalist><input type="text" className="border p-2 rounded" placeholder="原價" value={formData.officialPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/></div>{modalMode === 'collection' && (<><hr className="border-gray-100 mt-2" /><div className="flex items-center gap-2 mb-2 mt-2"><input type="checkbox" id="isPreorder" checked={formData.isPreorder || false} onChange={e=>setFormData({...formData, isPreorder: e.target.checked})} className="w-4 h-4 text-blue-600 rounded"/><label htmlFor="isPreorder" className="text-sm font-bold text-gray-700">預購商品</label></div><div className="grid grid-cols-2 gap-2"><div className="relative"><input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})} autoFocus={!editingItem && formData.name}/><select className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0" value={formData.currency || (formData.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency)} onChange={e=>setFormData({...formData, currency: e.target.value})}><option value="NT$">NT$</option><option value="r">r</option></select></div>{formData.isPreorder ? (<div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span><input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/></div>) : (<div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500">收物日期</span><input type="date" className="border p-2 rounded w-full" value={formData.date} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,date:e.target.value})}/></div>)}</div><div className="flex items-center gap-2 mt-2"><label>數量:</label><input type="number" className="border p-1 w-16" value={formData.quantity} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,quantity:e.target.value})}/>{editingItem && <span className="text-xs text-gray-400">(編輯時調整數量將會新增額外的複製品)</span>}</div><textarea className="w-full border p-2 rounded h-20 mt-2" placeholder="備註..." value={formData.note} onChange={e=>setFormData({...formData,note:e.target.value})}/></>)}<div className="flex gap-2 mt-4">{editingItem && modalMode === 'collection' && (<button onClick={async () => {if(confirm('確定要刪除此收藏嗎？')) {await deleteFromCollection(editingItem.id);setIsModalOpen(false);}}} className="bg-red-50 text-red-500 border border-red-200 px-4 rounded hover:bg-red-100"><Icon name="Trash2" size={18} /></button>)}<button onClick={handleSave} className="flex-1 bg-slate-900 text-white py-3 rounded hover:bg-slate-800">{modalMode === 'catalog' ? '更新圖鑑 (公開)' : '儲存收藏'}</button></div></div></div>)}
+                    {isModalOpen && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"><div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"><div className="flex justify-between items-center"><h3 className="font-bold">{modalMode === 'catalog' ? (editingItem ? '編輯公開圖鑑' : '新增公開圖鑑') : (editingItem ? '編輯我的收藏' : '加入我的收藏')}</h3><button onClick={()=>setIsModalOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button></div><div onClick={()=>fileInputRef.current.click()} className="w-32 h-32 mx-auto border-2 border-dashed rounded flex items-center justify-center cursor-pointer">{formData.image?<img src={formData.image} className="w-full h-full object-cover"/>:<Icon name="Upload"/>}<input type="file" ref={fileInputRef} className="hidden" onChange={(e)=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=()=>setFormData(p=>({...p,image:r.result}));r.readAsDataURL(f);}}}/></div><input type="text" className="w-full border p-2 rounded mt-2 text-xs text-gray-500" placeholder="或貼上圖片連結..." value={formData.image || ''} onChange={e=>setFormData({...formData, image: e.target.value})} /><input className="w-full border p-2 rounded mt-2" placeholder="名稱" value={formData.name} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,name:e.target.value})} autoFocus={!editingItem && !formData.name} /><div className="grid grid-cols-2 gap-2 mt-2"><select className="border p-2 rounded" value={formData.character} onChange={e=>setFormData({...formData,character:e.target.value})}>{CHARACTERS.map(c=><option key={c}>{c}</option>)}</select><input className="border p-2 rounded" placeholder="系列" value={formData.series} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,series:e.target.value})}/></div><div className="grid grid-cols-2 gap-2 mt-2"><input className="border p-2 rounded" list="types-list" placeholder="類型" value={formData.type} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,type:e.target.value})}/><datalist id="types-list">{appSettings.customTypes.map(t=><option key={t} value={t}/>)}</datalist><input type="text" className="border p-2 rounded" placeholder="原價" value={formData.officialPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/></div>{modalMode === 'collection' && (<><hr className="border-gray-100 mt-2" /><div className="flex items-center gap-2 mb-2 mt-2"><input type="checkbox" id="isPreorder" checked={formData.isPreorder || false} onChange={e=>setFormData({...formData, isPreorder: e.target.checked})} className="w-4 h-4 text-blue-600 rounded"/><label htmlFor="isPreorder" className="text-sm font-bold text-gray-700">預購商品</label></div><div className="flex items-center gap-2 mb-2"><label className="text-sm">數量:</label><input type="number" className="border p-1 w-16 rounded" value={formData.quantity} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div><div className="grid grid-cols-2 gap-2"><div className="relative"><input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})} autoFocus={!editingItem && formData.name}/><select className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0" value={formData.currency || (formData.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency)} onChange={e=>setFormData({...formData, currency: e.target.value})}><option value="NT$">NT$</option><option value="r">r</option></select></div>{formData.isPreorder ? (<div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span><input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/></div>) : (<div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500">收物日期</span><input type="date" className="border p-2 rounded w-full" value={formData.date} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,date:e.target.value})}/></div>)}</div><textarea className="w-full border p-2 rounded h-20 mt-2" placeholder="備註..." value={formData.note} onChange={e=>setFormData({...formData,note:e.target.value})}/></>)}<div className="flex gap-2 mt-4">{editingItem && modalMode === 'collection' && (<button onClick={async () => {if(confirm('確定要刪除此收藏嗎？')) {await deleteFromCollection(editingItem.id);setIsModalOpen(false);}}} className="bg-red-50 text-red-500 border border-red-200 px-4 rounded hover:bg-red-100"><Icon name="Trash2" size={18} /></button>)}<button onClick={handleSave} className="flex-1 bg-slate-900 text-white py-3 rounded hover:bg-slate-800">{modalMode === 'catalog' ? '更新圖鑑 (公開)' : '儲存收藏'}</button></div></div></div>)}
 
                     <div className="md:hidden fixed bottom-0 w-full bg-white border-t p-2 flex justify-around z-40">
                         <button onClick={()=>setActiveTab('collection')}><Icon name="Package"/><span className="text-xs">收藏</span></button>

@@ -138,17 +138,17 @@
             const [isExpanded, setIsExpanded] = useState(false);
             const hasManyOptions = options.length > 5;
             return (
-                <div className="relative mb-2 animate-fade-in group">
+                <div className="relative mb-2 animate-fade-in group z-10">
                     <div className={`flex gap-2 items-center transition-all ${isExpanded ? 'flex-wrap' : 'overflow-x-auto pb-2 scrollbar-hide pr-12'}`}>
-                        <button onClick={() => toggle('all')} className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border flex-shrink-0 ${selected.length === 0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{multi ? "全選" : "全部"}</button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); toggle('all'); }} className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border flex-shrink-0 cursor-pointer ${selected.length === 0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{multi ? "全選" : "全部"}</button>
                         {options.map(opt => {
                             const isHighlight = highlightSet && highlightSet.has(opt);
                             const isSelected = selected.includes(opt);
-                            return <button key={opt} onClick={() => toggle(opt)} className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border flex-shrink-0 ${isSelected ? 'bg-blue-100 text-blue-700 border-blue-300' : (isHighlight ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')}`}>{opt}</button>;
+                            return <button type="button" key={opt} onClick={(e) => { e.stopPropagation(); toggle(opt); }} className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border flex-shrink-0 cursor-pointer ${isSelected ? 'bg-blue-100 text-blue-700 border-blue-300' : (isHighlight ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')}`}>{opt}</button>;
                         })}
-                        {multi && <button onClick={() => toggle('all')} className="px-3 py-1 text-xs rounded-full bg-gray-200 text-gray-600 border border-transparent hover:bg-gray-300 whitespace-nowrap flex-shrink-0">重置</button>}
+                        {multi && <button type="button" onClick={(e) => { e.stopPropagation(); toggle('all'); }} className="px-3 py-1 text-xs rounded-full bg-gray-200 text-gray-600 border border-transparent hover:bg-gray-300 whitespace-nowrap flex-shrink-0 cursor-pointer">重置</button>}
                     </div>
-                    {hasManyOptions && (!isExpanded ? <div className="absolute right-0 top-0 bottom-2 w-12 bg-gradient-to-l from-gray-50 via-gray-50 to-transparent flex items-center justify-end pointer-events-none"><button onClick={() => setIsExpanded(true)} className="w-7 h-7 bg-white border border-gray-200 rounded-full shadow-sm flex items-center justify-center text-gray-500 hover:text-blue-600 pointer-events-auto mr-1"><Icon name="ChevronDown" size={16}/></button></div> : <div className="flex justify-center mt-2"><button onClick={() => setIsExpanded(false)} className="px-4 py-1 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-full text-xs flex items-center gap-1 transition-colors"><Icon name="ChevronUp" size={14}/> 收合</button></div>)}
+                    {hasManyOptions && (!isExpanded ? <div className="absolute right-0 top-0 bottom-2 w-12 bg-gradient-to-l from-gray-50 via-gray-50 to-transparent flex items-center justify-end pointer-events-none"><button type="button" onClick={() => setIsExpanded(true)} className="w-7 h-7 bg-white border border-gray-200 rounded-full shadow-sm flex items-center justify-center text-gray-500 hover:text-blue-600 pointer-events-auto mr-1 cursor-pointer"><Icon name="ChevronDown" size={16}/></button></div> : <div className="flex justify-center mt-2"><button type="button" onClick={() => setIsExpanded(false)} className="px-4 py-1 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-full text-xs flex items-center gap-1 transition-colors cursor-pointer"><Icon name="ChevronUp" size={14}/> 收合</button></div>)}
                 </div>
             );
         });
@@ -433,14 +433,80 @@
             );
         };
 
+        const BatchAddModal = ({ isOpen, onClose, selectedItems, onSave }) => {
+            const [commonDate, setCommonDate] = useState(new Date().toISOString().split('T')[0]);
+            const [isPreorder, setIsPreorder] = useState(false);
+            const [commonShippingDate, setCommonShippingDate] = useState('');
+            const [commonNote, setCommonNote] = useState(''); 
+            const [itemsDetails, setItemsDetails] = useState({});
+
+            useEffect(() => {
+                if (isOpen && selectedItems.length > 0) {
+                    const initial = {};
+                    selectedItems.forEach(i => { initial[i.id] = { price: '', currency: 'NT$', quantity: 1 }; });
+                    setItemsDetails(initial);
+                }
+            }, [isOpen, selectedItems]);
+
+            const updateDetail = (id, field, value) => { setItemsDetails(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } })); };
+
+            const handleConfirm = () => {
+                const payload = [];
+                selectedItems.forEach(item => {
+                    const detail = itemsDetails[item.id] || { price: '', currency: 'NT$', quantity: 1 };
+                    const qty = Math.max(1, parseInt(detail.quantity) || 1);
+                    payload.push({ ...item, date: !isPreorder ? commonDate : '', isPreorder: isPreorder, shippingDate: isPreorder ? (commonShippingDate || commonDate) : '', acquiredPrice: detail.price, currency: detail.currency, note: commonNote, quantity: qty });
+                });
+                onSave(payload);
+            };
+
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"><div className="bg-white rounded-3xl w-full max-w-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col"><div className="flex justify-between items-center border-b pb-3"><h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icon name="Layers" /> 批次新增收藏</h3><button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button></div><div className="space-y-4 flex-1 overflow-y-auto p-1"><div className="bg-gray-50 p-4 rounded-xl space-y-3 border border-gray-100"><h4 className="font-bold text-sm text-gray-700">共同資訊</h4><div className="flex items-center gap-4"><div className="flex items-center gap-2"><input type="checkbox" id="batchPreorder" checked={isPreorder} onChange={e=>setIsPreorder(e.target.checked)} className="w-4 h-4 text-blue-600 rounded"/><label htmlFor="batchPreorder" className="text-sm font-bold text-gray-700">預購商品</label></div><div className="flex-1"><label className="text-xs text-gray-500 block mb-1">{isPreorder ? '預計出貨日' : '收物日期'}</label><input type="date" className="border p-2 rounded w-full bg-white" value={isPreorder ? commonShippingDate : commonDate} onChange={e => isPreorder ? setCommonShippingDate(e.target.value) : setCommonDate(e.target.value)}/></div></div></div><div className="space-y-2"><h4 className="font-bold text-sm text-gray-700">個別設定 ({selectedItems.length})</h4>{selectedItems.map(item => { const detail = itemsDetails[item.id] || { price: '', currency: 'NT$', quantity: 1 }; return (<div key={item.id} className="flex items-center gap-3 p-2 border rounded-lg hover:bg-gray-50"><div className="w-12 h-12 bg-gray-200 rounded overflow-hidden flex-shrink-0">{item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-gray-400 m-auto mt-3" size={20}/>}</div><div className="flex-1 min-w-0"><p className="text-sm font-bold truncate">{item.name}</p><p className="text-xs text-gray-500">{item.character} · {item.type}</p></div><div className="flex items-center gap-2"><div className="flex items-center gap-1 bg-white border rounded px-1"><span className="text-xs text-gray-400">x</span><input type="number" className="w-8 text-center text-sm outline-none" value={detail.quantity} onChange={e => updateDetail(item.id, 'quantity', e.target.value)}/></div><div className="flex items-center border rounded bg-white overflow-hidden w-36"><input type="number" className="w-full p-2 text-sm outline-none" placeholder="價格" value={detail.price} onChange={e=>updateDetail(item.id, 'price', e.target.value)}/><select className="bg-gray-50 border-l p-2 text-xs outline-none text-gray-600 font-bold" value={detail.currency} onChange={e=>updateDetail(item.id, 'currency', e.target.value)}><option value="NT$">NT$</option><option value="r">r</option></select></div></div></div>); })}</div><div><h4 className="font-bold text-sm text-gray-700 mb-2">備註</h4><textarea className="w-full border p-2 rounded h-16 text-sm bg-white" placeholder="共同備註 (選填)..." value={commonNote} onChange={e=>setCommonNote(e.target.value)}/></div></div><div className="pt-2 border-t flex gap-2"><button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">取消</button><button onClick={handleConfirm} className="flex-1 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 font-bold shadow-md">確認新增</button></div></div></div>);
+        };
+
         const App = () => {
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState(() => localStorage.getItem('deepspace_active_tab') || 'collection');
-            // ... (keep state initializers) ...
+
             const [appSettings, setAppSettings] = useState(() => {
                 const savedSettings = localStorage.getItem('deepspace_settings');
-                const defaults = { layoutCols: 4, customTypes: DEFAULT_MERCH_TYPES, customSeries: [], customCharacters: CHARACTERS, visibleCharacters: CHARACTERS, multiSelect: { type: true, character: false, date: false, series: false }, defaultPreorderCurrency: 'NT$', defaultCurrency: 'NT$', groupAllInFilterMode: true, showAmount: true };
-                if (savedSettings) { try { const parsed = JSON.parse(savedSettings); if(!parsed.visibleCharacters) parsed.visibleCharacters=CHARACTERS; if(!parsed.customCharacters) parsed.customCharacters=CHARACTERS; if(parsed.customCharacters && !parsed.customCharacters.includes("全員")) parsed.customCharacters.push("全員"); if(parsed.visibleCharacters && !parsed.visibleCharacters.includes("全員")) parsed.visibleCharacters.push("全員"); if(!parsed.multiSelect) parsed.multiSelect=defaults.multiSelect; if(typeof parsed.showAmount === 'undefined') parsed.showAmount=true; if(!parsed.customTypes) parsed.customTypes=DEFAULT_MERCH_TYPES; return parsed; } catch(e) { return defaults; } } return defaults;
+                const defaults = {
+                    layoutCols: 4, customTypes: DEFAULT_MERCH_TYPES, customSeries: [], 
+                    customCharacters: CHARACTERS, visibleCharacters: CHARACTERS,
+                    multiSelect: { type: true, character: false, date: false, series: false },
+                    defaultPreorderCurrency: 'NT$', defaultCurrency: 'NT$', groupAllInFilterMode: true,
+                    showAmount: true // Default to true
+                };
+                if (savedSettings) {
+                    try {
+                        const parsed = JSON.parse(savedSettings);
+                        if (!parsed.visibleCharacters) parsed.visibleCharacters = CHARACTERS;
+                        if (!parsed.customCharacters) parsed.customCharacters = CHARACTERS;
+                        
+                        // Auto-inject "全員" if it's missing (legacy support)
+                        if (parsed.customCharacters && !parsed.customCharacters.includes("全員")) {
+                            parsed.customCharacters.push("全員");
+                        }
+                        
+                        // FIX: Ensure "全員" is in visibleCharacters if missing
+                        // This fixes the issue where existing users wouldn't see "全員" items because the filter list was stale
+                        if (parsed.visibleCharacters && !parsed.visibleCharacters.includes("全員")) {
+                            parsed.visibleCharacters.push("全員");
+                        }
+
+                        if (!parsed.multiSelect) parsed.multiSelect = defaults.multiSelect;
+                        if (typeof parsed.multiSelect.series === 'undefined') parsed.multiSelect.series = false;
+                        if (!parsed.defaultPreorderCurrency) parsed.defaultPreorderCurrency = 'NT$';
+                        if (!parsed.defaultCurrency) parsed.defaultCurrency = 'NT$';
+                        if (typeof parsed.groupAllInFilterMode === 'undefined') parsed.groupAllInFilterMode = true;
+                        if (typeof parsed.showAmount === 'undefined') parsed.showAmount = true; // Default for existing users
+                        if (!parsed.customTypes) parsed.customTypes = DEFAULT_MERCH_TYPES;
+                        if (!parsed.customSeries) parsed.customSeries = []; 
+                        return parsed;
+                    } catch (e) { return defaults; }
+                }
+                return defaults;
             });
 
             // *** STATE VARIABLES ***
@@ -454,6 +520,7 @@
             const [exchangeRate, setExchangeRate] = useState(4.5); 
             const [exchangeRateTimestamp, setExchangeRateTimestamp] = useState(null);
             const [showRmbDetail, setShowRmbDetail] = useState(false);
+            
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false); 
             const [editingItem, setEditingItem] = useState(null); 
@@ -462,34 +529,42 @@
             const [importJson, setImportJson] = useState('');
             const [newTypeInput, setNewTypeInput] = useState(''); 
             const [newSeriesInput, setNewSeriesInput] = useState(''); 
+
             const [isBatchMode, setIsBatchMode] = useState(false);
             const [batchSelection, setBatchSelection] = useState(new Set());
             const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+
             const [editingFeeTarget, setEditingFeeTarget] = useState({ date: null, type: null });
             const [editingFeeValue, setEditingFeeValue] = useState('');
+
             const fileInputRef = useRef(null);
             const feeInputRef = useRef(null);
+            
             const dragItem = useRef();
             const dragOverItem = useRef();
 
             const [items, setItems] = useState([]); 
             const [catalogItems, setCatalogItems] = useState([]); 
             const [dailyFees, setDailyFees] = useState({}); 
-            const [trades, setTrades] = useState([]);
+            const [trades, setTrades] = useState([]); // NEW Trade State
 
-            // ... (keep effects) ...
+            // --- Load Trades Effect ---
             useEffect(() => {
                 if (!isFirebaseInitialized) {
                     const localTrades = localStorage.getItem('deepspace_trades_local');
                     if (localTrades) setTrades(JSON.parse(localTrades));
+                    // ... load items/catalog/fees locally ...
                     const localItems = localStorage.getItem('deepspace_items_v7_local');
                     if (localItems) setItems(JSON.parse(localItems));
                     const localFees = localStorage.getItem('deepspace_daily_fees_local');
                     if (localFees) setDailyFees(JSON.parse(localFees));
                     const localCatalog = localStorage.getItem('deepspace_catalog_v7_local');
-                    if (localCatalog) { try { setCatalogItems(getUniqueItems(JSON.parse(localCatalog))); } catch(e){ console.error(e); } }
+                    if (localCatalog) {
+                        try { setCatalogItems(getUniqueItems(JSON.parse(localCatalog))); } catch(e){ console.error(e); }
+                    }
                     return;
                 }
+                
                 setPersistence(auth, browserLocalPersistence).catch(console.error);
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
                     if (currentUser) { if (!currentUser.isAnonymous) setUser(currentUser); else setUser(null); } 
@@ -499,41 +574,80 @@
             }, []);
 
             useEffect(() => {
-                fetch('https://api.exchangerate-api.com/v4/latest/CNY').then(res => res.json()).then(data => { if(data && data.rates && data.rates.TWD) { setExchangeRate(data.rates.TWD); const now = new Date(); setExchangeRateTimestamp(`${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`); } }).catch(err => console.error("Exchange rate error", err));
+                fetch('https://api.exchangerate-api.com/v4/latest/CNY')
+                    .then(res => res.json())
+                    .then(data => {
+                        if(data && data.rates && data.rates.TWD) {
+                            setExchangeRate(data.rates.TWD);
+                            const now = new Date();
+                            setExchangeRateTimestamp(`${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`);
+                        }
+                    })
+                    .catch(err => console.error("Exchange rate error", err));
             }, []);
 
-            useEffect(() => { setSelectedTypeFilters([]); setSelectedCharFilters([]); setSelectedDateFilters([]); setSelectedSeriesFilters([]); }, [collectionGroupingMode, groupingMode]);
+            useEffect(() => {
+                setSelectedTypeFilters([]); setSelectedCharFilters([]); setSelectedDateFilters([]); setSelectedSeriesFilters([]);
+            }, [collectionGroupingMode, groupingMode]);
 
             useEffect(() => {
                 if (!isFirebaseInitialized) return;
                 if (!auth.currentUser) return;
+                
                 const catalogColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'public', 'data', 'catalog');
                 const unsubCatalog = onSnapshot(catalogColl, (snapshot) => {
                     const cloudCatalog = snapshot.docs.map(doc => doc.data());
                     cloudCatalog.sort((a, b) => (a.order || 0) - (b.order || 0));
-                    setCatalogItems(getUniqueItems(cloudCatalog)); 
+                    setCatalogItems(getUniqueItems(cloudCatalog)); // Force Unique
                 });
-                let unsubCollection = () => {}; let unsubFees = () => {}; let unsubTrades = () => {};
+
+                let unsubCollection = () => {};
+                let unsubFees = () => {};
+                let unsubTrades = () => {}; // NEW
+
                 if (user) {
                     const userColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'items');
                     const q = query(userColl, orderBy("order", "asc"));
                     unsubCollection = onSnapshot(q, (snapshot) => { setItems(snapshot.docs.map(doc => doc.data())); });
+                    
                     const feesColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'daily_fees');
-                    unsubFees = onSnapshot(feesColl, (snapshot) => { const feesMap = {}; snapshot.docs.forEach(doc => { const data = doc.data(); feesMap[doc.id] = { shipping: data.amount || 0, handling: data.handling || 0 }; }); setDailyFees(feesMap); });
+                    unsubFees = onSnapshot(feesColl, (snapshot) => {
+                        const feesMap = {};
+                        snapshot.docs.forEach(doc => { const data = doc.data(); feesMap[doc.id] = { shipping: data.amount || 0, handling: data.handling || 0 }; });
+                        setDailyFees(feesMap);
+                    });
+
+                    // NEW: Trade Listener
                     const tradeColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'trades');
-                    unsubTrades = onSnapshot(tradeColl, (snapshot) => { const loadedTrades = snapshot.docs.map(doc => doc.data()); loadedTrades.sort((a, b) => new Date(b.buyDate) - new Date(a.buyDate)); setTrades(loadedTrades); });
+                    unsubTrades = onSnapshot(query(tradeColl, orderBy("buyDate", "desc")), (snapshot) => {
+                        setTrades(snapshot.docs.map(doc => doc.data()));
+                    });
                 } else {
+                    // Local fallback
                     const localTrades = localStorage.getItem('deepspace_trades_local');
                     if(localTrades) setTrades(JSON.parse(localTrades));
                 }
                 return () => { unsubCatalog(); unsubCollection(); unsubFees(); unsubTrades(); };
             }, [user, auth.currentUser]);
 
-            useEffect(() => { if (!isFirebaseInitialized || !user) { localStorage.setItem('deepspace_trades_local', JSON.stringify(trades)); } }, [trades, user]);
-            useEffect(() => { if (!isFirebaseInitialized || !user) { localStorage.setItem('deepspace_items_v7_local', JSON.stringify(items)); localStorage.setItem('deepspace_daily_fees_local', JSON.stringify(dailyFees)); } }, [items, dailyFees, user]);
-            useEffect(() => { if (!isFirebaseInitialized) localStorage.setItem('deepspace_catalog_v7_local', JSON.stringify(catalogItems)); }, [catalogItems]);
+            // Save Trades Local
+            useEffect(() => {
+                if (!isFirebaseInitialized || !user) {
+                    localStorage.setItem('deepspace_trades_local', JSON.stringify(trades));
+                }
+            }, [trades, user]);
 
-            // ... (handlers) ...
+            useEffect(() => {
+                if (!isFirebaseInitialized || !user) {
+                    localStorage.setItem('deepspace_items_v7_local', JSON.stringify(items));
+                    localStorage.setItem('deepspace_daily_fees_local', JSON.stringify(dailyFees));
+                }
+            }, [items, dailyFees, user]);
+            
+            useEffect(() => {
+                if (!isFirebaseInitialized) localStorage.setItem('deepspace_catalog_v7_local', JSON.stringify(catalogItems));
+            }, [catalogItems]);
+
             const handleLogin = async () => { if (window.location.protocol === 'file:') return alert("請使用 Live Server 或上傳至網頁空間開啟。"); if (!isFirebaseInitialized) return alert("請設定 Firebase Config"); try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { alert(e.message); } };
             const handleLogout = () => signOut(auth);
             const saveToCollection = async (newItem) => { const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0; const itemWithOrder = { ...newItem, order: newItem.order || (maxOrder + 1) }; if (user && isFirebaseInitialized) { await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, newItem.id), itemWithOrder); } else { setItems(prev => { const exists = prev.find(i => i.id === newItem.id); const list = exists ? prev.map(i => i.id === newItem.id ? itemWithOrder : i) : [...prev, itemWithOrder]; return list.sort((a, b) => (a.order || 0) - (b.order || 0)); }); } };
@@ -629,6 +743,18 @@
                 if (mode === 'date' && dateFilters.length > 0) processed = processed.filter(i => { const effDate = getEffectiveDate(i); return dateFilters.includes(effDate); }); 
                 if (mode === 'series' && seriesFilters.length > 0) processed = processed.filter(i => seriesFilters.includes(i.series)); 
                 return processed; 
+            };
+            
+            // --- RESTORED toggleFilter ---
+            const toggleFilter = (filterState, setFilterState, value, multiSelectEnabled) => { 
+                if (value === 'all') { setFilterState([]); return; } 
+                if (multiSelectEnabled) { 
+                    if (filterState.includes(value)) { setFilterState(prev => prev.filter(v => v !== value)); } 
+                    else { setFilterState(prev => [...prev, value]); } 
+                } else { 
+                    if (filterState.includes(value)) { setFilterState([]); } 
+                    else { setFilterState([value]); } 
+                } 
             };
 
             const getEffectiveDate = (item) => item.isPreorder ? item.shippingDate : item.date;

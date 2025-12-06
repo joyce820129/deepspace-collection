@@ -283,7 +283,9 @@
         const TradeCard = memo(({ trade, openModal, deleteTrade, markAsSold, isBatchMode, isSelected, onToggleSelect }) => {
             const theme = CHARACTER_THEMES[trade.character] || CHARACTER_THEMES["其他"];
             const isSold = trade.status === 'sold';
-            const profit = (Number(trade.salePrice) || 0) - (Number(trade.costPrice) || 0);
+            const quantity = trade.quantity || 1;
+            // Updated profit calc: (Sale - Cost) * Quantity
+            const profit = ((Number(trade.salePrice) || 0) - (Number(trade.costPrice) || 0)) * quantity;
             
             const handleCardClick = (e) => {
                 if (isBatchMode) {
@@ -305,9 +307,9 @@
                     )}
 
                     {/* Quantity Badge */}
-                    {(trade.quantity > 1) && (
+                    {(quantity > 1) && (
                         <div className="absolute top-2 left-2 z-10 bg-slate-900 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
-                            x{trade.quantity}
+                            x{quantity}
                         </div>
                     )}
 
@@ -935,7 +937,22 @@
             const handleTradeBatchSelect = (tradeId) => { setTradeBatchSelection(prev => { const newSet = new Set(prev); if(newSet.has(tradeId)) newSet.delete(tradeId); else newSet.add(tradeId); return newSet; }); };
             const handleBatchTradeSell = async () => { if(tradeBatchSelection.size === 0) return; if(!confirm(`確定要將這 ${tradeBatchSelection.size} 筆標記為已售出嗎？`)) return; const sellDate = new Date().toISOString().split('T')[0]; if (user && isFirebaseInitialized) { const batch = writeBatch(db); tradeBatchSelection.forEach(id => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, id); const original = trades.find(t => t.id === id); if(original && original.status !== 'sold') { batch.update(ref, { status: 'sold', sellDate }); } }); await batch.commit(); } else { setTrades(prev => prev.map(t => { if(tradeBatchSelection.has(t.id)) { return { ...t, status: 'sold', sellDate }; } return t; })); } setIsTradeBatchMode(false); setTradeBatchSelection(new Set()); };
             const handleBatchDeleteTrade = async () => { if(tradeBatchSelection.size === 0) return; if(!confirm(`警告：確定要刪除這 ${tradeBatchSelection.size} 筆交易紀錄嗎？`)) return; if (user && isFirebaseInitialized) { const batch = writeBatch(db); tradeBatchSelection.forEach(id => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, id); batch.delete(ref); }); await batch.commit(); } else { setTrades(prev => prev.filter(t => !tradeBatchSelection.has(t.id))); } setIsTradeBatchMode(false); setTradeBatchSelection(new Set()); };
-            const tradeStats = useMemo(() => { let soldCount = 0; let forSaleCount = 0; let totalCost = 0; let totalRevenue = 0; trades.forEach(t => { const cost = Number(t.costPrice) || 0; const sale = Number(t.salePrice) || 0; if(t.status === 'sold') { soldCount++; totalCost += cost; totalRevenue += sale; } else { forSaleCount++; } }); return { soldCount, forSaleCount, netProfit: totalRevenue - totalCost, totalRevenue }; }, [trades]);
+            const tradeStats = useMemo(() => { 
+                let soldCount = 0; let forSaleCount = 0; let totalCost = 0; let totalRevenue = 0; 
+                trades.forEach(t => { 
+                    const cost = Number(t.costPrice) || 0; 
+                    const sale = Number(t.salePrice) || 0; 
+                    const qty = t.quantity || 1; // Count quantity
+                    if(t.status === 'sold') { 
+                        soldCount += qty; 
+                        totalCost += cost * qty; 
+                        totalRevenue += sale * qty; 
+                    } else { 
+                        forSaleCount += qty; 
+                    } 
+                }); 
+                return { soldCount, forSaleCount, netProfit: totalRevenue - totalCost, totalRevenue }; 
+            }, [trades]);
 
             // --- Collection Batch Set Logic ---
             const toggleCollectionBatchMode = () => { setIsCollectionBatchMode(prev => !prev); setCollectionBatchSelection(new Set()); };
@@ -1030,8 +1047,8 @@
                         }
                     });
                     
-                    // Calculate Total
-                    const total = items.reduce((sum, i) => sum + (Number(i.salePrice) || 0), 0);
+                    // Calculate Total (using quantity)
+                    const total = items.reduce((sum, i) => sum + ((Number(i.salePrice) || 0) * (i.quantity || 1)), 0);
 
                     return { date, items, sets, loose, total };
                 });
@@ -1319,7 +1336,7 @@
                                                         {/* Render Sets */}
                                                         <div className="flex flex-col gap-4">
                                                             {Object.entries(sets).map(([setName, setItems]) => {
-                                                                const setTotal = setItems.reduce((sum, i) => sum + (Number(i.salePrice) || 0), 0);
+                                                                const setTotal = setItems.reduce((sum, i) => sum + ((Number(i.salePrice) || 0) * (i.quantity || 1)), 0);
                                                                 return (
                                                                     <div key={setName} className="col-span-full bg-green-50/50 rounded-2xl border-2 border-dashed border-green-200 p-4 relative mt-2 mb-2">
                                                                         <div className="absolute -top-3 left-4 flex items-center gap-2 flex-wrap">

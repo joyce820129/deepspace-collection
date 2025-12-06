@@ -564,6 +564,7 @@
             };
 
             const handleBatchSave = () => {
+                // Prepare all items in one go
                 const tradesToAdd = batchItems.map(item => ({
                     id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
                     name: item.name,
@@ -579,6 +580,7 @@
                     quantity: item.quantity,
                     setName: batchCommonData.setName
                 }));
+                // Pass single array to handler
                 onSave(tradesToAdd);
             };
 
@@ -627,38 +629,40 @@
                                     </div>
                                 </div>
 
-                                {/* Items List */}
-                                <div className="space-y-2">
+                                {/* Items List (Enhanced UI) */}
+                                <div className="space-y-3">
                                     {batchItems.map((item) => (
-                                        <div key={item.tempId} className="flex items-center gap-3 p-2 border rounded-lg hover:bg-gray-50">
-                                            <div className="w-12 h-12 bg-gray-200 rounded overflow-hidden flex-shrink-0">
-                                                {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-gray-400 m-auto mt-3" size={20}/>}
+                                        <div key={item.tempId} className="flex items-center gap-4 p-3 border rounded-xl hover:bg-gray-50 bg-white shadow-sm transition-colors">
+                                            <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-100">
+                                                {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-gray-300 m-auto mt-3" size={20}/>}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-bold truncate">{item.name}</p>
-                                                <p className="text-xs text-gray-500">{item.character} · 原價 {item.officialPrice || '?'}</p>
+                                                <p className="text-sm font-bold text-gray-800 truncate">{item.name}</p>
+                                                <p className="text-xs text-gray-500 mt-0.5">{item.character} · 原價 {item.officialPrice || '?'}</p>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-16 flex items-center border rounded bg-white px-1">
-                                                    <span className="text-xs text-gray-400 mr-1">x</span>
-                                                    <input type="number" className="w-full p-1 text-sm outline-none text-center" value={item.quantity} onChange={e=>updateBatchItem(item.tempId, 'quantity', e.target.value)}/>
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex flex-col items-center">
+                                                    <span className="text-[10px] text-gray-400 mb-0.5">數量</span>
+                                                    <input type="number" className="w-12 p-1.5 border rounded-lg text-sm text-center bg-gray-50" value={item.quantity} onChange={e=>updateBatchItem(item.tempId, 'quantity', e.target.value)}/>
                                                 </div>
-                                                <div className="w-24">
-                                                    <input type="number" className="w-full border p-1.5 rounded text-sm" placeholder="入手價" value={item.costPrice} onChange={e=>updateBatchItem(item.tempId, 'costPrice', e.target.value)}/>
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-gray-400 mb-0.5">入手價</span>
+                                                    <input type="number" className="w-20 p-1.5 border rounded-lg text-sm bg-gray-50" placeholder="0" value={item.costPrice} onChange={e=>updateBatchItem(item.tempId, 'costPrice', e.target.value)}/>
                                                 </div>
-                                                <div className="w-24">
-                                                    <input type="number" className="w-full border p-1.5 rounded text-sm" placeholder={batchCommonData.status==='sold'?'售出價':'預售價'} value={item.salePrice} onChange={e=>updateBatchItem(item.tempId, 'salePrice', e.target.value)}/>
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-gray-400 mb-0.5">{batchCommonData.status==='sold'?'售出價':'預售價'}</span>
+                                                    <input type="number" className="w-20 p-1.5 border rounded-lg text-sm bg-gray-50" placeholder="0" value={item.salePrice} onChange={e=>updateBatchItem(item.tempId, 'salePrice', e.target.value)}/>
                                                 </div>
-                                                <button onClick={()=>setBatchItems(prev => prev.filter(i => i.tempId !== item.tempId))} className="text-gray-400 hover:text-red-500 p-1"><Icon name="X" size={16}/></button>
+                                                <button onClick={()=>setBatchItems(prev => prev.filter(i => i.tempId !== item.tempId))} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors ml-1"><Icon name="X" size={16}/></button>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="pt-2 border-t flex gap-2">
-                                <button onClick={()=>setBatchEditMode(false)} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">返回選擇</button>
-                                <button onClick={handleBatchSave} className="flex-1 py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800">確認新增全部</button>
+                            <div className="pt-3 border-t flex gap-3">
+                                <button onClick={()=>setBatchEditMode(false)} className="px-6 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors">返回選擇</button>
+                                <button onClick={handleBatchSave} className="flex-1 py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800 transition-colors shadow-lg shadow-slate-200">確認新增 ({batchItems.length})</button>
                             </div>
                         </div>
                     </div>
@@ -903,7 +907,33 @@
             const toggleBatchMode = () => { setIsBatchMode(prev => !prev); setBatchSelection(new Set()); };
             const handleBatchSelect = (itemId) => { setBatchSelection(prev => { const newSet = new Set(prev); if (newSet.has(itemId)) newSet.delete(itemId); else newSet.add(itemId); return newSet; }); };
             const openBatchModal = () => { if (batchSelection.size === 0) return alert("請至少選擇一個物品"); setIsBatchModalOpen(true); };
-            const handleBatchSave = async (itemsToSave) => { for (const item of itemsToSave) { const uniqueItem = { ...item, id: Date.now() + Math.random().toString(36).substr(2, 9), order: Date.now() }; await saveToCollection(uniqueItem); } setIsBatchModalOpen(false); setIsBatchMode(false); setBatchSelection(new Set()); };
+            const handleBatchSave = async (itemsToSave) => {
+                // Optimized batch save: One state update for local mode
+                const currentMaxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0;
+                
+                const newItems = itemsToSave.map((item, index) => ({
+                    ...item,
+                    id: (Date.now() + index).toString() + Math.random().toString(36).substr(2, 5),
+                    order: currentMaxOrder + 1 + index
+                }));
+
+                if (user && isFirebaseInitialized) {
+                    const batch = writeBatch(db);
+                    newItems.forEach(newItem => {
+                        const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, newItem.id);
+                        batch.set(ref, newItem);
+                    });
+                    await batch.commit();
+                } else {
+                    setItems(prev => {
+                        return [...prev, ...newItems].sort((a, b) => (a.order || 0) - (b.order || 0));
+                    });
+                }
+                
+                setIsBatchModalOpen(false);
+                setIsBatchMode(false);
+                setBatchSelection(new Set());
+            };
             
             const openModal = (item = null, template = null, mode = 'collection') => { setModalMode(mode); const defaultData = { id: Date.now().toString(), name: '', character: '沈星回', type: '徽章', series: '', officialPrice: '', acquiredPrice: '', date: new Date().toISOString().split('T')[0], image: null, note: '', quantity: 1, isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency }; if (mode === 'catalog' && item) { setEditingItem(item); setFormData({ ...item }); } else if (mode === 'collection') { if (item) { setEditingItem(item); setFormData({ ...item, quantity: (item.quantity || 1), isPreorder: item.isPreorder || false, shippingDate: item.shippingDate || '', currency: item.currency || (item.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency), setName: item.setName || '' }); } else if (template) { setEditingItem(null); setFormData({ ...defaultData, ...template, quantity: 1, id: Date.now().toString(), isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency, acquiredPrice: '', setName: '' }); } else { setEditingItem(null); setFormData(defaultData); } } setIsModalOpen(true); };
             const handleSave = async () => { if (!formData.name) return alert("請輸入名稱"); const timestamp = Date.now(); setAppSettings(prev => { let next = { ...prev }; let changed = false; if (formData.type && !prev.customTypes.includes(formData.type)) { next.customTypes = [...prev.customTypes, formData.type]; changed = true; } if (formData.series && !prev.customSeries.includes(formData.series)) { next.customSeries = [...prev.customSeries, formData.series]; changed = true; } return changed ? next : prev; }); const qty = Math.max(1, parseInt(formData.quantity) || 1); const finalAcquiredPrice = formData.acquiredPrice === '' || formData.acquiredPrice === undefined || formData.acquiredPrice === null ? 0 : formData.acquiredPrice; if (modalMode === 'catalog') { const itemToSave = { ...formData }; delete itemToSave.quantity; delete itemToSave.acquiredPrice; delete itemToSave.date; delete itemToSave.note; delete itemToSave.isPreorder; delete itemToSave.shippingDate; delete itemToSave.currency; delete itemToSave.setName; await saveToCatalog(itemToSave); } else { const itemToSave = { ...formData, acquiredPrice: finalAcquiredPrice, quantity: qty }; if (editingItem) { await saveToCollection(itemToSave); } else { const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0; const newItem = { ...itemToSave, id: timestamp.toString(), order: maxOrder + 1 }; await saveToCollection(newItem); } } setIsModalOpen(false); };
@@ -937,22 +967,7 @@
             const handleTradeBatchSelect = (tradeId) => { setTradeBatchSelection(prev => { const newSet = new Set(prev); if(newSet.has(tradeId)) newSet.delete(tradeId); else newSet.add(tradeId); return newSet; }); };
             const handleBatchTradeSell = async () => { if(tradeBatchSelection.size === 0) return; if(!confirm(`確定要將這 ${tradeBatchSelection.size} 筆標記為已售出嗎？`)) return; const sellDate = new Date().toISOString().split('T')[0]; if (user && isFirebaseInitialized) { const batch = writeBatch(db); tradeBatchSelection.forEach(id => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, id); const original = trades.find(t => t.id === id); if(original && original.status !== 'sold') { batch.update(ref, { status: 'sold', sellDate }); } }); await batch.commit(); } else { setTrades(prev => prev.map(t => { if(tradeBatchSelection.has(t.id)) { return { ...t, status: 'sold', sellDate }; } return t; })); } setIsTradeBatchMode(false); setTradeBatchSelection(new Set()); };
             const handleBatchDeleteTrade = async () => { if(tradeBatchSelection.size === 0) return; if(!confirm(`警告：確定要刪除這 ${tradeBatchSelection.size} 筆交易紀錄嗎？`)) return; if (user && isFirebaseInitialized) { const batch = writeBatch(db); tradeBatchSelection.forEach(id => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, id); batch.delete(ref); }); await batch.commit(); } else { setTrades(prev => prev.filter(t => !tradeBatchSelection.has(t.id))); } setIsTradeBatchMode(false); setTradeBatchSelection(new Set()); };
-            const tradeStats = useMemo(() => { 
-                let soldCount = 0; let forSaleCount = 0; let totalCost = 0; let totalRevenue = 0; 
-                trades.forEach(t => { 
-                    const cost = Number(t.costPrice) || 0; 
-                    const sale = Number(t.salePrice) || 0; 
-                    const qty = t.quantity || 1; // Count quantity
-                    if(t.status === 'sold') { 
-                        soldCount += qty; 
-                        totalCost += cost * qty; 
-                        totalRevenue += sale * qty; 
-                    } else { 
-                        forSaleCount += qty; 
-                    } 
-                }); 
-                return { soldCount, forSaleCount, netProfit: totalRevenue - totalCost, totalRevenue }; 
-            }, [trades]);
+            const tradeStats = useMemo(() => { let soldCount = 0; let forSaleCount = 0; let totalCost = 0; let totalRevenue = 0; trades.forEach(t => { const cost = Number(t.costPrice) || 0; const sale = Number(t.salePrice) || 0; if(t.status === 'sold') { soldCount++; totalCost += cost; totalRevenue += sale; } else { forSaleCount++; } }); return { soldCount, forSaleCount, netProfit: totalRevenue - totalCost, totalRevenue }; }, [trades]);
 
             // --- Collection Batch Set Logic ---
             const toggleCollectionBatchMode = () => { setIsCollectionBatchMode(prev => !prev); setCollectionBatchSelection(new Set()); };
@@ -1019,6 +1034,16 @@
             const getEffectiveDate = (item) => item.isPreorder ? item.shippingDate : item.date;
             const getStackedItems = (sourceItems, mode) => { const map = new Map(); const stacks = []; sourceItems.forEach(item => { const key = item.name; if (!map.has(key)) { const stack = { ...item, instances: [item], totalCount: (item.quantity || 1) }; map.set(key, stack); stacks.push(stack); } else { const stack = map.get(key); stack.instances.push(item); stack.totalCount += (item.quantity || 1); } }); return stacks; };
             const getFilteredList = (list, mode, typeFilters, charFilters, dateFilters, seriesFilters) => { let processed = list.filter(i => appSettings.visibleCharacters.includes(i.character)); if (mode === 'type' && typeFilters.length > 0) processed = processed.filter(i => typeFilters.includes(i.type)); if (mode === 'character' && charFilters.length > 0) processed = processed.filter(i => charFilters.includes(i.character)); if (mode === 'date' && dateFilters.length > 0) processed = processed.filter(i => { const effDate = getEffectiveDate(i); return dateFilters.includes(effDate); }); if (mode === 'series' && seriesFilters.length > 0) processed = processed.filter(i => seriesFilters.includes(i.series)); return processed; };
+            const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters, dateFilters, seriesFilters) => { const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters, seriesFilters); const isAllSelected = (mode === 'type' && typeFilters.length === 0) || (mode === 'character' && charFilters.length === 0) || (mode === 'series' && seriesFilters.length === 0) || (mode === 'date' && dateFilters.length === 0); if (mode === 'none') { return { '全部': processedList }; } if (isAllSelected && !appSettings.groupAllInFilterMode) { return { '全部': processedList }; } const grouped = processedList.reduce((acc, item) => { let key = ''; if (mode === 'series') key = item.series || '其他系列'; else if (mode === 'type') key = item.type || '其他類型'; else if (mode === 'character') key = item.character || '其他角色'; else if (mode === 'date') key = getEffectiveDate(item) || '未知日期'; if (!acc[key]) acc[key] = []; acc[key].push(item); return acc; }, {}); if (mode === 'date') { const keys = Object.keys(grouped).sort((a,b) => { if(a==='未知日期') return 1; if(b==='未知日期') return -1; return sortOrder==='desc' ? new Date(b)-new Date(a) : new Date(a)-new Date(b); }); const sorted = {}; keys.forEach(k=>sorted[k]=grouped[k]); return sorted; } if (mode === 'type') { const sorted = {}; appSettings.customTypes.forEach(t => { if (grouped[t]) sorted[t] = grouped[t]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } if (mode === 'series') { const sorted = {}; (appSettings.customSeries || []).forEach(s => { if (grouped[s]) sorted[s] = grouped[s]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } if (mode === 'character') { const sorted = {}; appSettings.customCharacters.forEach(char => { if (grouped[char]) sorted[char] = grouped[char]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } return grouped; };
+            const groupedData = useMemo(() => ({ collection: getGroupedData(items, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters), catalog: getGroupedData(catalogItems, groupingMode, 'desc', selectedTypeFilters, selectedCharFilters, [], selectedSeriesFilters) }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters, appSettings.visibleCharacters, appSettings.groupAllInFilterMode, appSettings.customCharacters, appSettings.customTypes, appSettings.customSeries]);
+
+            const stats = useMemo(() => { const visibleItems = items.filter(i => appSettings.visibleCharacters.includes(i.character)); const totalCount = visibleItems.length; let totalNT = 0, totalR = 0; const charCost = {}; CHARACTERS.forEach(c => charCost[c] = 0); charCost["其他"] = 0; visibleItems.forEach(item => { const price = Number(item.acquiredPrice || 0); const qty = item.quantity || 1; if (item.currency === 'r') { totalR += price * qty; charCost[item.character] = (charCost[item.character] || 0) + (price * exchangeRate * qty); } else { totalNT += price * qty; charCost[item.character] = (charCost[item.character] || 0) + (price * qty); } }); Object.values(dailyFees).forEach(feeObj => { if (typeof feeObj === 'object') { totalNT += Number(feeObj.shipping || 0); totalNT += Number(feeObj.handling || 0); } else { totalNT += Number(feeObj || 0); } }); const grandTotal = totalNT + (totalR * exchangeRate); const byChar = visibleItems.reduce((acc, item) => { acc[item.character] = (acc[item.character] || 0) + (item.quantity || 1); return acc; }, {}); return { totalCount, totalNT, totalR, grandTotal, byChar, charCost }; }, [items, dailyFees, appSettings.visibleCharacters, exchangeRate]);
+            const chartData = useMemo(() => { return Object.entries(stats.byChar).map(([name, value]) => ({ name, value })).filter(i => i.value > 0); }, [stats.byChar]);
+            const costChartData = useMemo(() => { return Object.entries(stats.charCost).map(([name, value]) => ({ name, value: Math.round(value) })).filter(i => i.value > 0).sort((a,b) => b.value - a.value); }, [stats.charCost]);
+            const availableTypes = useMemo(() => { const source = activeTab === 'templates' ? catalogItems : items; const types = new Set(source.map(i => i.type).filter(Boolean)); return appSettings.customTypes.filter(t => types.has(t)).concat(Array.from(types).filter(t => !appSettings.customTypes.includes(t))); }, [items, catalogItems, appSettings.customTypes, activeTab]);
+            const availableSeries = useMemo(() => { const source = activeTab === 'collection' ? items : catalogItems; const series = new Set(source.map(i => i.series).filter(Boolean)); return (appSettings.customSeries || []).filter(s => series.has(s)).concat(Array.from(series).filter(s => !(appSettings.customSeries || []).includes(s))); }, [items, catalogItems, appSettings.customSeries, activeTab]);
+            const availableDates = useMemo(() => { const dates = new Set(items.map(i => getEffectiveDate(i)).filter(Boolean)); return Array.from(dates).sort((a, b) => { return dateSortOrder === 'desc' ? new Date(b) - new Date(a) : new Date(a) - new Date(b); }); }, [items, dateSortOrder]);
+            const preorderDates = useMemo(() => { const set = new Set(); items.forEach(i => { if (i.isPreorder && i.shippingDate) set.add(i.shippingDate); }); return set; }, [items]);
             
             // --- UPDATED: Grouped Data Logic for Trade History ---
             const getTradeGroupedData = (tradeList) => {
@@ -1053,17 +1078,6 @@
                     return { date, items, sets, loose, total };
                 });
             };
-
-            const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters, dateFilters, seriesFilters) => { const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters, seriesFilters); const isAllSelected = (mode === 'type' && typeFilters.length === 0) || (mode === 'character' && charFilters.length === 0) || (mode === 'series' && seriesFilters.length === 0) || (mode === 'date' && dateFilters.length === 0); if (mode === 'none') { return { '全部': processedList }; } if (isAllSelected && !appSettings.groupAllInFilterMode) { return { '全部': processedList }; } const grouped = processedList.reduce((acc, item) => { let key = ''; if (mode === 'series') key = item.series || '其他系列'; else if (mode === 'type') key = item.type || '其他類型'; else if (mode === 'character') key = item.character || '其他角色'; else if (mode === 'date') key = getEffectiveDate(item) || '未知日期'; if (!acc[key]) acc[key] = []; acc[key].push(item); return acc; }, {}); if (mode === 'date') { const keys = Object.keys(grouped).sort((a,b) => { if(a==='未知日期') return 1; if(b==='未知日期') return -1; return sortOrder==='desc' ? new Date(b)-new Date(a) : new Date(a)-new Date(b); }); const sorted = {}; keys.forEach(k=>sorted[k]=grouped[k]); return sorted; } if (mode === 'type') { const sorted = {}; appSettings.customTypes.forEach(t => { if (grouped[t]) sorted[t] = grouped[t]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } if (mode === 'series') { const sorted = {}; (appSettings.customSeries || []).forEach(s => { if (grouped[s]) sorted[s] = grouped[s]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } if (mode === 'character') { const sorted = {}; appSettings.customCharacters.forEach(char => { if (grouped[char]) sorted[char] = grouped[char]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } return grouped; };
-            const groupedData = useMemo(() => ({ collection: getGroupedData(items, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters), catalog: getGroupedData(catalogItems, groupingMode, 'desc', selectedTypeFilters, selectedCharFilters, [], selectedSeriesFilters) }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters, appSettings.visibleCharacters, appSettings.groupAllInFilterMode, appSettings.customCharacters, appSettings.customTypes, appSettings.customSeries]);
-
-            const stats = useMemo(() => { const visibleItems = items.filter(i => appSettings.visibleCharacters.includes(i.character)); const totalCount = visibleItems.length; let totalNT = 0, totalR = 0; const charCost = {}; CHARACTERS.forEach(c => charCost[c] = 0); charCost["其他"] = 0; visibleItems.forEach(item => { const price = Number(item.acquiredPrice || 0); const qty = item.quantity || 1; if (item.currency === 'r') { totalR += price * qty; charCost[item.character] = (charCost[item.character] || 0) + (price * exchangeRate * qty); } else { totalNT += price * qty; charCost[item.character] = (charCost[item.character] || 0) + (price * qty); } }); Object.values(dailyFees).forEach(feeObj => { if (typeof feeObj === 'object') { totalNT += Number(feeObj.shipping || 0); totalNT += Number(feeObj.handling || 0); } else { totalNT += Number(feeObj || 0); } }); const grandTotal = totalNT + (totalR * exchangeRate); const byChar = visibleItems.reduce((acc, item) => { acc[item.character] = (acc[item.character] || 0) + (item.quantity || 1); return acc; }, {}); return { totalCount, totalNT, totalR, grandTotal, byChar, charCost }; }, [items, dailyFees, appSettings.visibleCharacters, exchangeRate]);
-            const chartData = useMemo(() => { return Object.entries(stats.byChar).map(([name, value]) => ({ name, value })).filter(i => i.value > 0); }, [stats.byChar]);
-            const costChartData = useMemo(() => { return Object.entries(stats.charCost).map(([name, value]) => ({ name, value: Math.round(value) })).filter(i => i.value > 0).sort((a,b) => b.value - a.value); }, [stats.charCost]);
-            const availableTypes = useMemo(() => { const source = activeTab === 'templates' ? catalogItems : items; const types = new Set(source.map(i => i.type).filter(Boolean)); return appSettings.customTypes.filter(t => types.has(t)).concat(Array.from(types).filter(t => !appSettings.customTypes.includes(t))); }, [items, catalogItems, appSettings.customTypes, activeTab]);
-            const availableSeries = useMemo(() => { const source = activeTab === 'collection' ? items : catalogItems; const series = new Set(source.map(i => i.series).filter(Boolean)); return (appSettings.customSeries || []).filter(s => series.has(s)).concat(Array.from(series).filter(s => !(appSettings.customSeries || []).includes(s))); }, [items, catalogItems, appSettings.customSeries, activeTab]);
-            const availableDates = useMemo(() => { const dates = new Set(items.map(i => getEffectiveDate(i)).filter(Boolean)); return Array.from(dates).sort((a, b) => { return dateSortOrder === 'desc' ? new Date(b) - new Date(a) : new Date(a) - new Date(b); }); }, [items, dateSortOrder]);
-            const preorderDates = useMemo(() => { const set = new Set(); items.forEach(i => { if (i.isPreorder && i.shippingDate) set.add(i.shippingDate); }); return set; }, [items]);
 
             const gridStyle = { display: 'grid', gridTemplateColumns: `repeat(${appSettings.layoutCols}, minmax(0, 1fr))`, gap: '1rem' };
 
@@ -1151,8 +1165,8 @@
                                             // 運費包手按鈕 (Generic for day)
                                             const feeControls = (setKey) => (
                                                 <div className="flex items-center gap-2">
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); setEditingFeeValue(dailyFees[setKey]?.shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.shipping > 0 ? `運費 ${dailyFees[setKey].shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); setEditingFeeValue(dailyFees[setKey]?.handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.handling > 0 ? `包手 ${dailyFees[setKey].handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: gName, type: 'shipping'}); setEditingFeeValue(shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{shipping > 0 ? `運費 ${shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: gName, type: 'handling'}); setEditingFeeValue(handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{handling > 0 ? `包手 ${handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
                                                 </div>
                                             );
 
@@ -1185,6 +1199,7 @@
                                                                         <Icon name="Package" size={12} /> {setName} 
                                                                         <span className="ml-1 text-blue-500 border-l border-blue-200 pl-1">NT${Math.round(setGrandTotal).toLocaleString()}</span>
                                                                     </div>
+                                                                    {/* Fee controls for this specific set */}
                                                                     {feeControls(setKey)}
                                                                 </div>
                                                                 <div style={gridStyle} className="mt-2">

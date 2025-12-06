@@ -44,7 +44,7 @@
     <script type="text/babel" data-type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch, getDoc, deleteField } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch, getDoc, updateDoc, deleteField } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         const { useState, useEffect, useMemo, useRef, memo } = React;
         
@@ -212,7 +212,6 @@
             const handleCardClick = (e) => {
                 if (isBatchMode && onToggleSelect) {
                     e.stopPropagation();
-                    // Pass all instance IDs for batch selection
                     onToggleSelect(stack.instances.map(i => i.id));
                 }
             };
@@ -344,17 +343,18 @@
             );
         });
 
-        // --- Settings Modal (Updated UI) ---
+        // --- Settings Modal ---
         const SettingsModal = ({ isOpen, onClose, appSettings, setAppSettings, importJson, setImportJson, handleBulkImport, handleExportCatalog, handleResetData, handleAddType, handleDeleteType, newTypeInput, setNewTypeInput, handleManualSyncTypes, handleAddSeries, handleDeleteSeries, newSeriesInput, setNewSeriesInput, handleManualSyncSeries, handleRemoveDuplicates }) => {
             const [settingsTab, setSettingsTab] = useState('layout');
             const dragTypeItem = useRef(null); const dragTypeOverItem = useRef(null);
             const dragSeriesItem = useRef(null); const dragSeriesOverItem = useRef(null);
             
             if (!isOpen) return null;
-            // ... (Same implementation as before) ...
+
             const toggleCharacterVisibility = (char) => { setAppSettings(prev => { const current = prev.visibleCharacters || []; if (char === "ALL") { const allMainSelected = CHARACTERS.every(c => current.includes(c)); return allMainSelected ? { ...prev, visibleCharacters: [] } : { ...prev, visibleCharacters: [...CHARACTERS] }; } else { return current.includes(char) ? { ...prev, visibleCharacters: current.filter(c => c !== char) } : { ...prev, visibleCharacters: [...current, char] }; } }); };
             const toggleMultiSelect = (key) => { setAppSettings(prev => ({ ...prev, multiSelect: { ...(prev.multiSelect || {}), [key]: !prev.multiSelect?.[key] } })); };
-            const handleTypeSort = () => { /* ... */ }; 
+            const handleTypeSort = () => { const _customTypes = [...(appSettings.customTypes || DEFAULT_MERCH_TYPES)]; const dragIndex = dragTypeItem.current; const dragOverIndex = dragTypeOverItem.current; if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return; const dragItemContent = _customTypes[dragIndex]; _customTypes.splice(dragIndex, 1); _customTypes.splice(dragOverIndex, 0, dragItemContent); setAppSettings(prev => ({ ...prev, customTypes: _customTypes })); dragTypeItem.current = null; dragTypeOverItem.current = null; };
+            const handleSeriesSort = () => { const _customSeries = [...(appSettings.customSeries || [])]; const dragIndex = dragSeriesItem.current; const dragOverIndex = dragSeriesOverItem.current; if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return; const dragItemContent = _customSeries[dragIndex]; _customSeries.splice(dragIndex, 1); _customSeries.splice(dragOverIndex, 0, dragItemContent); setAppSettings(prev => ({ ...prev, customSeries: _customSeries })); dragSeriesItem.current = null; dragSeriesOverItem.current = null; };
             
             const customCharacters = appSettings.customCharacters || CHARACTERS;
             const customTypes = appSettings.customTypes || DEFAULT_MERCH_TYPES;
@@ -396,12 +396,10 @@
                         </div>
                     </div>
                 </div>)}
-                {/* ... (Other tabs) ... */}
-                {/* (To keep code compact, omitting unchanged tabs content, but in full version they exist) */}
                 {settingsTab === 'filter' && (<div className="space-y-4 animate-fade-in"><div className="flex justify-between items-center"><p className="text-sm text-gray-500">勾選角色以顯示週邊。</p><button onClick={() => toggleCharacterVisibility('ALL')} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700">我全都要</button></div><div className="grid grid-cols-2 gap-2">{customCharacters.map((char, index) => { const isChecked = (appSettings.visibleCharacters || []).includes(char); return (<div key={char} className={`flex items-center justify-between p-3 border rounded-xl transition-colors ${isChecked ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50'}`} onClick={() => toggleCharacterVisibility(char)}><div className="flex items-center gap-3"><span className={`text-sm font-medium ${CHARACTER_THEMES[char]?.text || 'text-gray-700'}`}>{char}</span></div><div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>{isChecked && <Icon name="Check" size={12} className="text-white"/>}</div></div>); })}</div></div>)}
                 {settingsTab === 'filters_config' && (<div className="space-y-4 animate-fade-in"><p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p><div className="space-y-3">{['series', 'type', 'character', 'date'].map(key => (<label key={key} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.multiSelect?.[key]} onChange={() => toggleMultiSelect(key)} /><span className="text-sm font-medium">依{key==='series'?'系列':key==='type'?'類型':key==='character'?'角色':'收物日'} - 多選</span></label>))}</div></div>)}
-                {settingsTab === 'types' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} /><button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label><button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">{customTypes.map((t, index) => (<div key={t} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm"><span className="text-sm font-medium">{t}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
-                {settingsTab === 'series' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增系列</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新系列名稱..." value={newSeriesInput} onKeyDown={(e) => e.key === 'Enter' && handleAddSeries()} onChange={e=>setNewSeriesInput(e.target.value)} /><button onClick={handleAddSeries} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前系列列表 (拖曳可排序)</label><button onClick={handleManualSyncSeries} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步系列</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100 min-h-[50px]">{customSeries.map((s, index) => (<div key={s} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm"><span className="text-sm font-medium">{s}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteSeries(s);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
+                {settingsTab === 'types' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} /><button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label><button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">{customTypes.map((t, index) => (<div key={t} draggable onDragStart={(e) => { dragTypeItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragTypeOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleTypeSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{t}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
+                {settingsTab === 'series' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增系列</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新系列名稱..." value={newSeriesInput} onKeyDown={(e) => e.key === 'Enter' && handleAddSeries()} onChange={e=>setNewSeriesInput(e.target.value)} /><button onClick={handleAddSeries} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前系列列表 (拖曳可排序)</label><button onClick={handleManualSyncSeries} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步系列</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100 min-h-[50px]">{customSeries.map((s, index) => (<div key={s} draggable onDragStart={(e) => { dragSeriesItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragSeriesOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleSeriesSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{s}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteSeries(s);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
                 {settingsTab === 'data' && (<div className="space-y-4 animate-fade-in"><div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800"><p className="font-bold mb-1">批次匯入：</p><p>貼上 Excel 或 JSON。匯入後將存入共用圖鑑。</p></div><textarea className="w-full h-32 p-3 border rounded-xl text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea><div className="flex gap-2"><button onClick={handleBulkImport} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 shadow-sm">匯入</button><button onClick={handleExportCatalog} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded hover:bg-gray-50">匯出</button></div><hr /><button onClick={handleRemoveDuplicates} className="w-full text-blue-600 border border-blue-200 py-3 rounded-xl hover:bg-blue-50 text-sm mb-2 font-bold flex items-center justify-center gap-2"><Icon name="Eraser" size={16}/> 清理重複資料 (本地)</button><button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-3 rounded-xl hover:bg-red-50 text-sm font-bold flex items-center justify-center gap-2"><Icon name="AlertTriangle" size={16}/> 清空本地快取資料</button></div>)}
                 </div>
                 </div></div>
@@ -426,7 +424,7 @@
             );
         };
 
-        // --- Collection Batch Action Bar ---
+        // --- Batch Manage Bar for Collection (Updated) ---
         const CollectionBatchBar = ({ selectionCount, onCancel, onAddToSet, onRemoveFromSet, onDelete }) => {
             return (
                 <div className="fixed bottom-8 right-8 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl z-40 flex flex-col gap-3 animate-fade-in min-w-[200px]">
@@ -446,7 +444,7 @@
                 </div>
             );
         };
-
+        
         // --- Trade Edit Modal ---
         const TradeModal = ({ isOpen, onClose, tradeItem, onSave, catalogItems, customTypes }) => {
             const [data, setData] = useState({
@@ -464,7 +462,6 @@
             });
             const [searchMode, setSearchMode] = useState(false);
             const [searchTerm, setSearchTerm] = useState('');
-            
             const [filterChar, setFilterChar] = useState('all');
             const [filterType, setFilterType] = useState('all');
 
@@ -610,8 +607,11 @@
                         if (typeof parsed.multiSelect.series === 'undefined') parsed.multiSelect.series = false;
                         if (!parsed.defaultPreorderCurrency) parsed.defaultPreorderCurrency = 'NT$';
                         if (!parsed.defaultCurrency) parsed.defaultCurrency = 'NT$';
+                        
+                        // Don't force overwrite user settings
                         if (typeof parsed.groupAllInFilterMode === 'undefined') parsed.groupAllInFilterMode = true;
                         if (typeof parsed.showAmount === 'undefined') parsed.showAmount = true;
+
                         if (!parsed.customTypes) parsed.customTypes = DEFAULT_MERCH_TYPES;
                         if (!parsed.customSeries) parsed.customSeries = []; 
                         return parsed;
@@ -620,6 +620,7 @@
                 return defaults;
             });
             
+            // ... (Standard States)
             const [groupingMode, setGroupingMode] = useState('none'); 
             const [collectionGroupingMode, setCollectionGroupingMode] = useState(() => localStorage.getItem('deepspace_collection_mode') || 'none');
             const [selectedTypeFilters, setSelectedTypeFilters] = useState([]); 
@@ -657,6 +658,9 @@
             const [isCollectionBatchMode, setIsCollectionBatchMode] = useState(false);
             const [collectionBatchSelection, setCollectionBatchSelection] = useState(new Set());
             const [isSetNameModalOpen, setIsSetNameModalOpen] = useState(false);
+            
+            // NEW: Trade Filter State
+            const [tradeFilterStatus, setTradeFilterStatus] = useState('all'); // 'all', 'selling', 'sold'
 
             useEffect(() => { localStorage.setItem('deepspace_active_tab', activeTab); }, [activeTab]);
             useEffect(() => { localStorage.setItem('deepspace_collection_mode', collectionGroupingMode); }, [collectionGroupingMode]);
@@ -676,6 +680,7 @@
             const saveToCatalog = async (newItem) => { if (!isFirebaseInitialized) { setCatalogItems(prev => { const exists = prev.find(i => i.id === newItem.id); return exists ? prev.map(i => i.id === newItem.id ? newItem : i) : [...prev, newItem]; }); return; } let order = newItem.order || Date.now(); await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, newItem.id), { ...newItem, order }, { merge: true }); };
             const deleteFromCatalog = async (itemId) => { if (confirm("警告：確定要從共用圖鑑刪除嗎？")) { if (isFirebaseInitialized) await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, itemId)); else setCatalogItems(prev => prev.filter(i => i.id !== itemId)); } };
             
+            // Updated handleSaveFee to support Set keys (date_setName)
             const handleSaveFee = async (id, type, amount) => { 
                 const numAmount = parseInt(amount) || 0; 
                 if (user && isFirebaseInitialized) { 
@@ -690,6 +695,7 @@
                 } 
                 setEditingFeeTarget({ date: null, type: null }); 
             };
+
             const handleRemoveDuplicates = () => { if (confirm("這將移除「名稱+角色+類型+系列」完全相同的重複資料。\n\n(注意：如果是雲端模式，此操作目前僅會清理本地顯示，若要清理雲端資料庫請手動刪除)")) { setCatalogItems(prev => { const unique = getUniqueItems(prev); alert(`已清理重複資料。剩餘 ${unique.length} 筆 (原 ${prev.length} 筆)`); return unique; }); } };
             
             const handleAddType = () => { if (newTypeInput && !appSettings.customTypes.includes(newTypeInput)) { setAppSettings(prev => ({...prev, customTypes: [...prev.customTypes, newTypeInput]})); setNewTypeInput(''); } };
@@ -698,9 +704,11 @@
             const handleAddSeries = () => { if (newSeriesInput && !appSettings.customSeries.includes(newSeriesInput)) { setAppSettings(prev => ({...prev, customSeries: [...(prev.customSeries || []), newSeriesInput]})); setNewSeriesInput(''); } };
             const handleDeleteSeries = (s) => { if (confirm(`確定要刪除系列「${s}」嗎？`)) { setAppSettings(prev => ({...prev, customSeries: prev.customSeries.filter(series => series !== s)})); } };
             const handleManualSyncSeries = () => { const allItems = [...items, ...catalogItems]; const validSeries = allItems.map(i => i.series ? i.series.trim() : '').filter(s => s !== ''); const usedSeries = new Set(validSeries); setAppSettings(prev => { const currentSeries = prev.customSeries || []; const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s)); if (newSeries.length > 0) { alert(`已同步 ${newSeries.length} 個新系列！`); return { ...prev, customSeries: [...currentSeries, ...newSeries] }; } else { alert('目前沒有發現新系列。'); return prev; } }); };
+            
             const handleBulkImport = async () => { if (!importJson.trim()) return; try { let parsedData = []; const text = importJson.trim(); if (text.startsWith('[')) { parsedData = JSON.parse(text); } else { const rows = text.split('\n').map(r=>r.trim()).filter(r=>r); const header = rows[0].toLowerCase(); const sep = header.includes('\t') ? '\t' : ','; const cols = rows[0].split(sep).map(s=>s.trim()); const mapKey = { 'name': 'name', '名稱': 'name', 'character': 'character', '角色': 'character', 'type': 'type', '類型': 'type', 'series': 'series', '系列': 'series', 'officialprice': 'officialPrice', '原價': 'officialPrice', 'image': 'image', '圖片': 'image' }; const keys = cols.map(c => mapKey[c.toLowerCase()] || c); if (!keys.includes('name')) throw new Error("缺少 'name' 或 '名稱' 欄位"); parsedData = rows.slice(1).map(row => { const vals = row.split(sep); let obj = {}; keys.forEach((k, i) => { if (vals[i]) obj[k] = vals[i].trim(); }); return obj; }).filter(o => o.name); } if (parsedData.length === 0) throw new Error("無有效資料"); const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== '')); const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== '')); setAppSettings(prev => { const currentTypes = prev.customTypes || []; const newTypesToAdd = Array.from(importedTypes).filter(t => !currentTypes.includes(t)); const currentSeries = prev.customSeries || []; const newSeriesToAdd = Array.from(importedSeries).filter(s => !currentSeries.includes(s)); let next = { ...prev }; let changed = false; if (newTypesToAdd.length > 0) { next.customTypes = [...currentTypes, ...newTypesToAdd]; changed = true; } if (newSeriesToAdd.length > 0) { next.customSeries = [...currentSeries, ...newSeriesToAdd]; changed = true; } return changed ? next : prev; }); let count = 0; const timestamp = Date.now(); let newItemsBatch = []; for (const item of parsedData) { const newItem = { id: item.id || `imp_${timestamp}_${count}`, name: item.name, character: item.character || '其他', type: item.type || '未分類', series: item.series || '', officialPrice: item.officialPrice || '', image: item.image || null, order: timestamp + count }; if(isFirebaseInitialized) { await saveToCatalog(newItem); } else { newItemsBatch.push(newItem); } count++; } if (!isFirebaseInitialized && newItemsBatch.length > 0) { setCatalogItems(prev => getUniqueItems([...prev, ...newItemsBatch])); } alert(`匯入成功 ${parsedData.length} 筆`); setImportJson(''); } catch (e) { alert("匯入失敗: " + e.message); } };
             const handleExportCatalog = () => { const dataStr = JSON.stringify(catalogItems, null, 2); setImportJson(dataStr); };
             const handleResetData = () => { if (confirm("確定要清空本地資料嗎？此操作無法復原。")) { setItems([]); setCatalogItems([]); setDailyFees({}); localStorage.removeItem('deepspace_items_v7_local'); localStorage.removeItem('deepspace_catalog_v7_local'); localStorage.removeItem('deepspace_daily_fees_local'); alert("已清空。"); } };
+            
             const toggleCharacterVisibility = (char) => { setAppSettings(prev => { const current = prev.visibleCharacters; if (char === "ALL") { const allMainSelected = CHARACTERS.every(c => current.includes(c)); if (allMainSelected) { return { ...prev, visibleCharacters: [] }; } else { return { ...prev, visibleCharacters: [...CHARACTERS] }; } } else { if (current.includes(char)) { return { ...prev, visibleCharacters: current.filter(c => c !== char) }; } else { return { ...prev, visibleCharacters: [...current, char] }; } } }); };
             const toggleMultiSelect = (key) => { setAppSettings(prev => ({ ...prev, multiSelect: { ...prev.multiSelect, [key]: !prev.multiSelect[key] } })); };
             const toggleBatchMode = () => { setIsBatchMode(prev => !prev); setBatchSelection(new Set()); };
@@ -716,9 +724,23 @@
             const commitBatches = async (batchArray) => { const chunkSize = 400; for (let i = 0; i < batchArray.length; i += chunkSize) { const batch = writeBatch(db); const chunk = batchArray.slice(i, i + chunkSize); chunk.forEach(op => batch.update(op.ref, op.data)); await batch.commit(); } };
             const handleSort = async () => { if (collectionGroupingMode !== 'none') return; const stacks = groupedData.collection['全部'] ? getStackedItems(groupedData.collection['全部'], 'none') : []; const copyStacks = [...stacks]; const dragItemContent = copyStacks[dragItem.current]; copyStacks.splice(dragItem.current, 1); copyStacks.splice(dragOverItem.current, 0, dragItemContent); dragItem.current = null; dragOverItem.current = null; const newItems = []; const updates = []; copyStacks.forEach((stack, index) => { stack.instances.forEach(inst => { const newOrder = index; const updatedItem = { ...inst, order: newOrder }; newItems.push(updatedItem); if (user && isFirebaseInitialized) { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, inst.id); updates.push({ ref, data: { order: newOrder } }); } }); }); setItems(prevItems => { const orderMap = new Map(); newItems.forEach(i => orderMap.set(i.id, i.order)); const updatedList = prevItems.map(item => { if (orderMap.has(item.id)) { return { ...item, order: orderMap.get(item.id) }; } return item; }); return updatedList.sort((a, b) => (a.order || 0) - (b.order || 0)); }); if (user && isFirebaseInitialized && updates.length > 0) { try { await commitBatches(updates); } catch (e) { console.error("Batch update failed", e); alert("排序儲存失敗"); } } };
 
+            // --- Trade Logic ---
             const [isTradeModalOpen, setIsTradeModalOpen] = useState(false);
             const [editingTrade, setEditingTrade] = useState(null);
-            const handleSaveTrade = async (tradeData) => { const tradesToProcess = Array.isArray(tradeData) ? tradeData : [tradeData]; if (tradesToProcess.length === 0) return; if (!tradesToProcess[0].name) return alert("請輸入物品名稱"); if (user && isFirebaseInitialized) { const batch = writeBatch(db); tradesToProcess.forEach(t => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, t.id); batch.set(ref, t); }); await batch.commit(); } else { setTrades(prev => { const ids = new Set(tradesToProcess.map(t => t.id)); const filtered = prev.filter(t => !ids.has(t.id)); return [...tradesToProcess, ...filtered]; }); } setIsTradeModalOpen(false); };
+
+            const handleSaveTrade = async (tradeData) => {
+                const tradesToProcess = Array.isArray(tradeData) ? tradeData : [tradeData];
+                if (tradesToProcess.length === 0) return;
+                if (!tradesToProcess[0].name) return alert("請輸入物品名稱");
+                if (user && isFirebaseInitialized) {
+                    const batch = writeBatch(db);
+                    tradesToProcess.forEach(t => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, t.id); batch.set(ref, t); });
+                    await batch.commit();
+                } else {
+                    setTrades(prev => { const ids = new Set(tradesToProcess.map(t => t.id)); const filtered = prev.filter(t => !ids.has(t.id)); return [...tradesToProcess, ...filtered]; });
+                }
+                setIsTradeModalOpen(false);
+            };
             const handleDeleteTrade = async (tradeId) => { if(!confirm("確定要刪除這筆交易紀錄嗎？")) return; if(user && isFirebaseInitialized) { await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, tradeId)); } else { setTrades(prev => prev.filter(t => t.id !== tradeId)); } };
             const markAsSold = async (trade) => { const updated = { ...trade, status: 'sold', sellDate: new Date().toISOString().split('T')[0] }; if(user && isFirebaseInitialized) { await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, updated.id), updated); } else { setTrades(prev => prev.map(t => t.id === trade.id ? updated : t)); } };
             const openTradeModal = (trade = null) => { setEditingTrade(trade); setIsTradeModalOpen(true); };
@@ -728,13 +750,67 @@
             const handleBatchDeleteTrade = async () => { if(tradeBatchSelection.size === 0) return; if(!confirm(`警告：確定要刪除這 ${tradeBatchSelection.size} 筆交易紀錄嗎？`)) return; if (user && isFirebaseInitialized) { const batch = writeBatch(db); tradeBatchSelection.forEach(id => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, id); batch.delete(ref); }); await batch.commit(); } else { setTrades(prev => prev.filter(t => !tradeBatchSelection.has(t.id))); } setIsTradeBatchMode(false); setTradeBatchSelection(new Set()); };
             const tradeStats = useMemo(() => { let soldCount = 0; let forSaleCount = 0; let totalCost = 0; let totalRevenue = 0; trades.forEach(t => { const cost = Number(t.costPrice) || 0; const sale = Number(t.salePrice) || 0; if(t.status === 'sold') { soldCount++; totalCost += cost; totalRevenue += sale; } else { forSaleCount++; } }); return { soldCount, forSaleCount, netProfit: totalRevenue - totalCost, totalRevenue }; }, [trades]);
 
+            // --- Collection Batch Set Logic ---
             const toggleCollectionBatchMode = () => { setIsCollectionBatchMode(prev => !prev); setCollectionBatchSelection(new Set()); };
-            const handleCollectionBatchSelect = (itemIds) => { setCollectionBatchSelection(prev => { const newSet = new Set(prev); const ids = Array.isArray(itemIds) ? itemIds : [itemIds]; const allSelected = ids.every(id => newSet.has(id)); if (allSelected) { ids.forEach(id => newSet.delete(id)); } else { ids.forEach(id => newSet.add(id)); } return newSet; }); };
+            const handleCollectionBatchSelect = (itemIds) => { 
+                setCollectionBatchSelection(prev => { 
+                    const newSet = new Set(prev); 
+                    const ids = Array.isArray(itemIds) ? itemIds : [itemIds];
+                    
+                    // Check if all items in this group are already selected
+                    const allSelected = ids.every(id => newSet.has(id));
+                    
+                    if (allSelected) {
+                        ids.forEach(id => newSet.delete(id));
+                    } else {
+                        ids.forEach(id => newSet.add(id));
+                    }
+                    return newSet; 
+                }); 
+            };
             const handleBatchDeleteCollection = async () => { if(collectionBatchSelection.size === 0) return; if(!confirm(`確定要刪除這 ${collectionBatchSelection.size} 個收藏品嗎？`)) return; if(user && isFirebaseInitialized) { const batch = writeBatch(db); collectionBatchSelection.forEach(id => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, id); batch.delete(ref); }); await batch.commit(); } else { setItems(prev => prev.filter(i => !collectionBatchSelection.has(i.id))); } setIsCollectionBatchMode(false); setCollectionBatchSelection(new Set()); };
-            const handleBatchRemoveFromSet = async () => { if (collectionBatchSelection.size === 0) return; if (!confirm(`確定要將這 ${collectionBatchSelection.size} 個物品移出組合嗎？(變回散貨)`)) return; if (user && isFirebaseInitialized) { const batch = writeBatch(db); collectionBatchSelection.forEach(id => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, id); batch.update(ref, { setName: deleteField() }); }); await batch.commit(); } else { setItems(prev => prev.map(i => collectionBatchSelection.has(i.id) ? { ...i, setName: undefined } : i)); } setIsCollectionBatchMode(false); setCollectionBatchSelection(new Set()); };
-            const handleBatchSetGroup = () => { if (collectionBatchSelection.size === 0) return; setIsSetNameModalOpen(true); };
-            const confirmSetGroup = async (setName) => { if (user && isFirebaseInitialized) { const batch = writeBatch(db); collectionBatchSelection.forEach(id => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, id); batch.update(ref, { setName: setName }); }); await batch.commit(); } else { setItems(prev => prev.map(i => collectionBatchSelection.has(i.id) ? { ...i, setName: setName } : i)); } setIsSetNameModalOpen(false); setIsCollectionBatchMode(false); setCollectionBatchSelection(new Set()); };
+            
+            // --- NEW: Remove From Set Function ---
+            const handleBatchRemoveFromSet = async () => {
+                if (collectionBatchSelection.size === 0) return;
+                if (!confirm(`確定要將這 ${collectionBatchSelection.size} 個物品移出組合嗎？(變回散貨)`)) return;
 
+                if (user && isFirebaseInitialized) {
+                    const batch = writeBatch(db);
+                    collectionBatchSelection.forEach(id => {
+                        const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, id);
+                        batch.update(ref, { setName: deleteField() }); // Use deleteField to remove the field
+                    });
+                    await batch.commit();
+                } else {
+                    setItems(prev => prev.map(i => collectionBatchSelection.has(i.id) ? { ...i, setName: undefined } : i));
+                }
+                setIsCollectionBatchMode(false);
+                setCollectionBatchSelection(new Set());
+            };
+
+            const handleBatchSetGroup = () => {
+                 if (collectionBatchSelection.size === 0) return;
+                 setIsSetNameModalOpen(true);
+            };
+
+            const confirmSetGroup = async (setName) => {
+                if (user && isFirebaseInitialized) {
+                    const batch = writeBatch(db);
+                    collectionBatchSelection.forEach(id => {
+                        const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, id);
+                        batch.update(ref, { setName: setName });
+                    });
+                    await batch.commit();
+                } else {
+                    setItems(prev => prev.map(i => collectionBatchSelection.has(i.id) ? { ...i, setName: setName } : i));
+                }
+                setIsSetNameModalOpen(false);
+                setIsCollectionBatchMode(false);
+                setCollectionBatchSelection(new Set());
+            };
+
+            // --- Data Filters & Grouping ---
             const toggleFilter = (filterState, setFilterState, value, multiSelectEnabled) => { if (value === 'all') { setFilterState([]); return; } if (multiSelectEnabled) { if (filterState.includes(value)) { setFilterState(prev => prev.filter(v => v !== value)); } else { setFilterState(prev => [...prev, value]); } } else { if (filterState.includes(value)) { setFilterState([]); } else { setFilterState([value]); } } };
             const getEffectiveDate = (item) => item.isPreorder ? item.shippingDate : item.date;
             const getStackedItems = (sourceItems, mode) => { const map = new Map(); const stacks = []; sourceItems.forEach(item => { const key = item.name; if (!map.has(key)) { const stack = { ...item, instances: [item], totalCount: (item.quantity || 1) }; map.set(key, stack); stacks.push(stack); } else { const stack = map.get(key); stack.instances.push(item); stack.totalCount += (item.quantity || 1); } }); return stacks; };
@@ -792,8 +868,19 @@
                                         // Logic for Small Sets (only in Date view)
                                         let renderItems = [];
                                         if (collectionGroupingMode === 'date' && gName !== '全部') {
+                                            const dayStats = gItems.reduce((acc, item) => { const p = Number(item.acquiredPrice || 0); if (item.currency === 'r') acc.r += p; else acc.nt += p; return acc; }, { nt: 0, r: 0 });
+                                            const dayFee = dailyFees[gName]; const shipping = (typeof dayFee === 'object' ? dayFee.shipping : dayFee) || 0; const handling = (typeof dayFee === 'object' ? dayFee.handling : 0) || 0;
+                                            const total = dayStats.nt + (dayStats.r * exchangeRate) + shipping + handling;
                                             
-                                            // 1. Group items by Set Name
+                                            // 運費包手按鈕 (Generic for day)
+                                            const feeControls = (setKey) => (
+                                                <div className="flex items-center gap-2">
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); setEditingFeeValue(dailyFees[setKey]?.shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.shipping > 0 ? `運費 ${dailyFees[setKey].shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); setEditingFeeValue(dailyFees[setKey]?.handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.handling > 0 ? `包手 ${dailyFees[setKey].handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
+                                                </div>
+                                            );
+
+                                            // Group by 'setName'
                                             const sets = {};
                                             const loose = [];
                                             gItems.forEach(i => {
@@ -804,46 +891,25 @@
                                                     loose.push(i);
                                                 }
                                             });
-                                            
-                                            // 2. Calculate Totals (Items + Fees)
-                                            let dayGrandTotal = 0;
 
-                                            // A. Calculate Sets Total
+                                            // Determine where to show fee controls
+                                            const hasSets = Object.keys(sets).length > 0;
+                                            
+                                            // Calculate Total for Day
+                                            let dayGrandTotal = 0;
+                                            
+                                            // Sum Sets
                                             Object.entries(sets).forEach(([setName, setItems]) => {
                                                 const setKey = `${gName}_${setName}`;
                                                 const setFee = dailyFees[setKey] || { shipping: 0, handling: 0 };
-                                                
-                                                const setItemTotal = setItems.reduce((sum, item) => {
-                                                    const p = Number(item.acquiredPrice || 0);
-                                                    const q = item.quantity || 1;
-                                                    return sum + (item.currency === 'r' ? p * exchangeRate * q : p * q);
-                                                }, 0);
-                                                
+                                                const setItemTotal = setItems.reduce((sum, item) => sum + (item.currency === 'r' ? (Number(item.acquiredPrice)||0) * exchangeRate * (item.quantity||1) : (Number(item.acquiredPrice)||0) * (item.quantity||1)), 0);
                                                 dayGrandTotal += setItemTotal + (Number(setFee.shipping)||0) + (Number(setFee.handling)||0);
                                             });
-
-                                            // B. Calculate Loose Items Total + Generic Day Fees (ONLY if loose items exist)
-                                            const looseItemTotal = loose.reduce((sum, item) => {
-                                                 const p = Number(item.acquiredPrice || 0);
-                                                 const q = item.quantity || 1;
-                                                 return sum + (item.currency === 'r' ? p * exchangeRate * q : p * q);
-                                            }, 0);
-                                            
+                                            // Sum Loose
+                                            const looseItemTotal = loose.reduce((sum, item) => sum + (item.currency === 'r' ? (Number(item.acquiredPrice)||0) * exchangeRate * (item.quantity||1) : (Number(item.acquiredPrice)||0) * (item.quantity||1)), 0);
                                             const genericDayFee = dailyFees[gName] || { shipping: 0, handling: 0 };
                                             dayGrandTotal += looseItemTotal;
-                                            
-                                            // FIX: Only add generic day fee if there are loose items
-                                            if (loose.length > 0) {
-                                                dayGrandTotal += (Number(genericDayFee.shipping)||0) + (Number(genericDayFee.handling)||0);
-                                            }
-
-                                            // 運費包手按鈕 (Generic for day)
-                                            const feeControls = (setKey) => (
-                                                <div className="flex items-center gap-2">
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); setEditingFeeValue(dailyFees[setKey]?.shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.shipping > 0 ? `運費 ${dailyFees[setKey].shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); setEditingFeeValue(dailyFees[setKey]?.handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.handling > 0 ? `包手 ${dailyFees[setKey].handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
-                                                </div>
-                                            );
+                                            if (loose.length > 0) dayGrandTotal += (Number(genericDayFee.shipping)||0) + (Number(genericDayFee.handling)||0);
 
                                             dayTotalDisplay = (
                                                 <div className="flex items-center gap-2">
@@ -874,7 +940,6 @@
                                                                         <Icon name="Package" size={12} /> {setName} 
                                                                         <span className="ml-1 text-blue-500 border-l border-blue-200 pl-1">NT${Math.round(setGrandTotal).toLocaleString()}</span>
                                                                     </div>
-                                                                    {/* Fee controls for this specific set */}
                                                                     {feeControls(setKey)}
                                                                 </div>
                                                                 <div style={gridStyle} className="mt-2">
@@ -889,7 +954,6 @@
                                                         );
                                                     })}
                                                     
-                                                    {/* Loose items (no set name) */}
                                                     {loose.length > 0 && (
                                                         <div style={gridStyle} className="mt-4">
                                                             {getStackedItems(loose, collectionGroupingMode).map((s,i) => (
@@ -939,8 +1003,8 @@
                                 />
                             </div>
                         )}
-                        
-                        {/* ... (Other Tabs are below in full code but omitted here for brevity if unchanged, but provided full code has them) ... */}
+
+                        {/* ... (Templates and other tabs remain) ... */}
                         {/* Templates Tab */}
                         {activeTab === 'templates' && (
                             <div className="space-y-6 animate-fade-in pb-20 md:pb-0">

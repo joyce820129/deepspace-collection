@@ -134,7 +134,6 @@
             return <span ref={containerRef} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}></span>;
         };
 
-        // NEW: Scrollable Filter Component
         const ScrollableTags = ({ items, selected, onToggle, labelAll }) => {
             const scrollRef = useRef(null);
             const scrollInterval = useRef(null);
@@ -345,15 +344,14 @@
             );
         });
 
-        // --- Settings Modal ---
+        // --- Settings Modal (Updated UI) ---
         const SettingsModal = ({ isOpen, onClose, appSettings, setAppSettings, importJson, setImportJson, handleBulkImport, handleExportCatalog, handleResetData, handleAddType, handleDeleteType, newTypeInput, setNewTypeInput, handleManualSyncTypes, handleAddSeries, handleDeleteSeries, newSeriesInput, setNewSeriesInput, handleManualSyncSeries, handleRemoveDuplicates }) => {
             const [settingsTab, setSettingsTab] = useState('layout');
             const dragTypeItem = useRef(null); const dragTypeOverItem = useRef(null);
             const dragSeriesItem = useRef(null); const dragSeriesOverItem = useRef(null);
             
             if (!isOpen) return null;
-            
-            // ... (keep setting toggles) ...
+            // ... (Same implementation as before) ...
             const toggleCharacterVisibility = (char) => { setAppSettings(prev => { const current = prev.visibleCharacters || []; if (char === "ALL") { const allMainSelected = CHARACTERS.every(c => current.includes(c)); return allMainSelected ? { ...prev, visibleCharacters: [] } : { ...prev, visibleCharacters: [...CHARACTERS] }; } else { return current.includes(char) ? { ...prev, visibleCharacters: current.filter(c => c !== char) } : { ...prev, visibleCharacters: [...current, char] }; } }); };
             const toggleMultiSelect = (key) => { setAppSettings(prev => ({ ...prev, multiSelect: { ...(prev.multiSelect || {}), [key]: !prev.multiSelect?.[key] } })); };
             const handleTypeSort = () => { /* ... */ }; 
@@ -368,7 +366,7 @@
                 {settingsTab === 'layout' && (<div className="space-y-6 animate-fade-in">
                     <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                         <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><Icon name="Grid" size={16}/> 每行顯示數量</label>
-                        <div className="flex gap-2">{[2,3,4,5].map(cols => (<button key={cols} onClick={()=>setAppSettings(prev=>({...prev, layoutCols: cols}))} className={`flex-1 py-2 rounded-xl border text-sm font-bold transition-all ${appSettings.layoutCols===cols ? 'bg-blue-500 text-white border-blue-500 shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}>{cols}</button>))}</div>
+                        <div className="flex gap-2">{[2,3,4,5,6].map(cols => (<button key={cols} onClick={()=>setAppSettings(prev=>({...prev, layoutCols: cols}))} className={`flex-1 py-2 rounded-xl border text-sm font-bold transition-all ${appSettings.layoutCols===cols ? 'bg-blue-500 text-white border-blue-500 shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}>{cols}</button>))}</div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
@@ -402,15 +400,51 @@
                 {/* (To keep code compact, omitting unchanged tabs content, but in full version they exist) */}
                 {settingsTab === 'filter' && (<div className="space-y-4 animate-fade-in"><div className="flex justify-between items-center"><p className="text-sm text-gray-500">勾選角色以顯示週邊。</p><button onClick={() => toggleCharacterVisibility('ALL')} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700">我全都要</button></div><div className="grid grid-cols-2 gap-2">{customCharacters.map((char, index) => { const isChecked = (appSettings.visibleCharacters || []).includes(char); return (<div key={char} className={`flex items-center justify-between p-3 border rounded-xl transition-colors ${isChecked ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50'}`} onClick={() => toggleCharacterVisibility(char)}><div className="flex items-center gap-3"><span className={`text-sm font-medium ${CHARACTER_THEMES[char]?.text || 'text-gray-700'}`}>{char}</span></div><div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>{isChecked && <Icon name="Check" size={12} className="text-white"/>}</div></div>); })}</div></div>)}
                 {settingsTab === 'filters_config' && (<div className="space-y-4 animate-fade-in"><p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p><div className="space-y-3">{['series', 'type', 'character', 'date'].map(key => (<label key={key} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.multiSelect?.[key]} onChange={() => toggleMultiSelect(key)} /><span className="text-sm font-medium">依{key==='series'?'系列':key==='type'?'類型':key==='character'?'角色':'收物日'} - 多選</span></label>))}</div></div>)}
-                {settingsTab === 'types' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} /><button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label><button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">{customTypes.map((t, index) => (<div key={t} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm"><span className="text-sm font-medium">{t}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
-                {settingsTab === 'series' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增系列</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新系列名稱..." value={newSeriesInput} onKeyDown={(e) => e.key === 'Enter' && handleAddSeries()} onChange={e=>setNewSeriesInput(e.target.value)} /><button onClick={handleAddSeries} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前系列列表 (拖曳可排序)</label><button onClick={handleManualSyncSeries} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步系列</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100 min-h-[50px]">{customSeries.map((s, index) => (<div key={s} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm"><span className="text-sm font-medium">{s}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteSeries(s);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
+                {settingsTab === 'types' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} /><button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label><button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">{customTypes.map((t, index) => (<div key={t} draggable onDragStart={(e) => { dragTypeItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragTypeOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleTypeSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{t}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
+                {settingsTab === 'series' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增系列</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新系列名稱..." value={newSeriesInput} onKeyDown={(e) => e.key === 'Enter' && handleAddSeries()} onChange={e=>setNewSeriesInput(e.target.value)} /><button onClick={handleAddSeries} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前系列列表 (拖曳可排序)</label><button onClick={handleManualSyncSeries} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步系列</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100 min-h-[50px]">{customSeries.map((s, index) => (<div key={s} draggable onDragStart={(e) => { dragSeriesItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragSeriesOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleSeriesSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{s}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteSeries(s);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
                 {settingsTab === 'data' && (<div className="space-y-4 animate-fade-in"><div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800"><p className="font-bold mb-1">批次匯入：</p><p>貼上 Excel 或 JSON。匯入後將存入共用圖鑑。</p></div><textarea className="w-full h-32 p-3 border rounded-xl text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea><div className="flex gap-2"><button onClick={handleBulkImport} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 shadow-sm">匯入</button><button onClick={handleExportCatalog} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded hover:bg-gray-50">匯出</button></div><hr /><button onClick={handleRemoveDuplicates} className="w-full text-blue-600 border border-blue-200 py-3 rounded-xl hover:bg-blue-50 text-sm mb-2 font-bold flex items-center justify-center gap-2"><Icon name="Eraser" size={16}/> 清理重複資料 (本地)</button><button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-3 rounded-xl hover:bg-red-50 text-sm font-bold flex items-center justify-center gap-2"><Icon name="AlertTriangle" size={16}/> 清空本地快取資料</button></div>)}
                 </div>
                 </div></div>
             );
         };
+        
+        // --- NEW: Set Name Modal ---
+        const SetNameModal = ({ isOpen, onClose, onConfirm }) => {
+            const [name, setName] = useState('');
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl flex flex-col gap-4">
+                        <h3 className="text-lg font-bold text-gray-800">建立小組合 (Set)</h3>
+                        <input className="w-full border p-3 rounded-xl text-sm" placeholder="輸入組合名稱 (例如: 痛包組)" value={name} onChange={e=>setName(e.target.value)} autoFocus onKeyDown={e=>{if(e.key==='Enter')onConfirm(name)}}/>
+                        <div className="flex gap-2">
+                            <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600">取消</button>
+                            <button onClick={()=>onConfirm(name)} className="flex-1 py-2 rounded-xl bg-blue-600 text-white font-bold disabled:opacity-50" disabled={!name}>建立</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
 
-        // --- Trade Edit Modal ---
+        // --- Batch Manage Bar for Collection (Updated) ---
+        const CollectionBatchBar = ({ selectionCount, onCancel, onAddToSet, onDelete }) => {
+            return (
+                <div className="fixed bottom-8 right-8 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl z-40 flex flex-col gap-3 animate-fade-in min-w-[200px]">
+                    <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+                        <span className="font-bold text-sm">已選 {selectionCount} 項</span>
+                        <button onClick={onCancel} className="text-xs text-slate-400 hover:text-white"><Icon name="X" size={16}/></button>
+                    </div>
+                    <button onClick={onAddToSet} disabled={selectionCount === 0} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors">
+                        <Icon name="Package" size={16} /> 建立小組合
+                    </button>
+                    <button onClick={onDelete} disabled={selectionCount === 0} className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors">
+                        <Icon name="Trash2" size={16} /> 刪除
+                    </button>
+                </div>
+            );
+        };
+        
+        // --- Trade Edit Modal with Enhanced Selection & Filters ---
         const TradeModal = ({ isOpen, onClose, tradeItem, onSave, catalogItems, customTypes }) => {
             const [data, setData] = useState({
                 id: Date.now().toString(),
@@ -430,18 +464,19 @@
             const [filterChar, setFilterChar] = useState('all');
             const [filterType, setFilterType] = useState('all');
 
-            // Batch Add States
-            const [isMultiSelect, setIsMultiSelect] = useState(false);
-            const [selectedCatalogIds, setSelectedCatalogIds] = useState(new Set());
-            const [batchEditMode, setBatchEditMode] = useState(false);
-            const [batchItems, setBatchItems] = useState([]);
-            const [batchCommonData, setBatchCommonData] = useState({ status: 'selling', buyDate: new Date().toISOString().split('T')[0], sellDate: '', note: '' });
-
             useEffect(() => {
                 if (isOpen) {
-                    if (tradeItem) { setData({ ...tradeItem }); setSearchMode(false); setBatchEditMode(false); }
-                    else { setData({ id: Date.now().toString(), name: '', character: '沈星回', costPrice: '', salePrice: '', officialPrice: '', buyDate: new Date().toISOString().split('T')[0], sellDate: '', status: 'selling', image: '', note: '' }); setSearchMode(false); setBatchEditMode(false); setSelectedCatalogIds(new Set()); setBatchItems([]); }
-                    setFilterChar('all'); setFilterType('all'); setSearchTerm(''); setIsMultiSelect(false);
+                    if (tradeItem) {
+                        setData({ ...tradeItem });
+                        setSearchMode(false);
+                    }
+                    else {
+                        setData({ id: Date.now().toString(), name: '', character: '沈星回', costPrice: '', salePrice: '', officialPrice: '', buyDate: new Date().toISOString().split('T')[0], sellDate: '', status: 'selling', image: '', note: '' });
+                        setSearchMode(false);
+                    }
+                    setFilterChar('all');
+                    setFilterType('all');
+                    setSearchTerm('');
                 }
             }, [isOpen, tradeItem]);
 
@@ -455,32 +490,14 @@
             }, [catalogItems, searchTerm, filterChar, filterType]);
 
             const selectCatalogItem = (item) => {
-                if (isMultiSelect) {
-                    setSelectedCatalogIds(prev => { const newSet = new Set(prev); if (newSet.has(item.id)) newSet.delete(item.id); else newSet.add(item.id); return newSet; });
-                } else {
-                    setData(prev => ({ ...prev, name: item.name, character: item.character, image: item.image || '', officialPrice: item.officialPrice || '' }));
-                    setSearchMode(false);
-                }
-            };
-
-            const proceedToBatchEdit = () => {
-                const selectedItems = catalogItems.filter(i => selectedCatalogIds.has(i.id));
-                if (selectedItems.length === 0) return;
-                const initialBatchItems = selectedItems.map(item => ({ ...item, tempId: Date.now() + Math.random(), costPrice: '', salePrice: '' }));
-                setBatchItems(initialBatchItems);
-                setBatchEditMode(true);
-                setSearchMode(false);
-            };
-
-            const updateBatchItem = (tempId, field, value) => { setBatchItems(prev => prev.map(item => item.tempId === tempId ? { ...item, [field]: value } : item)); };
-            const handleBatchSave = () => {
-                const tradesToAdd = batchItems.map(item => ({
-                    id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
-                    name: item.name, character: item.character, image: item.image || '', officialPrice: item.officialPrice || '',
-                    costPrice: item.costPrice, salePrice: item.salePrice, status: batchCommonData.status,
-                    buyDate: batchCommonData.buyDate, sellDate: batchCommonData.sellDate, note: batchCommonData.note
+                setData(prev => ({
+                    ...prev,
+                    name: item.name,
+                    character: item.character,
+                    image: item.image || '',
+                    officialPrice: item.officialPrice || '' 
                 }));
-                onSave(tradesToAdd);
+                setSearchMode(false);
             };
 
             const toggleChar = (val) => setFilterChar(val === filterChar && val !== 'all' ? 'all' : val);
@@ -488,42 +505,67 @@
 
             if (!isOpen) return null;
 
-            // Batch Edit View
-            if (batchEditMode) {
-                return (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"><div className="bg-white rounded-3xl w-full max-w-3xl p-6 space-y-4 max-h-[90vh] overflow-y-auto flex flex-col"><div className="flex justify-between items-center border-b pb-3"><h3 className="text-lg font-bold text-gray-800">批次新增交易 ({batchItems.length})</h3><button onClick={onClose}><Icon name="X" size={20}/></button></div><div className="flex-1 overflow-y-auto space-y-4 p-1"><div className="bg-gray-50 p-4 rounded-xl border border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-4"><div className="col-span-2 md:col-span-1"><label className="text-xs text-gray-500 font-bold block mb-1">狀態</label><select className="w-full border p-2 rounded text-sm" value={batchCommonData.status} onChange={e=>setBatchCommonData({...batchCommonData, status: e.target.value})}><option value="selling">待售中</option><option value="sold">已售出</option></select></div><div className="col-span-2 md:col-span-1"><label className="text-xs text-gray-500 font-bold block mb-1">買入日期</label><input type="date" className="w-full border p-2 rounded text-sm" value={batchCommonData.buyDate} onChange={e=>setBatchCommonData({...batchCommonData, buyDate: e.target.value})}/></div>{batchCommonData.status === 'sold' && (<div className="col-span-2 md:col-span-1"><label className="text-xs text-gray-500 font-bold block mb-1">售出日期</label><input type="date" className="w-full border p-2 rounded text-sm" value={batchCommonData.sellDate} onChange={e=>setBatchCommonData({...batchCommonData, sellDate: e.target.value})}/></div>)}<div className="col-span-2 md:col-span-full"><label className="text-xs text-gray-500 font-bold block mb-1">共同備註</label><input className="w-full border p-2 rounded text-sm" placeholder="選填..." value={batchCommonData.note} onChange={e=>setBatchCommonData({...batchCommonData, note: e.target.value})}/></div></div><div className="space-y-2">{batchItems.map((item) => (<div key={item.tempId} className="flex items-center gap-3 p-2 border rounded-lg hover:bg-gray-50"><div className="w-12 h-12 bg-gray-200 rounded overflow-hidden flex-shrink-0">{item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-gray-400 m-auto mt-3" size={20}/>}</div><div className="flex-1 min-w-0"><p className="text-sm font-bold truncate">{item.name}</p><p className="text-xs text-gray-500">{item.character} · 原價 {item.officialPrice || '?'}</p></div><div className="flex items-center gap-2"><div className="w-24"><input type="number" className="w-full border p-1.5 rounded text-sm" placeholder="入手價" value={item.costPrice} onChange={e=>updateBatchItem(item.tempId, 'costPrice', e.target.value)}/></div><div className="w-24"><input type="number" className="w-full border p-1.5 rounded text-sm" placeholder={batchCommonData.status==='sold'?'售出價':'預售價'} value={item.salePrice} onChange={e=>updateBatchItem(item.tempId, 'salePrice', e.target.value)}/></div><button onClick={()=>setBatchItems(prev => prev.filter(i => i.tempId !== item.tempId))} className="text-gray-400 hover:text-red-500 p-1"><Icon name="X" size={16}/></button></div></div>))}</div></div><div className="pt-2 border-t flex gap-2"><button onClick={()=>setBatchEditMode(false)} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">返回選擇</button><button onClick={handleBatchSave} className="flex-1 py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800">確認新增全部</button></div></div></div>
-                );
-            }
-
             return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto flex flex-col">
-                        <div className="flex justify-between items-center border-b pb-3 flex-shrink-0"><h3 className="text-lg font-bold text-gray-800">{tradeItem ? '編輯交易' : '新增交易'}</h3><button onClick={onClose}><Icon name="X" size={20}/></button></div>
-                        {!tradeItem && !searchMode && (
-                            <div className="flex gap-2 mb-2 flex-shrink-0"><button onClick={()=>setSearchMode(true)} className="flex-1 text-sm py-2 rounded-lg border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 hover:border-blue-400 hover:text-blue-500 transition-colors flex items-center justify-center gap-2"><Icon name="Search" size={16}/> 從圖鑑選擇物品...</button></div>
+                    <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-center border-b pb-3">
+                            <h3 className="text-lg font-bold text-gray-800">{tradeItem ? '編輯交易' : '新增交易'}</h3>
+                            <button onClick={onClose}><Icon name="X" size={20}/></button>
+                        </div>
+
+                        {!tradeItem && (
+                            <div className="flex gap-2 mb-2">
+                                <button onClick={()=>setSearchMode(!searchMode)} className={`flex-1 text-sm py-2 rounded-lg border ${searchMode ? 'bg-slate-100 border-slate-300 font-bold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                    {searchMode ? '取消選擇' : '🔍 從圖鑑選擇'}
+                                </button>
+                            </div>
                         )}
+
                         {searchMode ? (
-                            <div className="flex-1 overflow-hidden flex flex-col min-h-[400px]">
-                                <div className="flex gap-2 mb-2"><input className="flex-1 border p-2 rounded" placeholder="搜尋名稱..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} autoFocus/><button onClick={()=>{setSearchMode(false); setIsMultiSelect(false); setSelectedCatalogIds(new Set());}} className="px-3 text-sm text-gray-500 hover:text-gray-800">取消</button></div>
-                                <div className="space-y-2 mb-2 flex-shrink-0">
+                            <div className="animate-fade-in space-y-3">
+                                <input className="w-full border p-2 rounded" placeholder="搜尋名稱..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} autoFocus/>
+                                
+                                <div className="space-y-2">
                                     <ScrollableTags items={CHARACTERS} selected={filterChar} onToggle={toggleChar} labelAll="全部角色" />
                                     <ScrollableTags items={customTypes || DEFAULT_MERCH_TYPES} selected={filterType} onToggle={toggleType} labelAll="全部類型" />
                                 </div>
-                                <div className="flex items-center justify-between mb-2 px-1"><label className="flex items-center gap-2 text-sm cursor-pointer text-blue-600 font-bold"><input type="checkbox" className="rounded text-blue-600 focus:ring-blue-500" checked={isMultiSelect} onChange={e=>setIsMultiSelect(e.target.checked)}/> 多選模式</label>{isMultiSelect && <span className="text-xs text-gray-500">已選擇 {selectedCatalogIds.size} 項</span>}</div>
-                                <div className="flex-1 overflow-y-auto border rounded divide-y bg-white">
-                                    {filteredCatalog.length > 0 ? filteredCatalog.map(item => {
-                                        const isSelected = selectedCatalogIds.has(item.id);
-                                        return (<div key={item.id} onClick={()=>selectCatalogItem(item)} className={`p-2 flex items-center gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-100' : 'hover:bg-gray-50'}`}><div className="w-10 h-10 bg-gray-200 rounded overflow-hidden flex-shrink-0 relative">{item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" size={16} className="m-auto mt-2 text-gray-400"/>}{isMultiSelect && isSelected && <div className="absolute inset-0 bg-blue-500/30 flex items-center justify-center"><Icon name="Check" size={20} className="text-white drop-shadow-md"/></div>}</div><div className="text-sm flex-1"><p className={`font-bold ${isSelected ? 'text-blue-800' : 'text-gray-800'}`}>{item.name}</p><div className="flex gap-2 text-xs text-gray-500"><span>{item.character}</span><span>·</span><span>{item.type}</span></div></div></div>);
-                                    }) : <div className="p-10 text-center text-gray-400 text-sm">沒有符合條件的物品</div>}
+
+                                <div className="max-h-60 overflow-y-auto border rounded divide-y">
+                                    {filteredCatalog.length > 0 ? filteredCatalog.map(item => (
+                                        <div key={item.id} onClick={()=>selectCatalogItem(item)} className="p-2 flex items-center gap-3 hover:bg-blue-50 cursor-pointer">
+                                            <div className="w-10 h-10 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                                                {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" size={16}/>}
+                                            </div>
+                                            <div className="text-sm flex-1">
+                                                <p className="font-bold text-gray-800">{item.name}</p>
+                                                <div className="flex gap-2 text-xs text-gray-500">
+                                                    <span>{item.character}</span>
+                                                    <span>·</span>
+                                                    <span>{item.type}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )) : <div className="p-4 text-center text-gray-400 text-sm">沒有符合條件的物品</div>}
                                 </div>
-                                {isMultiSelect && (<button onClick={proceedToBatchEdit} disabled={selectedCatalogIds.size === 0} className="mt-2 w-full py-3 bg-blue-600 text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-md">確認選擇 ({selectedCatalogIds.size}) & 前往編輯</button>)}
                             </div>
                         ) : (
                             <>
                                 <input className="w-full border p-2 rounded" placeholder="物品名稱" value={data.name} onChange={e=>setData({...data, name: e.target.value})} />
-                                <div className="grid grid-cols-2 gap-3"><select className="border p-2 rounded" value={data.character} onChange={e=>setData({...data, character: e.target.value})}>{CHARACTERS.map(c=><option key={c}>{c}</option>)}</select><select className="border p-2 rounded" value={data.status} onChange={e=>setData({...data, status: e.target.value})}><option value="selling">待售中</option><option value="sold">已售出</option></select></div>
-                                <div className="grid grid-cols-2 gap-3"><div><label className="text-xs text-gray-500">原價</label><input type="text" className="w-full border p-2 rounded" value={data.officialPrice} onChange={e=>setData({...data, officialPrice: e.target.value})}/></div><div><label className="text-xs text-gray-500">{data.status==='sold'?'售出價格':'預售價格'} (NT$)</label><input type="number" className="w-full border p-2 rounded" value={data.salePrice} onChange={e=>setData({...data, salePrice: e.target.value})}/></div></div>
-                                <div className="grid grid-cols-2 gap-3"><div><label className="text-xs text-gray-500">入手價格 (NT$)</label><input type="number" className="w-full border p-2 rounded" value={data.costPrice} onChange={e=>setData({...data, costPrice: e.target.value})}/></div><div><label className="text-xs text-gray-500">買入日期</label><input type="date" className="w-full border p-2 rounded" value={data.buyDate} onChange={e=>setData({...data, buyDate: e.target.value})}/></div></div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <select className="border p-2 rounded" value={data.character} onChange={e=>setData({...data, character: e.target.value})}>{CHARACTERS.map(c=><option key={c}>{c}</option>)}</select>
+                                    <select className="border p-2 rounded" value={data.status} onChange={e=>setData({...data, status: e.target.value})}>
+                                        <option value="selling">待售中</option>
+                                        <option value="sold">已售出</option>
+                                    </select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><label className="text-xs text-gray-500">原價</label><input type="text" className="w-full border p-2 rounded" value={data.officialPrice} onChange={e=>setData({...data, officialPrice: e.target.value})}/></div>
+                                    <div><label className="text-xs text-gray-500">{data.status==='sold'?'售出價格':'預售價格'} (NT$)</label><input type="number" className="w-full border p-2 rounded" value={data.salePrice} onChange={e=>setData({...data, salePrice: e.target.value})}/></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><label className="text-xs text-gray-500">入手價格 (NT$)</label><input type="number" className="w-full border p-2 rounded" value={data.costPrice} onChange={e=>setData({...data, costPrice: e.target.value})}/></div>
+                                    <div><label className="text-xs text-gray-500">買入日期</label><input type="date" className="w-full border p-2 rounded" value={data.buyDate} onChange={e=>setData({...data, buyDate: e.target.value})}/></div>
+                                </div>
                                 {data.status === 'sold' && <div className="mb-2"><label className="text-xs text-gray-500">售出日期</label><input type="date" className="w-full border p-2 rounded" value={data.sellDate} onChange={e=>setData({...data, sellDate: e.target.value})}/></div>}
                                 <input className="w-full border p-2 rounded text-xs" placeholder="圖片連結 (選填)" value={data.image} onChange={e=>setData({...data, image: e.target.value})}/>
                                 <textarea className="w-full border p-2 rounded h-20" placeholder="備註 (交易平台、買家資訊等...)" value={data.note} onChange={e=>setData({...data, note: e.target.value})}/>
@@ -534,36 +576,42 @@
                 </div>
             );
         };
-        
-        // --- Batch Manage Bar for Collection (New UI) ---
-        const CollectionBatchBar = ({ selectionCount, onCancel, onAddToSet, onDelete }) => {
-            return (
-                <div className="fixed bottom-20 md:bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-4 animate-fade-in">
-                    <span className="font-bold text-sm">已選擇 {selectionCount} 項</span>
-                    <div className="h-4 w-px bg-slate-700"></div>
-                    <button onClick={onCancel} className="text-sm text-slate-300 hover:text-white">取消</button>
-                    
-                    <button onClick={onAddToSet} disabled={selectionCount === 0} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1">
-                        <Icon name="Package" size={14} /> 建立小組合 (Set)
-                    </button>
-                    
-                    <button onClick={onDelete} disabled={selectionCount === 0} className="bg-red-600 hover:bg-red-500 text-white px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1">
-                        <Icon name="Trash2" size={14} /> 刪除
-                    </button>
-                </div>
-            );
-        };
 
         const App = () => {
-            // ... (State setup similar to previous)
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState(() => localStorage.getItem('deepspace_active_tab') || 'collection');
+            // ... (State initializers)
             const [appSettings, setAppSettings] = useState(() => {
                 const savedSettings = localStorage.getItem('deepspace_settings');
-                const defaults = { layoutCols: 4, customTypes: DEFAULT_MERCH_TYPES, customSeries: [], customCharacters: CHARACTERS, visibleCharacters: CHARACTERS, multiSelect: { type: true, character: false, date: false, series: false }, defaultPreorderCurrency: 'NT$', defaultCurrency: 'NT$', groupAllInFilterMode: true, showAmount: true };
-                if (savedSettings) { try { const parsed = JSON.parse(savedSettings); if(!parsed.visibleCharacters) parsed.visibleCharacters=CHARACTERS; if(!parsed.customCharacters) parsed.customCharacters=CHARACTERS; if(parsed.customCharacters && !parsed.customCharacters.includes("全員")) parsed.customCharacters.push("全員"); if(parsed.visibleCharacters && !parsed.visibleCharacters.includes("全員")) parsed.visibleCharacters.push("全員"); if(!parsed.multiSelect) parsed.multiSelect=defaults.multiSelect; if(typeof parsed.showAmount === 'undefined') parsed.showAmount=true; if(!parsed.customTypes) parsed.customTypes=DEFAULT_MERCH_TYPES; return parsed; } catch(e) { return defaults; } } return defaults;
+                const defaults = {
+                    layoutCols: 4, customTypes: DEFAULT_MERCH_TYPES, customSeries: [], 
+                    customCharacters: CHARACTERS, visibleCharacters: CHARACTERS,
+                    multiSelect: { type: true, character: false, date: false, series: false },
+                    defaultPreorderCurrency: 'NT$', defaultCurrency: 'NT$', 
+                    groupAllInFilterMode: true,
+                    showAmount: true
+                };
+                if (savedSettings) {
+                    try {
+                        const parsed = JSON.parse(savedSettings);
+                        if (!parsed.visibleCharacters) parsed.visibleCharacters = CHARACTERS;
+                        if (!parsed.customCharacters) parsed.customCharacters = CHARACTERS;
+                        if (parsed.customCharacters && !parsed.customCharacters.includes("全員")) parsed.customCharacters.push("全員");
+                        if (parsed.visibleCharacters && !parsed.visibleCharacters.includes("全員")) parsed.visibleCharacters.push("全員");
+                        if (!parsed.multiSelect) parsed.multiSelect = defaults.multiSelect;
+                        if (typeof parsed.multiSelect.series === 'undefined') parsed.multiSelect.series = false;
+                        if (!parsed.defaultPreorderCurrency) parsed.defaultPreorderCurrency = 'NT$';
+                        if (!parsed.defaultCurrency) parsed.defaultCurrency = 'NT$';
+                        if (typeof parsed.groupAllInFilterMode === 'undefined') parsed.groupAllInFilterMode = true;
+                        if (typeof parsed.showAmount === 'undefined') parsed.showAmount = true;
+                        if (!parsed.customTypes) parsed.customTypes = DEFAULT_MERCH_TYPES;
+                        if (!parsed.customSeries) parsed.customSeries = []; 
+                        return parsed;
+                    } catch (e) { return defaults; }
+                }
+                return defaults;
             });
-
+            
             // ... (Standard States)
             const [groupingMode, setGroupingMode] = useState('none'); 
             const [collectionGroupingMode, setCollectionGroupingMode] = useState('none'); 
@@ -604,8 +652,9 @@
             // NEW: Collection Batch States
             const [isCollectionBatchMode, setIsCollectionBatchMode] = useState(false);
             const [collectionBatchSelection, setCollectionBatchSelection] = useState(new Set());
+            const [isSetNameModalOpen, setIsSetNameModalOpen] = useState(false);
 
-            // ... (Effects - same as before) ...
+            // ... (Effects omitted for brevity, same as before) ...
             useEffect(() => { if (!isFirebaseInitialized) { const localTrades = localStorage.getItem('deepspace_trades_local'); if (localTrades) setTrades(JSON.parse(localTrades)); const localItems = localStorage.getItem('deepspace_items_v7_local'); if (localItems) setItems(JSON.parse(localItems)); const localFees = localStorage.getItem('deepspace_daily_fees_local'); if (localFees) setDailyFees(JSON.parse(localFees)); const localCatalog = localStorage.getItem('deepspace_catalog_v7_local'); if (localCatalog) { try { setCatalogItems(getUniqueItems(JSON.parse(localCatalog))); } catch(e){ console.error(e); } } return; } setPersistence(auth, browserLocalPersistence).catch(console.error); const unsubscribe = onAuthStateChanged(auth, (currentUser) => { if (currentUser) { if (!currentUser.isAnonymous) setUser(currentUser); else setUser(null); } else { setUser(null); signInAnonymously(auth).catch(console.error); } }); return () => unsubscribe(); }, []);
             useEffect(() => { fetch('https://api.exchangerate-api.com/v4/latest/CNY').then(res => res.json()).then(data => { if(data && data.rates && data.rates.TWD) { setExchangeRate(data.rates.TWD); const now = new Date(); setExchangeRateTimestamp(`${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`); } }).catch(err => console.error("Exchange rate error", err)); }, []);
             useEffect(() => { setSelectedTypeFilters([]); setSelectedCharFilters([]); setSelectedDateFilters([]); setSelectedSeriesFilters([]); }, [collectionGroupingMode, groupingMode]);
@@ -687,21 +736,21 @@
                     const allSelected = ids.every(id => newSet.has(id));
                     
                     if (allSelected) {
-                        // If all selected, deselect them
                         ids.forEach(id => newSet.delete(id));
                     } else {
-                        // If any unselected, select all of them
                         ids.forEach(id => newSet.add(id));
                     }
                     return newSet; 
                 }); 
             };
             const handleBatchDeleteCollection = async () => { if(collectionBatchSelection.size === 0) return; if(!confirm(`確定要刪除這 ${collectionBatchSelection.size} 個收藏品嗎？`)) return; if(user && isFirebaseInitialized) { const batch = writeBatch(db); collectionBatchSelection.forEach(id => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, id); batch.delete(ref); }); await batch.commit(); } else { setItems(prev => prev.filter(i => !collectionBatchSelection.has(i.id))); } setIsCollectionBatchMode(false); setCollectionBatchSelection(new Set()); };
-            const handleBatchSetGroup = async () => {
-                if (collectionBatchSelection.size === 0) return;
-                const setName = prompt("請輸入小組合 (Set) 名稱：");
-                if (setName === null) return; // Cancelled
-                
+            
+            const handleBatchSetGroup = () => {
+                 if (collectionBatchSelection.size === 0) return;
+                 setIsSetNameModalOpen(true);
+            };
+
+            const confirmSetGroup = async (setName) => {
                 if (user && isFirebaseInitialized) {
                     const batch = writeBatch(db);
                     collectionBatchSelection.forEach(id => {
@@ -712,6 +761,7 @@
                 } else {
                     setItems(prev => prev.map(i => collectionBatchSelection.has(i.id) ? { ...i, setName: setName } : i));
                 }
+                setIsSetNameModalOpen(false);
                 setIsCollectionBatchMode(false);
                 setCollectionBatchSelection(new Set());
             };
@@ -783,7 +833,14 @@
                                             const dayStats = gItems.reduce((acc, item) => { const p = Number(item.acquiredPrice || 0); if (item.currency === 'r') acc.r += p; else acc.nt += p; return acc; }, { nt: 0, r: 0 });
                                             const dayFee = dailyFees[gName]; const shipping = (typeof dayFee === 'object' ? dayFee.shipping : dayFee) || 0; const handling = (typeof dayFee === 'object' ? dayFee.handling : 0) || 0;
                                             const total = dayStats.nt + (dayStats.r * exchangeRate) + shipping + handling;
-                                            dayTotalDisplay = (<div className="flex items-center gap-2"><span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100"><Icon name="Banknote" size={14}/>NT$ {Math.round(total).toLocaleString()}</span>{editingFeeTarget.date === gName && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(gName, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(gName, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: gName, type: 'shipping'}); setEditingFeeValue(shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{shipping > 0 ? `運費 ${shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}{editingFeeTarget.date === gName && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(gName, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(gName, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: gName, type: 'handling'}); setEditingFeeValue(handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{handling > 0 ? `包手 ${handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}</div>);
+                                            
+                                            // 運費包手按鈕
+                                            const feeControls = (
+                                                <div className="flex items-center gap-2">
+                                                    {editingFeeTarget.date === gName && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(gName, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(gName, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: gName, type: 'shipping'}); setEditingFeeValue(shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{shipping > 0 ? `運費 ${shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
+                                                    {editingFeeTarget.date === gName && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(gName, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(gName, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: gName, type: 'handling'}); setEditingFeeValue(handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{handling > 0 ? `包手 ${handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
+                                                </div>
+                                            );
 
                                             // Group by 'setName'
                                             const sets = {};
@@ -797,23 +854,47 @@
                                                 }
                                             });
 
+                                            // Determine where to show fee controls
+                                            const hasSets = Object.keys(sets).length > 0;
+                                            
+                                            dayTotalDisplay = (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100"><Icon name="Banknote" size={14}/>NT$ {Math.round(total).toLocaleString()}</span>
+                                                    {!hasSets && feeControls} 
+                                                </div>
+                                            );
+
                                             renderItems = (
                                                 <>
-                                                    {Object.entries(sets).map(([setName, setItems]) => (
-                                                        <div key={setName} className="bg-blue-50/50 rounded-2xl border-2 border-dashed border-blue-200 p-4 relative mt-4 mb-2">
-                                                            <div className="absolute -top-3 left-4 bg-blue-100 text-blue-700 px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm border border-blue-200">
-                                                                <Icon name="Package" size={12} /> {setName}
+                                                    {Object.entries(sets).map(([setName, setItems], idx) => {
+                                                        // Calculate Set Total
+                                                        const setTotal = setItems.reduce((sum, item) => {
+                                                            const p = Number(item.acquiredPrice || 0);
+                                                            const q = item.quantity || 1;
+                                                            return sum + (item.currency === 'r' ? p * exchangeRate * q : p * q);
+                                                        }, 0);
+
+                                                        return (
+                                                            <div key={setName} className="col-span-full bg-blue-50/50 rounded-2xl border-2 border-dashed border-blue-200 p-4 relative mt-6 mb-2">
+                                                                <div className="absolute -top-3 left-4 flex items-center gap-2">
+                                                                    <div className="bg-blue-100 text-blue-700 px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm border border-blue-200">
+                                                                        <Icon name="Package" size={12} /> {setName} 
+                                                                        <span className="ml-1 text-blue-500 border-l border-blue-200 pl-1">NT${Math.round(setTotal).toLocaleString()}</span>
+                                                                    </div>
+                                                                    {/* If this is the FIRST set of the day, show fee controls here as requested */}
+                                                                    {idx === 0 && feeControls}
+                                                                </div>
+                                                                <div style={gridStyle} className="mt-2">
+                                                                    {getStackedItems(setItems, 'none').map((s, i) => (
+                                                                        <StackCard 
+                                                                            key={s.id} stack={s} index={i} isDraggable={false} openModal={openModal} deleteFromCollection={deleteFromCollection} 
+                                                                            showAmount={appSettings.showAmount} isBatchMode={isCollectionBatchMode} isSelected={collectionBatchSelection.has(s.id)} onToggleSelect={handleCollectionBatchSelect} 
+                                                                        />
+                                                                    ))}
+                                                                </div>
                                                             </div>
-                                                            <div style={gridStyle}>
-                                                                {getStackedItems(setItems, 'none').map((s, idx) => (
-                                                                    <StackCard 
-                                                                        key={s.id} stack={s} index={idx} isDraggable={false} openModal={openModal} deleteFromCollection={deleteFromCollection} 
-                                                                        showAmount={appSettings.showAmount} isBatchMode={isCollectionBatchMode} isSelected={collectionBatchSelection.has(s.id)} onToggleSelect={handleCollectionBatchSelect} 
-                                                                    />
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                     <div style={gridStyle} className="mt-4">
                                                         {getStackedItems(loose, collectionGroupingMode).map((s,i) => (
                                                             <StackCard 
@@ -851,6 +932,13 @@
                                         onDelete={handleBatchDeleteCollection} 
                                     />
                                 )}
+
+                                {/* Set Name Modal */}
+                                <SetNameModal 
+                                    isOpen={isSetNameModalOpen} 
+                                    onClose={() => setIsSetNameModalOpen(false)} 
+                                    onConfirm={confirmSetGroup} 
+                                />
                             </div>
                         )}
 
@@ -929,25 +1017,24 @@
 
                                 {/* Trade Batch Action Bar */}
                                 {isTradeBatchMode && (
-                                    <div className="fixed bottom-20 md:bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-4 animate-fade-in">
-                                        <span className="font-bold text-sm">已選擇 {tradeBatchSelection.size} 項</span>
-                                        <div className="h-4 w-px bg-slate-700"></div>
-                                        <button onClick={() => {setIsTradeBatchMode(false); setTradeBatchSelection(new Set());}} className="text-sm text-slate-300 hover:text-white">取消</button>
-                                        
+                                    <div className="fixed bottom-8 right-8 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl z-40 flex flex-col gap-3 animate-fade-in min-w-[200px]">
+                                        <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+                                            <span className="font-bold text-sm">已選 {tradeBatchSelection.size} 項</span>
+                                            <button onClick={() => {setIsTradeBatchMode(false); setTradeBatchSelection(new Set());}} className="text-xs text-slate-400 hover:text-white"><Icon name="X" size={16}/></button>
+                                        </div>
                                         <button 
                                             onClick={handleBatchTradeSell} 
                                             disabled={tradeBatchSelection.size === 0}
-                                            className="bg-green-600 hover:bg-green-500 text-white px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                            className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                                         >
-                                            <Icon name="CheckCircle2" size={14} /> 標記售出
+                                            <Icon name="CheckCircle2" size={16} /> 標記售出
                                         </button>
-                                        
                                         <button 
                                             onClick={handleBatchDeleteTrade} 
                                             disabled={tradeBatchSelection.size === 0}
-                                            className="bg-red-600 hover:bg-red-500 text-white px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                            className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                                         >
-                                            <Icon name="Trash2" size={14} /> 刪除
+                                            <Icon name="Trash2" size={16} /> 刪除
                                         </button>
                                     </div>
                                 )}
@@ -1021,16 +1108,11 @@
                     {isSettingsOpen && <SettingsModal isOpen={isSettingsOpen} onClose={()=>setIsSettingsOpen(false)} appSettings={appSettings} setAppSettings={setAppSettings} importJson={importJson} setImportJson={setImportJson} handleBulkImport={handleBulkImport} handleExportCatalog={handleExportCatalog} handleResetData={handleResetData} handleAddType={handleAddType} handleDeleteType={handleDeleteType} newTypeInput={newTypeInput} setNewTypeInput={setNewTypeInput} handleManualSyncTypes={handleManualSyncTypes} handleAddSeries={handleAddSeries} handleDeleteSeries={handleDeleteSeries} newSeriesInput={newSeriesInput} setNewSeriesInput={setNewSeriesInput} handleManualSyncSeries={handleManualSyncSeries} handleRemoveDuplicates={handleRemoveDuplicates} />}
                     {isBatchModalOpen && <BatchAddModal isOpen={isBatchModalOpen} onClose={() => setIsBatchModalOpen(false)} selectedItems={catalogItems.filter(i => batchSelection.has(i.id))} onSave={handleBatchSave} />}
                     {isModalOpen && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"><div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"><div className="flex justify-between items-center"><h3 className="font-bold">{modalMode === 'catalog' ? (editingItem ? '編輯公開圖鑑' : '新增公開圖鑑') : (editingItem ? '編輯我的收藏' : '加入我的收藏')}</h3><button onClick={()=>setIsModalOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button></div><div onClick={()=>fileInputRef.current.click()} className="w-32 h-32 mx-auto border-2 border-dashed rounded flex items-center justify-center cursor-pointer">{formData.image?<img src={formData.image} className="w-full h-full object-cover"/>:<Icon name="Upload"/>}<input type="file" ref={fileInputRef} className="hidden" onChange={(e)=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=()=>setFormData(p=>({...p,image:r.result}));r.readAsDataURL(f);}}}/></div><input type="text" className="w-full border p-2 rounded mt-2 text-xs text-gray-500" placeholder="或貼上圖片連結..." value={formData.image || ''} onChange={e=>setFormData({...formData, image: e.target.value})} /><input className="w-full border p-2 rounded mt-2" placeholder="名稱" value={formData.name} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,name:e.target.value})} autoFocus={!editingItem && !formData.name} /><div className="grid grid-cols-2 gap-2 mt-2"><select className="border p-2 rounded" value={formData.character} onChange={e=>setFormData({...formData,character:e.target.value})}>{CHARACTERS.map(c=><option key={c}>{c}</option>)}</select><input className="border p-2 rounded" placeholder="系列" value={formData.series} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,series:e.target.value})}/></div><div className="grid grid-cols-2 gap-2 mt-2"><input className="border p-2 rounded" list="types-list" placeholder="類型" value={formData.type} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,type:e.target.value})}/><datalist id="types-list">{appSettings.customTypes.map(t=><option key={t} value={t}/>)}</datalist><input type="text" className="border p-2 rounded" placeholder="原價" value={formData.officialPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/></div>{modalMode === 'collection' && (<><hr className="border-gray-100 mt-2" /><div className="flex items-center gap-2 mb-2 mt-2"><input type="checkbox" id="isPreorder" checked={formData.isPreorder || false} onChange={e=>setFormData({...formData, isPreorder: e.target.checked})} className="w-4 h-4 text-blue-600 rounded"/><label htmlFor="isPreorder" className="text-sm font-bold text-gray-700">預購商品</label></div><div className="flex items-center gap-2 mb-2"><label className="text-sm">數量:</label><input type="number" className="border p-1 w-16 rounded" value={formData.quantity} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div>
-                    {formData.setName && (
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                                組合: {formData.setName}
-                            </span>
-                            <button onClick={()=>setFormData({...formData, setName: ''})} className="text-gray-400 hover:text-red-500">
-                                <Icon name="X" size={14}/>
-                            </button>
-                        </div>
-                    )}
+                    {/* New Set Name Field for Collection */}
+                    <div className="flex items-center gap-2 mb-2">
+                        <label className="text-sm whitespace-nowrap">小組合:</label>
+                        <input className="border p-1 rounded w-full text-sm" placeholder="例如: 痛包組 (選填)" value={formData.setName || ''} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData, setName: e.target.value})} />
+                    </div>
                     <div className="grid grid-cols-2 gap-2"><div className="relative"><input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})} autoFocus={!editingItem && formData.name}/><select className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0" value={formData.currency || (formData.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency)} onChange={e=>setFormData({...formData, currency: e.target.value})}><option value="NT$">NT$</option><option value="r">r</option></select></div>{formData.isPreorder ? (<div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span><input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/></div>) : (<div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500">收物日期</span><input type="date" className="border p-2 rounded w-full" value={formData.date} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,date:e.target.value})}/></div>)}</div><textarea className="w-full border p-2 rounded h-20 mt-2" placeholder="備註..." value={formData.note} onChange={e=>setFormData({...formData,note:e.target.value})}/></>)}<div className="flex gap-2 mt-4">{editingItem && modalMode === 'collection' && (<button onClick={async () => {if(confirm('確定要刪除此收藏嗎？')) {await deleteFromCollection(editingItem.id);setIsModalOpen(false);}}} className="bg-red-50 text-red-500 border border-red-200 px-4 rounded hover:bg-red-100"><Icon name="Trash2" size={18} /></button>)}<button onClick={handleSave} className="flex-1 bg-slate-900 text-white py-3 rounded hover:bg-slate-800">{modalMode === 'catalog' ? '更新圖鑑 (公開)' : '儲存收藏'}</button></div></div></div>)}
 
                     {isTradeModalOpen && <TradeModal isOpen={isTradeModalOpen} onClose={()=>setIsTradeModalOpen(false)} tradeItem={editingTrade} onSave={handleSaveTrade} catalogItems={catalogItems} customTypes={appSettings.customTypes} />}

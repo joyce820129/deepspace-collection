@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>深空收藏艙 | 獵人週邊管理</title>
-    
+    <title>深空收藏艙 | 獵人週邊管理 (金額計算修正版)</title>
+
     <!-- 設定網頁小圖示 (Favicon) - 黃色星星深色背景 -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f172a%22/><path d=%22M50 20 L59 42 L82 42 L64 57 L71 80 L50 67 L29 80 L36 57 L18 42 L41 42 Z%22 fill=%22%23facc15%22 stroke=%22%23facc15%22 stroke-width=%222%22 stroke-linejoin=%22round%22/></svg>">
-
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1243,61 +1243,7 @@
             const getStackedItems = (sourceItems, mode) => { const map = new Map(); const stacks = []; sourceItems.forEach(item => { const key = item.name; if (!map.has(key)) { const stack = { ...item, instances: [item], totalCount: (item.quantity || 1) }; map.set(key, stack); stacks.push(stack); } else { const stack = map.get(key); stack.instances.push(item); stack.totalCount += (item.quantity || 1); } }); return stacks; };
             const toggleFilter = (filterState, setFilterState, value, multiSelectEnabled) => { if (value === 'all') { setFilterState([]); return; } if (multiSelectEnabled) { if (filterState.includes(value)) { setFilterState(prev => prev.filter(v => v !== value)); } else { setFilterState(prev => [...prev, value]); } } else { if (filterState.includes(value)) { setFilterState([]); } else { setFilterState([value]); } } };
             const getFilteredList = (list, mode, typeFilters, charFilters, dateFilters, seriesFilters) => { let processed = list.filter(i => appSettings.visibleCharacters.includes(i.character)); if (mode === 'type' && typeFilters.length > 0) processed = processed.filter(i => typeFilters.includes(i.type)); if (mode === 'character' && charFilters.length > 0) processed = processed.filter(i => charFilters.includes(i.character)); if (mode === 'date' && dateFilters.length > 0) processed = processed.filter(i => { const effDate = getEffectiveDate(i); return dateFilters.includes(effDate); }); if (mode === 'series' && seriesFilters.length > 0) processed = processed.filter(i => seriesFilters.includes(i.series)); return processed; };
-            const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters, dateFilters, seriesFilters) => { 
-                const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters, seriesFilters); 
-                const isAllSelected = (mode === 'type' && typeFilters.length === 0) || (mode === 'character' && charFilters.length === 0) || (mode === 'series' && seriesFilters.length === 0) || (mode === 'date' && dateFilters.length === 0); 
-                
-                if (mode === 'none') { return { '全部': processedList }; } 
-                
-                // Logic for "Hide Headers but keep sort"
-                if (isAllSelected && !appSettings.groupAllInFilterMode) { 
-                    let sorted = [...processedList];
-                    if (mode === 'series') {
-                        const seriesOrder = appSettings.customSeries || [];
-                        sorted.sort((a,b) => {
-                            const iA = seriesOrder.indexOf(a.series || '');
-                            const iB = seriesOrder.indexOf(b.series || '');
-                            if (iA !== -1 && iB !== -1) return iA - iB;
-                            if (iA !== -1) return -1;
-                            if (iB !== -1) return 1;
-                            return (a.series||'').localeCompare(b.series||'');
-                        });
-                    } else if (mode === 'type') {
-                        const typeOrder = appSettings.customTypes || [];
-                         sorted.sort((a,b) => {
-                            const iA = typeOrder.indexOf(a.type || '');
-                            const iB = typeOrder.indexOf(b.type || '');
-                            if (iA !== -1 && iB !== -1) return iA - iB;
-                            if (iA !== -1) return -1;
-                            if (iB !== -1) return 1;
-                            return (a.type||'').localeCompare(b.type||'');
-                        });
-                    } else if (mode === 'character') {
-                         const charOrder = appSettings.customCharacters || [];
-                         sorted.sort((a,b) => {
-                            const iA = charOrder.indexOf(a.character || '');
-                            const iB = charOrder.indexOf(b.character || '');
-                            if (iA !== -1 && iB !== -1) return iA - iB;
-                            if (iA !== -1) return -1;
-                            if (iB !== -1) return 1;
-                             return (a.character||'').localeCompare(b.character||'');
-                        });
-                    } else if (mode === 'date') {
-                         sorted.sort((a,b) => {
-                             const dA = getEffectiveDate(a);
-                             const dB = getEffectiveDate(b);
-                             if (!dA && !dB) return 0;
-                             if (!dA) return 1;
-                             if (!dB) return -1;
-                             return sortOrder === 'desc' ? new Date(dB) - new Date(dA) : new Date(dA) - new Date(dB);
-                         });
-                    }
-
-                    return { '全部': sorted }; 
-                } 
-
-                const grouped = processedList.reduce((acc, item) => { let key = ''; if (mode === 'series') key = item.series || '其他系列'; else if (mode === 'type') key = item.type || '其他類型'; else if (mode === 'character') key = item.character || '其他角色'; else if (mode === 'date') key = getEffectiveDate(item) || '未知日期'; if (!acc[key]) acc[key] = []; acc[key].push(item); return acc; }, {}); if (mode === 'date') { const keys = Object.keys(grouped).sort((a,b) => { if(a==='未知日期') return 1; if(b==='未知日期') return -1; return sortOrder==='desc' ? new Date(b)-new Date(a) : new Date(a)-new Date(b); }); const sorted = {}; keys.forEach(k=>sorted[k]=grouped[k]); return sorted; } if (mode === 'type') { const sorted = {}; appSettings.customTypes.forEach(t => { if (grouped[t]) sorted[t] = grouped[t]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } if (mode === 'series') { const sorted = {}; (appSettings.customSeries || []).forEach(s => { if (grouped[s]) sorted[s] = grouped[s]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } if (mode === 'character') { const sorted = {}; appSettings.customCharacters.forEach(char => { if (grouped[char]) sorted[char] = grouped[char]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } return grouped; 
-            };
+            const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters, dateFilters, seriesFilters) => { const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters, seriesFilters); const isAllSelected = (mode === 'type' && typeFilters.length === 0) || (mode === 'character' && charFilters.length === 0) || (mode === 'series' && seriesFilters.length === 0) || (mode === 'date' && dateFilters.length === 0); if (mode === 'none') { return { '全部': processedList }; } if (isAllSelected && !appSettings.groupAllInFilterMode) { return { '全部': processedList }; } const grouped = processedList.reduce((acc, item) => { let key = ''; if (mode === 'series') key = item.series || '其他系列'; else if (mode === 'type') key = item.type || '其他類型'; else if (mode === 'character') key = item.character || '其他角色'; else if (mode === 'date') key = getEffectiveDate(item) || '未知日期'; if (!acc[key]) acc[key] = []; acc[key].push(item); return acc; }, {}); if (mode === 'date') { const keys = Object.keys(grouped).sort((a,b) => { if(a==='未知日期') return 1; if(b==='未知日期') return -1; return sortOrder==='desc' ? new Date(b)-new Date(a) : new Date(a)-new Date(b); }); const sorted = {}; keys.forEach(k=>sorted[k]=grouped[k]); return sorted; } if (mode === 'type') { const sorted = {}; appSettings.customTypes.forEach(t => { if (grouped[t]) sorted[t] = grouped[t]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } if (mode === 'series') { const sorted = {}; (appSettings.customSeries || []).forEach(s => { if (grouped[s]) sorted[s] = grouped[s]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } if (mode === 'character') { const sorted = {}; appSettings.customCharacters.forEach(char => { if (grouped[char]) sorted[char] = grouped[char]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } return grouped; };
             const groupedData = useMemo(() => ({ collection: getGroupedData(items, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters), catalog: getGroupedData(catalogItems, groupingMode, 'desc', selectedTypeFilters, selectedCharFilters, [], selectedSeriesFilters) }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters, appSettings.visibleCharacters, appSettings.groupAllInFilterMode, appSettings.customCharacters, appSettings.customTypes, appSettings.customSeries]);
 
             const stats = useMemo(() => {

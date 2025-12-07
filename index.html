@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>深空收藏艙 | 獵人週邊管理 (匯入完美版)</title>
+    <title>深空收藏艙 | 獵人週邊管理 (資料管理版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -396,7 +396,7 @@
             );
         };
 
-        const SettingsModal = ({ isOpen, onClose, appSettings, setAppSettings, importJson, setImportJson, handleBulkImport, handleExportCatalog, handleResetData, handleAddType, handleDeleteType, newTypeInput, setNewTypeInput, handleManualSyncTypes, handleAddSeries, handleDeleteSeries, newSeriesInput, setNewSeriesInput, handleManualSyncSeries, handleRemoveDuplicates }) => {
+        const SettingsModal = ({ isOpen, onClose, appSettings, setAppSettings, importJson, setImportJson, handleBulkImport, handleExport, handleResetData, handleAddType, handleDeleteType, newTypeInput, setNewTypeInput, handleManualSyncTypes, handleAddSeries, handleDeleteSeries, newSeriesInput, setNewSeriesInput, handleManualSyncSeries, handleRemoveDuplicates }) => {
             const [settingsTab, setSettingsTab] = useState('layout');
             const dragTypeItem = useRef(null); const dragTypeOverItem = useRef(null);
             const dragSeriesItem = useRef(null); const dragSeriesOverItem = useRef(null);
@@ -452,7 +452,36 @@
                 {settingsTab === 'filters_config' && (<div className="space-y-4 animate-fade-in"><p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p><div className="space-y-3">{['series', 'type', 'character', 'date'].map(key => (<label key={key} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.multiSelect?.[key]} onChange={() => toggleMultiSelect(key)} /><span className="text-sm font-medium">依{key==='series'?'系列':key==='type'?'類型':key==='character'?'角色':'收物日'} - 多選</span></label>))}</div></div>)}
                 {settingsTab === 'types' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} /><button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label><button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">{customTypes.map((t, index) => (<div key={t} draggable onDragStart={(e) => { dragTypeItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragTypeOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleTypeSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{t}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
                 {settingsTab === 'series' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增系列</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新系列名稱..." value={newSeriesInput} onKeyDown={(e) => e.key === 'Enter' && handleAddSeries()} onChange={e=>setNewSeriesInput(e.target.value)} /><button onClick={handleAddSeries} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前系列列表 (拖曳可排序)</label><button onClick={handleManualSyncSeries} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步系列</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100 min-h-[50px]">{customSeries.map((s, index) => (<div key={s} draggable onDragStart={(e) => { dragSeriesItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragSeriesOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleSeriesSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{s}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteSeries(s);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
-                {settingsTab === 'data' && (<div className="space-y-4 animate-fade-in"><div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800"><p className="font-bold mb-1">批次匯入：</p><p>貼上 Excel 或 JSON。匯入後將存入「週邊圖鑑」。</p></div><textarea className="w-full h-32 p-3 border rounded-xl text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea><div className="flex gap-2"><button onClick={handleBulkImport} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 shadow-sm">匯入</button><button onClick={handleExportCatalog} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded hover:bg-gray-50">匯出</button></div><hr /><button onClick={handleRemoveDuplicates} className="w-full text-blue-600 border border-blue-200 py-3 rounded-xl hover:bg-blue-50 text-sm mb-2 font-bold flex items-center justify-center gap-2"><Icon name="Eraser" size={16}/> 清理重複資料 (本地)</button><button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-3 rounded-xl hover:bg-red-50 text-sm font-bold flex items-center justify-center gap-2"><Icon name="AlertTriangle" size={16}/> 清空本地快取資料</button></div>)}
+                {settingsTab === 'data' && (<div className="space-y-4 animate-fade-in">
+                    
+                    {/* Export Section */}
+                    <div className="bg-gray-50 p-4 rounded-xl space-y-2 border border-gray-100">
+                        <label className="block text-sm font-bold text-gray-700 mb-1">1. 資料檢視與備份 (Export)</label>
+                        <p className="text-xs text-gray-500 mb-2">點擊下方按鈕以產生 JSON 資料，您可以複製保存。</p>
+                        <div className="flex flex-wrap gap-2">
+                             <button onClick={() => handleExport('collection')} className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs hover:bg-gray-50 text-gray-700 shadow-sm">顯示我的收藏</button>
+                             <button onClick={() => handleExport('trades')} className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs hover:bg-gray-50 text-gray-700 shadow-sm">顯示交易紀錄</button>
+                             <button onClick={() => handleExport('catalog')} className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs hover:bg-gray-50 text-gray-700 shadow-sm">顯示週邊圖鑑</button>
+                             <button onClick={() => handleExport('all')} className="px-3 py-2 bg-slate-800 text-white rounded-lg text-xs hover:bg-slate-700 shadow-sm">完整備份 (全部)</button>
+                        </div>
+                    </div>
+
+                    <textarea className="w-full h-32 p-3 border rounded-xl text-xs font-mono" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="在此貼上 JSON 資料以進行匯入..."></textarea>
+                    
+                    {/* Import Section */}
+                    <div className="bg-blue-50 p-4 rounded-xl space-y-2 border border-blue-100">
+                        <label className="block text-sm font-bold text-blue-800 mb-1">2. 資料匯入與還原 (Import)</label>
+                        <p className="text-xs text-blue-600 mb-2">請選擇您要將上方資料匯入到哪裡：</p>
+                        <div className="flex gap-2">
+                            <button onClick={() => handleBulkImport('catalog')} className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 shadow-sm text-sm font-bold">匯入至圖鑑</button>
+                            <button onClick={() => handleBulkImport('collection')} className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 shadow-sm text-sm font-bold">匯入至收藏庫</button>
+                        </div>
+                    </div>
+
+                    <hr className="my-2"/>
+                    <button onClick={handleRemoveDuplicates} className="w-full text-blue-600 border border-blue-200 py-3 rounded-xl hover:bg-blue-50 text-sm mb-2 font-bold flex items-center justify-center gap-2"><Icon name="Eraser" size={16}/> 清理重複資料 (本地)</button>
+                    <button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-3 rounded-xl hover:bg-red-50 text-sm font-bold flex items-center justify-center gap-2"><Icon name="AlertTriangle" size={16}/> 清空本地快取資料</button>
+                </div>)}
                 </div>
                 </div></div>
             );
@@ -983,8 +1012,8 @@
             const handleDeleteSeries = (s) => { if (confirm(`確定要刪除系列「${s}」嗎？`)) { setAppSettings(prev => ({...prev, customSeries: prev.customSeries.filter(series => series !== s)})); } };
             const handleManualSyncSeries = () => { const allItems = [...items, ...catalogItems]; const validSeries = allItems.map(i => i.series ? i.series.trim() : '').filter(s => s !== ''); const usedSeries = new Set(validSeries); setAppSettings(prev => { const currentSeries = prev.customSeries || []; const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s)); if (newSeries.length > 0) { alert(`已同步 ${newSeries.length} 個新系列！`); return { ...prev, customSeries: [...currentSeries, ...newSeries] }; } else { alert('目前沒有發現新系列。'); return prev; } }); };
             
-            // --- FIX: Improved Batch Import Logic (Corrected Target: Catalog) ---
-            const handleBulkImport = async () => { 
+            // --- FIX: Improved Batch Import Logic ---
+            const handleBulkImport = async (target = 'catalog') => { 
                 if (!importJson.trim()) {
                     alert("請輸入資料！");
                     return;
@@ -994,6 +1023,29 @@
                     let parsedData = []; 
                     const text = importJson.trim(); 
                     
+                    // Try parsing as Full Backup first
+                    try {
+                        const fullBackup = JSON.parse(text);
+                        // Check if it looks like a full backup structure
+                        if (fullBackup.items && fullBackup.catalog) {
+                           if(confirm("偵測到完整備份資料。是否要還原所有資料？(這將覆蓋現有資料)")) {
+                               // Restore Logic (Simple overwrite for local, complex for firebase - here simplistic)
+                               if(isFirebaseInitialized) {
+                                   alert("雲端模式暫不支援一鍵完整還原，請分開匯入。");
+                                   return;
+                               }
+                               setItems(fullBackup.items || []);
+                               setTrades(fullBackup.trades || []);
+                               setCatalogItems(getUniqueItems(fullBackup.catalog || []));
+                               setDailyFees(fullBackup.fees || {});
+                               if(fullBackup.settings) setAppSettings(prev => ({...prev, ...fullBackup.settings}));
+                               alert("還原成功！");
+                               setImportJson('');
+                               return;
+                           }
+                        }
+                    } catch(e) { /* Not a full backup object, proceed */ }
+
                     if (text.startsWith('[')) { 
                         try {
                             parsedData = JSON.parse(text); 
@@ -1001,7 +1053,7 @@
                             throw new Error("JSON 格式錯誤，請檢查內容。");
                         }
                     } else { 
-                        // Enhanced CSV/Excel Parsing
+                        // CSV/Excel Parsing (Same as before)
                         const rows = text.split('\n').map(r=>r.trim()).filter(r=>r); 
                         if(rows.length < 2) throw new Error("資料格式錯誤或行數不足");
 
@@ -1009,7 +1061,7 @@
                         const firstLine = rows[0];
                         const sep = firstLine.includes('\t') ? '\t' : ',';
                         
-                        const cols = firstLine.split(sep).map(s=>s.trim().replace(/^"|"$/g, '')); // Remove quotes
+                        const cols = firstLine.split(sep).map(s=>s.trim().replace(/^"|"$/g, ''));
                         
                         const mapKey = { 
                             'name': 'name', '名稱': 'name', '商品名稱': 'name', '品名': 'name', '名字': 'name',
@@ -1018,36 +1070,33 @@
                             'series': 'series', '系列': 'series', '版本': 'series',
                             'officialprice': 'officialPrice', '原價': 'officialPrice', '價格': 'officialPrice', '金額': 'officialPrice',
                             'image': 'image', '圖片': 'image', '圖': 'image', 'img': 'image',
+                            'cost': 'acquiredPrice', '成本': 'acquiredPrice', '入手價': 'acquiredPrice', '購入價': 'acquiredPrice',
+                            'date': 'date', '日期': 'date', '收物日': 'date', '購買日': 'date',
+                            'note': 'note', '備註': 'note',
+                            'qty': 'quantity', '數量': 'quantity', 'count': 'quantity'
                         }; 
                         
                         const keys = cols.map(c => mapKey[c.toLowerCase()] || c); 
                         
-                        if (!keys.includes('name')) {
-                            throw new Error(`找不到「名稱」欄位。\n偵測到的欄位: ${cols.join(', ')}\n請確保首行包含：名稱, 角色, 類型...`); 
-                        } 
+                        if (!keys.includes('name')) throw new Error(`找不到「名稱」欄位。偵測: ${cols.join(', ')}`);
                         
                         parsedData = rows.slice(1).map(row => { 
-                            // Robust splitting handling quotes if comma separated
                             let vals;
                             if (sep === ',') {
-                                // Simple regex for CSV splitting (handles basic quotes)
                                 vals = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || row.split(',');
                                 vals = vals.map(v => v.replace(/^"|"$/g, '').trim());
                             } else {
                                 vals = row.split(sep).map(v => v.trim());
                             }
-                            
                             let obj = {}; 
-                            keys.forEach((k, i) => { 
-                                if (vals[i]) obj[k] = vals[i]; 
-                            }); 
+                            keys.forEach((k, i) => { if (vals[i]) obj[k] = vals[i]; }); 
                             return obj; 
                         }).filter(o => o.name); 
                     } 
                     
                     if (parsedData.length === 0) throw new Error("無有效資料"); 
-                    
-                    // Update Settings (Add new types/series found in import)
+
+                    // Update Settings (Common)
                     const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== '')); 
                     const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== '')); 
                     setAppSettings(prev => { 
@@ -1062,53 +1111,83 @@
                         return changed ? next : prev; 
                     }); 
                     
-                    const timestamp = Date.now(); 
-                    
-                    // Prepare all items first
-                    const newItems = parsedData.map((item, i) => ({
-                        id: item.id || `imp_${timestamp}_${i}`, 
-                        name: item.name, 
-                        character: item.character || '其他', 
-                        type: item.type || '未分類', 
-                        series: item.series || '', 
-                        officialPrice: item.officialPrice || '', 
-                        image: item.image || null, 
-                        order: timestamp + i
+                    const timestamp = Date.now();
+                    const itemsToImport = parsedData.map((item, i) => ({
+                         // Basic Fields
+                         id: item.id || `imp_${timestamp}_${i}`,
+                         name: item.name,
+                         character: item.character || '其他',
+                         type: item.type || '未分類',
+                         series: item.series || '',
+                         officialPrice: item.officialPrice || '',
+                         image: item.image || null,
+                         // Fields specific to Collection (provide defaults if missing)
+                         ...(target === 'collection' ? {
+                             date: item.date || new Date().toISOString().split('T')[0],
+                             acquiredPrice: item.acquiredPrice || '',
+                             quantity: item.quantity || 1,
+                             currency: item.currency || 'NT$',
+                             note: item.note || ''
+                         } : {}),
+                         order: timestamp + i
                     }));
 
-                    // Batch Import Execution
                     if (isFirebaseInitialized) {
-                        // Firebase Batch Write (Limit 500 per batch)
-                        const BATCH_SIZE = 400;
-                        for (let i = 0; i < newItems.length; i += BATCH_SIZE) {
-                            const chunk = newItems.slice(i, i + BATCH_SIZE);
-                            const batch = writeBatch(db);
-                            chunk.forEach(item => {
-                                const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, item.id);
-                                batch.set(ref, item, { merge: true });
-                            });
-                            await batch.commit();
-                        }
+                         const collectionPath = target === 'catalog' 
+                            ? `artifacts/${GLOBAL_APP_ID}/public/data/catalog`
+                            : `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`;
+                         
+                         const BATCH_SIZE = 400;
+                         for (let i = 0; i < itemsToImport.length; i += BATCH_SIZE) {
+                             const chunk = itemsToImport.slice(i, i + BATCH_SIZE);
+                             const batch = writeBatch(db);
+                             chunk.forEach(item => {
+                                 const ref = doc(db, collectionPath, item.id);
+                                 batch.set(ref, item, { merge: true });
+                             });
+                             await batch.commit();
+                         }
                     } else {
-                        // Local State Batch Update (One-time update to prevent state thrashing)
-                        setCatalogItems(prev => {
-                            // Filter out exact ID duplicates if any, then append
-                            const existingIds = new Set(prev.map(i => i.id));
-                            const uniqueNewItems = newItems.filter(i => !existingIds.has(i.id));
-                            return getUniqueItems([...prev, ...uniqueNewItems]);
-                        });
+                         if (target === 'catalog') {
+                             setCatalogItems(prev => {
+                                 const existingIds = new Set(prev.map(i => i.id));
+                                 const uniqueNewItems = itemsToImport.filter(i => !existingIds.has(i.id));
+                                 return getUniqueItems([...prev, ...uniqueNewItems]);
+                             });
+                             setActiveTab('templates');
+                         } else {
+                             setItems(prev => {
+                                 // Simple append for collection, re-sort
+                                 const newCollection = [...prev, ...itemsToImport];
+                                 return newCollection.sort((a,b) => (a.order||0) - (b.order||0));
+                             });
+                             setActiveTab('collection');
+                         }
                     }
                     
-                    alert(`成功匯入 ${newItems.length} 筆資料至「週邊圖鑑」！`); 
+                    alert(`成功匯入 ${itemsToImport.length} 筆資料至${target === 'catalog' ? '「週邊圖鑑」' : '「我的收藏庫」'}！`); 
                     setImportJson(''); 
-                    setActiveTab('templates'); // Switch to Templates tab
+                    
                 } catch (e) { 
                     console.error(e);
                     alert("匯入失敗: " + e.message); 
                 } 
             };
 
-            const handleExportCatalog = () => { const dataStr = JSON.stringify(catalogItems, null, 2); setImportJson(dataStr); };
+            const handleExport = (type) => {
+                let data = "";
+                if (type === 'collection') data = JSON.stringify(items, null, 2);
+                else if (type === 'trades') data = JSON.stringify(trades, null, 2);
+                else if (type === 'catalog') data = JSON.stringify(catalogItems, null, 2);
+                else if (type === 'all') {
+                    data = JSON.stringify({
+                        items, trades, catalog: catalogItems, fees: dailyFees, settings: appSettings
+                    }, null, 2);
+                }
+                setImportJson(data);
+            };
+
+            const handleExportCatalog = () => { handleExport('catalog'); };
             const handleResetData = () => { if (confirm("確定要清空本地資料嗎？此操作無法復原。")) { setItems([]); setCatalogItems([]); setDailyFees({}); safeLocalStorage.removeItem('deepspace_items_v7_local'); safeLocalStorage.removeItem('deepspace_catalog_v7_local'); safeLocalStorage.removeItem('deepspace_daily_fees_local'); alert("已清空。"); } };
             
             const toggleCharacterVisibility = (char) => { setAppSettings(prev => { const current = prev.visibleCharacters; if (char === "ALL") { const allMainSelected = CHARACTERS.every(c => current.includes(c)); if (allMainSelected) { return { ...prev, visibleCharacters: [] }; } else { return { ...prev, visibleCharacters: [...CHARACTERS] }; } } else { if (current.includes(char)) { return { ...prev, visibleCharacters: current.filter(c => c !== char) }; } else { return { ...prev, visibleCharacters: [...current, char] }; } } }); };
@@ -1691,7 +1770,7 @@
                         )}
                     </main>
 
-                    {isSettingsOpen && <SettingsModal isOpen={isSettingsOpen} onClose={()=>setIsSettingsOpen(false)} appSettings={appSettings} setAppSettings={setAppSettings} importJson={importJson} setImportJson={setImportJson} handleBulkImport={handleBulkImport} handleExportCatalog={handleExportCatalog} handleResetData={handleResetData} handleAddType={handleAddType} handleDeleteType={handleDeleteType} newTypeInput={newTypeInput} setNewTypeInput={setNewTypeInput} handleManualSyncTypes={handleManualSyncTypes} handleAddSeries={handleAddSeries} handleDeleteSeries={handleDeleteSeries} newSeriesInput={newSeriesInput} setNewSeriesInput={setNewSeriesInput} handleManualSyncSeries={handleManualSyncSeries} handleRemoveDuplicates={handleRemoveDuplicates} />}
+                    {isSettingsOpen && <SettingsModal isOpen={isSettingsOpen} onClose={()=>setIsSettingsOpen(false)} appSettings={appSettings} setAppSettings={setAppSettings} importJson={importJson} setImportJson={setImportJson} handleBulkImport={handleBulkImport} handleExport={handleExport} handleExportCatalog={handleExportCatalog} handleResetData={handleResetData} handleAddType={handleAddType} handleDeleteType={handleDeleteType} newTypeInput={newTypeInput} setNewTypeInput={setNewTypeInput} handleManualSyncTypes={handleManualSyncTypes} handleAddSeries={handleAddSeries} handleDeleteSeries={handleDeleteSeries} newSeriesInput={newSeriesInput} setNewSeriesInput={setNewSeriesInput} handleManualSyncSeries={handleManualSyncSeries} handleRemoveDuplicates={handleRemoveDuplicates} />}
                     {isBatchModalOpen && <BatchAddModal isOpen={isBatchModalOpen} onClose={() => setIsBatchModalOpen(false)} selectedItems={catalogItems.filter(i => batchSelection.has(i.id))} onSave={handleBatchSave} />}
                     {isModalOpen && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"><div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"><div className="flex justify-between items-center"><h3 className="font-bold">{modalMode === 'catalog' ? (editingItem ? '編輯公開圖鑑' : '新增公開圖鑑') : (editingItem ? '編輯我的收藏' : '加入我的收藏')}</h3><button onClick={()=>setIsModalOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button></div><div onClick={()=>fileInputRef.current.click()} className="w-32 h-32 mx-auto border-2 border-dashed rounded flex items-center justify-center cursor-pointer">{formData.image?<img src={formData.image} className="w-full h-full object-cover"/>:<Icon name="Upload"/>}<input type="file" ref={fileInputRef} className="hidden" onChange={(e)=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=()=>setFormData(p=>({...p,image:r.result}));r.readAsDataURL(f);}}}/></div><input type="text" className="w-full border p-2 rounded mt-2 text-xs text-gray-500" placeholder="或貼上圖片連結..." value={formData.image || ''} onChange={e=>setFormData({...formData, image: e.target.value})} /><input className="w-full border p-2 rounded mt-2" placeholder="名稱" value={formData.name} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,name:e.target.value})} autoFocus={!editingItem && !formData.name} /><div className="grid grid-cols-2 gap-2 mt-2"><select className="border p-2 rounded" value={formData.character} onChange={e=>setFormData({...formData,character:e.target.value})}>{CHARACTERS.map(c=><option key={c}>{c}</option>)}</select><input className="border p-2 rounded" placeholder="系列" value={formData.series} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,series:e.target.value})}/></div><div className="grid grid-cols-2 gap-2 mt-2"><input className="border p-2 rounded" list="types-list" placeholder="類型" value={formData.type} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,type:e.target.value})}/><datalist id="types-list">{appSettings.customTypes.map(t=><option key={t} value={t}/>)}</datalist><input type="text" className="border p-2 rounded" placeholder="原價" value={formData.officialPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/></div>{modalMode === 'collection' && (<><hr className="border-gray-100 mt-2" /><div className="flex items-center gap-2 mb-2 mt-2"><input type="checkbox" id="isPreorder" checked={formData.isPreorder || false} onChange={e=>setFormData({...formData, isPreorder: e.target.checked})} className="w-4 h-4 text-blue-600 rounded"/><label htmlFor="isPreorder" className="text-sm font-bold text-gray-700">預購商品</label></div><div className="flex items-center gap-2 mb-2"><label className="text-sm">數量:</label><input type="number" className="border p-1 w-16 rounded" value={formData.quantity} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div><div className="grid grid-cols-2 gap-2"><div className="relative"><input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})} autoFocus={!editingItem && formData.name}/><select className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0" value={formData.currency || (formData.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency)} onChange={e=>setFormData({...formData, currency: e.target.value})}><option value="NT$">NT$</option><option value="r">r</option></select></div>{formData.isPreorder ? (<div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span><input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/></div>) : (<div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500">收物日期</span><input type="date" className="border p-2 rounded w-full" value={formData.date} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,date:e.target.value})}/></div>)}</div><textarea className="w-full border p-2 rounded h-20 mt-2" placeholder="備註..." value={formData.note} onChange={e=>setFormData({...formData,note:e.target.value})}/></>)}<div className="flex gap-2 mt-4">{editingItem && modalMode === 'collection' && (<button onClick={async () => {if(confirm('確定要刪除此收藏嗎？')) {await deleteFromCollection(editingItem.id);setIsModalOpen(false);}}} className="bg-red-50 text-red-500 border border-red-200 px-4 rounded hover:bg-red-100"><Icon name="Trash2" size={18} /></button>)}<button onClick={handleSave} className="flex-1 bg-slate-900 text-white py-3 rounded hover:bg-slate-800">{modalMode === 'catalog' ? '更新圖鑑 (公開)' : '儲存收藏'}</button></div></div></div>)}
 

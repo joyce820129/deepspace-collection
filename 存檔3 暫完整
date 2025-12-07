@@ -1,0 +1,1776 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>深空收藏艙 | 獵人週邊管理 (金額計算修正版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Prop Types (Recharts 依賴項) -->
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    <!-- Recharts -->
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .thin-scrollbar::-webkit-scrollbar { width: 4px; }
+        .thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .thin-scrollbar::-webkit-scrollbar-thumb { background-color: #e2e8f0; border-radius: 20px; }
+        
+        /* 拖曳時的樣式 */
+        .cursor-move { cursor: grab; }
+        .cursor-move:active { cursor: grabbing; }
+        .dragging { opacity: 0.4; border: 2px dashed #3b82f6; }
+
+        /* 隱藏數字輸入框的上下箭頭 */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch, getDoc, updateDoc, deleteField } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const { useState, useEffect, useMemo, useRef, memo } = React;
+        
+        const RechartsObj = window.Recharts || {};
+        const { 
+            PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, 
+            BarChart, Bar, XAxis, YAxis, CartesianGrid 
+        } = RechartsObj;
+
+        // --- Firebase Config ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDxpH_rteE6PJq_bMmg3X2CxTs1lrQmhZA",
+            authDomain: "deepspace-collection.firebaseapp.com",
+            projectId: "deepspace-collection",
+            storageBucket: "deepspace-collection.firebasestorage.app",
+            messagingSenderId: "129454784064",
+            appId: "1:129454784064:web:38e7f8ffcf99d9a61ea9a5",
+            measurementId: "G-GCCS7NBT15"
+        };
+        const GLOBAL_APP_ID = "deepspace_shared_v1";
+
+        let auth, db;
+        let isFirebaseInitialized = false;
+
+        if (Object.keys(firebaseConfig).length > 0) {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                isFirebaseInitialized = true;
+            } catch (e) { console.error("Firebase init error:", e); }
+        } else if (typeof __firebase_config !== 'undefined') {
+            try {
+                const app = initializeApp(JSON.parse(__firebase_config));
+                auth = getAuth(app);
+                db = getFirestore(app);
+                isFirebaseInitialized = true;
+            } catch(e) { console.log("Preview env init failed", e); }
+        }
+
+        // --- Safe LocalStorage Helper ---
+        const safeLocalStorage = {
+            getItem: (key) => {
+                try { return localStorage.getItem(key); } catch (e) { return null; }
+            },
+            setItem: (key, value) => {
+                try { localStorage.setItem(key, value); } catch (e) { }
+            },
+            removeItem: (key) => {
+                try { localStorage.removeItem(key); } catch (e) { }
+            }
+        };
+
+        const CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝", "全員"];
+        const DEFAULT_MERCH_TYPES = ["徽章", "立牌", "拍立得", "小卡", "相卡", "明信片", "雷射票", "書籤", "透卡", "貼紙", "色紙", "簽名板", "杯墊", "吊飾", "公仔", "娃娃", "卡冊", "其他"];
+        const CHARACTER_THEMES = {
+            "沈星回": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", badge: "bg-purple-100 text-purple-800" },
+            "黎深": { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", badge: "bg-blue-100 text-blue-800" },
+            "祁煜": { bg: "bg-pink-50", text: "text-pink-700", border: "border-pink-200", badge: "bg-pink-100 text-pink-800" },
+            "秦徹": { bg: "bg-red-50", text: "text-red-700", border: "border-red-200", badge: "bg-red-100 text-red-800" },
+            "夏以晝": { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200", badge: "bg-orange-100 text-orange-800" },
+            "全員": { bg: "bg-slate-100", text: "text-slate-700", border: "border-slate-300", badge: "bg-slate-200 text-slate-800" },
+            "其他": { bg: "bg-gray-50", text: "text-gray-700", border: "border-gray-200", badge: "bg-gray-100 text-gray-800" }
+        };
+        const CHART_COLORS = { "沈星回": "#9333ea", "黎深": "#2563eb", "祁煜": "#db2777", "秦徹": "#dc2626", "夏以晝": "#ea580c", "全員": "#475569", "其他": "#9ca3af" };
+
+        const getUniqueItems = (items) => {
+            if (!Array.isArray(items)) return [];
+            const seen = new Set();
+            return items.filter(item => {
+                if (!item) return false;
+                const name = (item.name || '').trim().toLowerCase();
+                const char = (item.character || '').trim().toLowerCase();
+                const type = (item.type || '').trim().toLowerCase();
+                const series = (item.series || '').trim().toLowerCase();
+                const key = `${name}|${char}|${type}|${series}`;
+                if (seen.has(key)) return false; 
+                seen.add(key);
+                return true;
+            });
+        };
+
+        // --- Components ---
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const containerRef = useRef(null);
+            useEffect(() => {
+                const container = containerRef.current;
+                if (!container || !window.lucide) return;
+                container.innerHTML = '';
+                const iconNode = window.lucide.icons[name];
+                if (iconNode) {
+                    const svgElement = window.lucide.createElement(iconNode);
+                    svgElement.setAttribute('width', size);
+                    svgElement.setAttribute('height', size);
+                    if (className) svgElement.setAttribute('class', className);
+                    svgElement.setAttribute('stroke-width', 2);
+                    container.appendChild(svgElement);
+                }
+            }, [name, size, className]);
+            return <span ref={containerRef} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}></span>;
+        };
+
+        const FilterBar = memo(({ options, selected, toggle, multi, highlightSet }) => {
+            const [isExpanded, setIsExpanded] = useState(false);
+            const hasManyOptions = options.length > 5;
+            return (
+                <div className="relative mb-2 animate-fade-in group z-10">
+                    <div className={`flex gap-2 items-center transition-all ${isExpanded ? 'flex-wrap' : 'overflow-x-auto pb-2 scrollbar-hide pr-12'}`}>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); toggle('all'); }} className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border flex-shrink-0 cursor-pointer ${selected.length === 0 ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{multi ? "全選" : "全部"}</button>
+                        {options.map(opt => {
+                            const isHighlight = highlightSet && highlightSet.has(opt);
+                            const isSelected = selected.includes(opt);
+                            return <button type="button" key={opt} onClick={(e) => { e.stopPropagation(); toggle(opt); }} className={`px-3 py-1 text-xs rounded-full whitespace-nowrap transition-colors border flex-shrink-0 cursor-pointer ${isSelected ? 'bg-blue-100 text-blue-700 border-blue-300' : (isHighlight ? 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50')}`}>{opt}</button>;
+                        })}
+                        {multi && <button type="button" onClick={(e) => { e.stopPropagation(); toggle('all'); }} className="px-3 py-1 text-xs rounded-full bg-gray-200 text-gray-600 border border-transparent hover:bg-gray-300 whitespace-nowrap flex-shrink-0 cursor-pointer">重置</button>}
+                    </div>
+                    {hasManyOptions && (!isExpanded ? <div className="absolute right-0 top-0 bottom-2 w-12 bg-gradient-to-l from-gray-50 via-gray-50 to-transparent flex items-center justify-end pointer-events-none"><button type="button" onClick={() => setIsExpanded(true)} className="w-7 h-7 bg-white border border-gray-200 rounded-full shadow-sm flex items-center justify-center text-gray-500 hover:text-blue-600 pointer-events-auto mr-1 cursor-pointer"><Icon name="ChevronDown" size={16}/></button></div> : <div className="flex justify-center mt-2"><button type="button" onClick={() => setIsExpanded(false)} className="px-4 py-1 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-full text-xs flex items-center gap-1 transition-colors cursor-pointer"><Icon name="ChevronUp" size={14}/> 收合</button></div>)}
+                </div>
+            );
+        });
+
+        const StackCard = memo(({ stack, index, openModal, deleteFromCollection, isDraggable, onDragStart, onDragEnter, onDragEnd, showAmount = true, isBatchMode = false, isSelected = false, onToggleSelect = null }) => {
+            const theme = CHARACTER_THEMES[stack.character] || CHARACTER_THEMES["其他"];
+            const consolidated = useMemo(() => {
+                const map = new Map();
+                stack.instances.forEach(inst => {
+                    const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}-${inst.currency}`;
+                    const itemQty = inst.quantity || 1;
+                    if (!map.has(key)) map.set(key, { ...inst, count: itemQty }); else map.get(key).count += itemQty;
+                });
+                const result = Array.from(map.values());
+                result.sort((a, b) => {
+                    const dateA = a.isPreorder ? a.shippingDate : a.date;
+                    const dateB = b.isPreorder ? b.shippingDate : b.date;
+                    if (!dateA && !dateB) return 0;
+                    if (!dateA) return 1;
+                    if (!dateB) return -1;
+                    return new Date(dateA) - new Date(dateB);
+                });
+                return result;
+            }, [stack.instances]);
+
+            const handleCardClick = (e) => {
+                if (isBatchMode && onToggleSelect) {
+                    e.stopPropagation();
+                    onToggleSelect(stack.instances.map(i => i.id));
+                }
+            };
+
+            return (
+                <div 
+                    onClick={handleCardClick}
+                    draggable={isDraggable && !isBatchMode} 
+                    onDragStart={(e) => { if(!isDraggable || isBatchMode) return; e.target.classList.add('dragging'); onDragStart(e, index); }} 
+                    onDragEnter={(e) => isDraggable && !isBatchMode && onDragEnter(e, index)} 
+                    onDragEnd={(e) => { if(!isDraggable || isBatchMode) return; e.target.classList.remove('dragging'); onDragEnd(e); }} 
+                    onDragOver={(e) => e.preventDefault()} 
+                    className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col group relative 
+                        ${isDraggable && !isBatchMode ? 'cursor-move active:cursor-grabbing hover:shadow-md transition-shadow' : ''}
+                        ${isBatchMode ? 'cursor-pointer hover:border-blue-400' : 'border-gray-100'}
+                        ${isSelected ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50' : ''}
+                    `}
+                >
+                    {isBatchMode && (
+                        <div className={`absolute top-2 right-2 z-20 w-6 h-6 rounded-full border-2 flex items-center justify-center bg-white ${isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-300 text-transparent'}`}>
+                            <Icon name="Check" size={14} />
+                        </div>
+                    )}
+
+                    {stack.totalCount > 1 && <div className="absolute top-2 left-2 z-10 bg-slate-900 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">x{stack.totalCount}</div>}
+                    <div className={`h-40 w-full relative bg-gray-100 flex items-center justify-center overflow-hidden`}>
+                        {stack.image ? <img src={stack.image} className="w-full h-full object-cover pointer-events-none" /> : <Icon name="Image" className={`opacity-20 ${theme.text}`} size={32} />}
+                        {!isBatchMode && <div className="absolute top-2 right-2"><span className={`text-[10px] font-bold px-2 py-1 rounded-full bg-white/90 shadow-sm ${theme.text}`}>{stack.character}</span></div>}
+                    </div>
+                    <div className="p-3 flex-1 flex flex-col bg-white">
+                        <h3 className="font-bold text-gray-800 text-sm line-clamp-1">{stack.name}</h3>
+                        {showAmount && (<div className="flex-1 mt-1 space-y-2 overflow-y-auto max-h-[120px] thin-scrollbar pr-1">{consolidated.map((inst, idx) => (
+                            <div key={idx} className="bg-gray-50 rounded p-2 text-xs border border-gray-100 flex justify-between items-center">
+                                <div>
+                                    <div className="flex gap-1 text-[10px] text-gray-500 items-center">{inst.isPreorder ? <span className="text-orange-500 font-bold flex items-center gap-0.5"><Icon name="Package" size={10}/> 預購 {inst.shippingDate}</span> : <span className="flex items-center gap-0.5"><Icon name="Calendar" size={10}/> {inst.date}</span>}</div>
+                                    <div className="flex items-baseline gap-1"><span className="font-bold text-base text-slate-800">{inst.currency === 'r' ? `${inst.acquiredPrice}r` : `NT$ ${inst.acquiredPrice}`}</span>{inst.officialPrice && <span className="text-[11px] text-gray-500 font-medium ml-1">({inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}</div>
+                                </div>
+                                <div className="flex items-center gap-1 ml-auto pl-2 border-l border-gray-100">
+                                    {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">x{inst.count}</span>}
+                                    {!isBatchMode && <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all"><Icon name="Edit3" size={12}/></button>}
+                                </div>
+                            </div>
+                        ))}</div>)}
+                    </div>
+                </div>
+            );
+        });
+
+        const CatalogCard = memo(({ item, index, openModal, deleteFromCatalog, isBatchMode, isSelected, onToggleSelect }) => {
+            const theme = CHARACTER_THEMES[item.character] || CHARACTER_THEMES["其他"];
+            const priceDisplay = item.officialPrice ? (isNaN(Number(item.officialPrice)) ? item.officialPrice : `${item.officialPrice}r`) : '?';
+            return (
+                <div onClick={(e) => { if (isBatchMode) { e.stopPropagation(); onToggleSelect(item.id); } }} className={`bg-white rounded-xl shadow-sm border overflow-hidden group relative transition-all ${isBatchMode ? 'cursor-pointer hover:border-blue-400' : 'border-gray-100'} ${isSelected ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50' : ''}`}>
+                    <div className="aspect-square bg-gray-50 relative overflow-hidden">
+                        <img src={item.image} alt={item.name} className="w-full h-full object-cover pointer-events-none" />
+                        {isBatchMode && (<div className={`absolute inset-0 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500/20' : 'bg-black/0 group-hover:bg-black/5'}`}><div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white/80 border-gray-300'}`}>{isSelected && <Icon name="Check" size={18} />}</div></div>)}
+                        {!isBatchMode && (<><div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" /><button onClick={(e) => {e.stopPropagation(); openModal(null, item, 'collection');}} className="absolute bottom-3 right-3 bg-white text-blue-600 p-2 rounded-full shadow-lg transform translate-y-10 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all z-20 w-10 h-10 flex items-center justify-center" title="加入我的收藏"><Icon name="Plus" size={24} /></button><div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"><button onClick={(e) => {e.stopPropagation(); openModal(item, null, 'catalog');}} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-blue-600 shadow-sm"><Icon name="Edit3" size={14} /></button><button onClick={(e) => {e.stopPropagation(); deleteFromCatalog(item.id);}} className="p-1.5 bg-white/90 rounded-full text-slate-600 hover:text-red-600 shadow-sm"><Icon name="Trash2" size={14} /></button></div></>)}
+                    </div>
+                    <div className="p-3 relative">
+                        <div className="flex items-center gap-2 mb-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${theme.badge}`}>{item.character}</span><span className="text-[10px] text-gray-500 border px-1 rounded">{item.type}</span></div>
+                        <h3 className="font-bold text-gray-800 text-sm truncate">{item.name}</h3>
+                        <div className="flex justify-end mt-2"><span className="text-xl font-bold text-black">{priceDisplay}</span></div>
+                    </div>
+                </div>
+            );
+        });
+
+        const TradeCard = memo(({ trade, openModal, deleteTrade, markAsSold, isBatchMode, isSelected, onToggleSelect }) => {
+            const theme = CHARACTER_THEMES[trade.character] || CHARACTER_THEMES["其他"];
+            const isSold = trade.status === 'sold';
+            const quantity = trade.quantity || 1;
+            const profit = ((Number(trade.salePrice) || 0) - (Number(trade.costPrice) || 0)) * quantity;
+            
+            const handleCardClick = (e) => {
+                if (isBatchMode) {
+                    e.stopPropagation();
+                    onToggleSelect(trade.id);
+                }
+            };
+
+            return (
+                <div onClick={handleCardClick} className={`bg-white rounded-xl shadow-sm border overflow-hidden flex flex-col relative transition-all 
+                    ${isSold ? 'opacity-70' : ''}
+                    ${isBatchMode ? 'cursor-pointer border-blue-200 hover:border-blue-400' : 'border-gray-100'}
+                    ${isSelected ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50' : ''}
+                `}>
+                    {isBatchMode && (
+                        <div className={`absolute top-2 right-2 z-20 w-6 h-6 rounded-full border-2 flex items-center justify-center bg-white ${isSelected ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-300 text-transparent'}`}>
+                            <Icon name="Check" size={14} />
+                        </div>
+                    )}
+
+                    {(quantity > 1) && (
+                        <div className="absolute top-2 left-2 z-10 bg-slate-900 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
+                            x{quantity}
+                        </div>
+                    )}
+
+                    <div className="p-3 border-b border-gray-100 flex justify-between items-start">
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full ${theme.badge}`}>{trade.character}</span>
+                            {isSold ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-bold">已售出</span> : <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold">待售中</span>}
+                        </div>
+                        {!isBatchMode && (
+                            <div className="flex gap-1">
+                                <button onClick={(e)=>{e.stopPropagation(); openModal(trade)}} className="text-gray-400 hover:text-blue-600 p-1"><Icon name="Edit3" size={14}/></button>
+                                <button onClick={(e)=>{e.stopPropagation(); deleteTrade(trade.id)}} className="text-gray-400 hover:text-red-600 p-1"><Icon name="Trash2" size={14}/></button>
+                            </div>
+                        )}
+                    </div>
+                    <div className="p-3 flex gap-3 items-center">
+                        <div className="w-16 h-16 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden">
+                            {trade.image ? <img src={trade.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-gray-300 m-auto mt-5" size={24}/>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-gray-800 text-sm truncate mb-1">{trade.name}</h3>
+                            <div className="grid grid-cols-2 gap-2 text-xs mt-1">
+                                {trade.setName && <div className="col-span-2 text-blue-500 font-bold flex items-center gap-1"><Icon name="Package" size={10}/> {trade.setName}</div>}
+                                {trade.officialPrice && <div className="col-span-2 text-gray-400 flex items-center gap-1"><span className="scale-75 origin-left">原價</span> <span className="text-slate-500 font-medium">{trade.officialPrice}</span></div>}
+                                <div><p className="text-gray-400 scale-90 origin-left">入手價</p><p className="font-bold text-slate-700">${trade.costPrice}</p></div>
+                                <div><p className="text-gray-400 scale-90 origin-left">{isSold ? '售出價' : '預售價'}</p><p className="font-bold text-blue-600">${trade.salePrice}</p></div>
+                            </div>
+                        </div>
+                    </div>
+                    {!isBatchMode && (
+                        isSold ? (
+                            <div className={`p-2 text-center text-xs font-bold ${profit >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                                {profit >= 0 ? `獲利 +${profit}` : `虧損 ${profit}`}
+                            </div>
+                        ) : (
+                            <button onClick={(e)=>{e.stopPropagation(); markAsSold(trade)}} className="w-full py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs font-bold transition-colors border-t border-gray-100 flex items-center justify-center gap-1">
+                                <Icon name="CheckCircle2" size={14}/> 標記為已售出
+                            </button>
+                        )
+                    )}
+                </div>
+            );
+        });
+
+        const BatchAddModal = ({ isOpen, onClose, selectedItems, onSave }) => {
+            const [commonDate, setCommonDate] = useState(new Date().toISOString().split('T')[0]);
+            const [isPreorder, setIsPreorder] = useState(false);
+            const [commonShippingDate, setCommonShippingDate] = useState('');
+            const [commonNote, setCommonNote] = useState('');
+            const [itemsDetails, setItemsDetails] = useState({});
+
+            useEffect(() => {
+                if (isOpen && selectedItems.length > 0) {
+                    const initial = {};
+                    selectedItems.forEach(i => { initial[i.id] = { price: '', currency: 'NT$', quantity: 1 }; });
+                    setItemsDetails(initial);
+                }
+            }, [isOpen, selectedItems]);
+
+            const updateDetail = (id, field, value) => { setItemsDetails(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } })); };
+
+            const handleConfirm = () => {
+                const payload = [];
+                selectedItems.forEach(item => {
+                    const detail = itemsDetails[item.id] || { price: '', currency: 'NT$', quantity: 1 };
+                    const qty = Math.max(1, parseInt(detail.quantity) || 1);
+                    payload.push({ 
+                        ...item, 
+                        date: !isPreorder ? commonDate : '', 
+                        isPreorder: isPreorder, 
+                        shippingDate: isPreorder ? (commonShippingDate || commonDate) : '', 
+                        acquiredPrice: detail.price, 
+                        currency: detail.currency, 
+                        note: commonNote, 
+                        quantity: qty 
+                    });
+                });
+                onSave(payload);
+            };
+
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-3xl w-full max-w-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+                        <div className="flex justify-between items-center border-b pb-3"><h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icon name="Layers" /> 批次新增收藏</h3><button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button></div>
+                        <div className="space-y-4 flex-1 overflow-y-auto p-1">
+                            <div className="bg-gray-50 p-4 rounded-xl space-y-3 border border-gray-100">
+                                <h4 className="font-bold text-sm text-gray-700">共同資訊</h4>
+                                <div className="flex items-center gap-4"><div className="flex items-center gap-2"><input type="checkbox" id="batchPreorder" checked={isPreorder} onChange={e=>setIsPreorder(e.target.checked)} className="w-4 h-4 text-blue-600 rounded"/><label htmlFor="batchPreorder" className="text-sm font-bold text-gray-700">預購商品</label></div><div className="flex-1"><label className="text-xs text-gray-500 block mb-1">{isPreorder ? '預計出貨日' : '收物日期'}</label><input type="date" className="border p-2 rounded w-full bg-white" value={isPreorder ? commonShippingDate : commonDate} onChange={e => isPreorder ? setCommonShippingDate(e.target.value) : setCommonDate(e.target.value)}/></div></div>
+                            </div>
+                            <div className="space-y-2">
+                                <h4 className="font-bold text-sm text-gray-700">個別設定 ({selectedItems.length})</h4>
+                                {selectedItems.map(item => {
+                                    const detail = itemsDetails[item.id] || { price: '', currency: 'NT$', quantity: 1 };
+                                    return (
+                                        <div key={item.id} className="flex items-center gap-3 p-2 border rounded-lg hover:bg-gray-50">
+                                            <div className="w-12 h-12 bg-gray-200 rounded overflow-hidden flex-shrink-0">{item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-gray-400 m-auto mt-3" size={20}/>}</div>
+                                            <div className="flex-1 min-w-0"><p className="text-sm font-bold truncate">{item.name}</p><p className="text-xs text-gray-500">{item.character} · {item.type}</p></div>
+                                            <div className="flex items-center gap-2"><div className="flex items-center gap-1 bg-white border rounded px-1"><span className="text-xs text-gray-400">x</span><input type="number" className="w-8 text-center text-sm outline-none" value={detail.quantity} onChange={e => updateDetail(item.id, 'quantity', e.target.value)}/></div><div className="flex items-center border rounded bg-white overflow-hidden w-36"><input type="number" className="w-full p-2 text-sm outline-none" placeholder="價格" value={detail.price} onChange={e=>updateDetail(item.id, 'price', e.target.value)}/><select className="bg-gray-50 border-l p-2 text-xs outline-none text-gray-600 font-bold" value={detail.currency} onChange={e=>updateDetail(item.id, 'currency', e.target.value)}><option value="NT$">NT$</option><option value="r">r</option></select></div></div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div><h4 className="font-bold text-sm text-gray-700 mb-2">備註</h4><textarea className="w-full border p-2 rounded h-16 text-sm bg-white" placeholder="共同備註 (選填)..." value={commonNote} onChange={e=>setCommonNote(e.target.value)}/></div>
+                        </div>
+                        <div className="pt-2 border-t flex gap-2"><button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">取消</button><button onClick={handleConfirm} className="flex-1 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 font-bold shadow-md">確認新增</button></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const SettingsModal = ({ isOpen, onClose, appSettings, setAppSettings, importJson, setImportJson, handleBulkImport, handleExportCatalog, handleResetData, handleAddType, handleDeleteType, newTypeInput, setNewTypeInput, handleManualSyncTypes, handleAddSeries, handleDeleteSeries, newSeriesInput, setNewSeriesInput, handleManualSyncSeries, handleRemoveDuplicates }) => {
+            const [settingsTab, setSettingsTab] = useState('layout');
+            const dragTypeItem = useRef(null); const dragTypeOverItem = useRef(null);
+            const dragSeriesItem = useRef(null); const dragSeriesOverItem = useRef(null);
+            
+            if (!isOpen) return null;
+
+            const toggleCharacterVisibility = (char) => { setAppSettings(prev => { const current = prev.visibleCharacters || []; if (char === "ALL") { const allMainSelected = CHARACTERS.every(c => current.includes(c)); return allMainSelected ? { ...prev, visibleCharacters: [] } : { ...prev, visibleCharacters: [...CHARACTERS] }; } else { return current.includes(char) ? { ...prev, visibleCharacters: current.filter(c => c !== char) } : { ...prev, visibleCharacters: [...current, char] }; } }); };
+            const toggleMultiSelect = (key) => { setAppSettings(prev => ({ ...prev, multiSelect: { ...(prev.multiSelect || {}), [key]: !prev.multiSelect?.[key] } })); };
+            const handleTypeSort = () => { const _customTypes = [...(appSettings.customTypes || DEFAULT_MERCH_TYPES)]; const dragIndex = dragTypeItem.current; const dragOverIndex = dragTypeOverItem.current; if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return; const dragItemContent = _customTypes[dragIndex]; _customTypes.splice(dragIndex, 1); _customTypes.splice(dragOverIndex, 0, dragItemContent); setAppSettings(prev => ({ ...prev, customTypes: _customTypes })); dragTypeItem.current = null; dragTypeOverItem.current = null; };
+            const handleSeriesSort = () => { const _customSeries = [...(appSettings.customSeries || [])]; const dragIndex = dragSeriesItem.current; const dragOverIndex = dragSeriesOverItem.current; if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return; const dragItemContent = _customSeries[dragIndex]; _customSeries.splice(dragIndex, 1); _customSeries.splice(dragOverIndex, 0, dragItemContent); setAppSettings(prev => ({ ...prev, customSeries: _customSeries })); dragSeriesItem.current = null; dragSeriesOverItem.current = null; };
+            
+            const customCharacters = appSettings.customCharacters || CHARACTERS;
+            const customTypes = appSettings.customTypes || DEFAULT_MERCH_TYPES;
+            const customSeries = appSettings.customSeries || [];
+            
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"><div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl"><div className="flex justify-between items-center border-b pb-3"><h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icon name="Settings" /> 設定</h3><button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button></div><div className="flex gap-2 border-b pb-2 overflow-x-auto">{['layout', 'filter', 'filters_config', 'types', 'series', 'data'].map(t => (<button key={t} onClick={()=>setSettingsTab(t)} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${settingsTab===t ? 'bg-slate-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}>{t==='layout' ? '版面' : t==='filter' ? '角色' : t==='filters_config' ? '篩選' : t==='types' ? '類型' : t==='series' ? '系列' : '資料'}</button>))}</div>
+                <div className="mt-2">
+                {settingsTab === 'layout' && (<div className="space-y-6 animate-fade-in">
+                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                        <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><Icon name="Grid" size={16}/> 每行顯示數量</label>
+                        <div className="flex gap-2">{[2,3,4,5,6].map(cols => (<button key={cols} onClick={()=>setAppSettings(prev=>({...prev, layoutCols: cols}))} className={`flex-1 py-2 rounded-xl border text-sm font-bold transition-all ${appSettings.layoutCols===cols ? 'bg-blue-500 text-white border-blue-500 shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}>{cols}</button>))}</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                            <label className="block text-sm font-bold text-gray-700 mb-3">一般商品幣值</label>
+                            <div className="flex gap-2">{['NT$', 'r'].map(curr => (<button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold transition-all ${appSettings.defaultCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}>{curr}</button>))}</div>
+                        </div>
+                        <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                            <label className="block text-sm font-bold text-gray-700 mb-3">預購商品幣值</label>
+                            <div className="flex gap-2">{['NT$', 'r'].map(curr => (<button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultPreorderCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold transition-all ${appSettings.defaultPreorderCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}>{curr}</button>))}</div>
+                        </div>
+                    </div>
+                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                        <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><Icon name="Eye" size={16}/> 顯示選項</h4>
+                        <div className="space-y-3">
+                             <label className="flex items-center justify-between cursor-pointer p-2 hover:bg-white rounded-lg transition-colors">
+                                <span className="text-sm font-medium text-gray-700">顯示分類大標題 (全部模式)</span>
+                                <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked={appSettings.groupAllInFilterMode} onChange={(e) => setAppSettings(prev => ({...prev, groupAllInFilterMode: e.target.checked}))}/>
+                             </label>
+                             <div className="border-t border-gray-200"></div>
+                             <label className="flex items-center justify-between cursor-pointer p-2 hover:bg-white rounded-lg transition-colors">
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-medium text-gray-700">顯示詳細資訊 (金額與日期)</span>
+                                    <span className="text-xs text-gray-400">隱藏後僅顯示圖片與名稱</span>
+                                </div>
+                                <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked={appSettings.showAmount !== false} onChange={(e) => setAppSettings(prev => ({...prev, showAmount: e.target.checked}))}/>
+                             </label>
+                        </div>
+                    </div>
+                </div>)}
+                {settingsTab === 'filter' && (<div className="space-y-4 animate-fade-in"><div className="flex justify-between items-center"><p className="text-sm text-gray-500">勾選角色以顯示週邊。</p><button onClick={() => toggleCharacterVisibility('ALL')} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700">我全都要</button></div><div className="grid grid-cols-2 gap-2">{customCharacters.map((char, index) => { const isChecked = (appSettings.visibleCharacters || []).includes(char); return (<div key={char} className={`flex items-center justify-between p-3 border rounded-xl transition-colors ${isChecked ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50'}`} onClick={() => toggleCharacterVisibility(char)}><div className="flex items-center gap-3"><span className={`text-sm font-medium ${CHARACTER_THEMES[char]?.text || 'text-gray-700'}`}>{char}</span></div><div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>{isChecked && <Icon name="Check" size={12} className="text-white"/>}</div></div>); })}</div></div>)}
+                {settingsTab === 'filters_config' && (<div className="space-y-4 animate-fade-in"><p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p><div className="space-y-3">{['series', 'type', 'character', 'date'].map(key => (<label key={key} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.multiSelect?.[key]} onChange={() => toggleMultiSelect(key)} /><span className="text-sm font-medium">依{key==='series'?'系列':key==='type'?'類型':key==='character'?'角色':'收物日'} - 多選</span></label>))}</div></div>)}
+                {settingsTab === 'types' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} /><button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label><button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">{customTypes.map((t, index) => (<div key={t} draggable onDragStart={(e) => { dragTypeItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragTypeOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleTypeSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{t}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
+                {settingsTab === 'series' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增系列</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新系列名稱..." value={newSeriesInput} onKeyDown={(e) => e.key === 'Enter' && handleAddSeries()} onChange={e=>setNewSeriesInput(e.target.value)} /><button onClick={handleAddSeries} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前系列列表 (拖曳可排序)</label><button onClick={handleManualSyncSeries} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步系列</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100 min-h-[50px]">{customSeries.map((s, index) => (<div key={s} draggable onDragStart={(e) => { dragSeriesItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragSeriesOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleSeriesSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{s}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteSeries(s);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
+                {settingsTab === 'data' && (<div className="space-y-4 animate-fade-in"><div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800"><p className="font-bold mb-1">批次匯入：</p><p>貼上 Excel 或 JSON。匯入後將存入「週邊圖鑑」。</p></div><textarea className="w-full h-32 p-3 border rounded-xl text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea><div className="flex gap-2"><button onClick={handleBulkImport} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 shadow-sm">匯入</button><button onClick={handleExportCatalog} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded hover:bg-gray-50">匯出</button></div><hr /><button onClick={handleRemoveDuplicates} className="w-full text-blue-600 border border-blue-200 py-3 rounded-xl hover:bg-blue-50 text-sm mb-2 font-bold flex items-center justify-center gap-2"><Icon name="Eraser" size={16}/> 清理重複資料 (本地)</button><button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-3 rounded-xl hover:bg-red-50 text-sm font-bold flex items-center justify-center gap-2"><Icon name="AlertTriangle" size={16}/> 清空本地快取資料</button></div>)}
+                </div>
+                </div></div>
+            );
+        };
+        
+        // --- NEW: Set Name Modal ---
+        const SetNameModal = ({ isOpen, onClose, onConfirm }) => {
+            const [name, setName] = useState('');
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl flex flex-col gap-4">
+                        <h3 className="text-lg font-bold text-gray-800">建立小組合 (Set)</h3>
+                        <input className="w-full border p-3 rounded-xl text-sm" placeholder="輸入組合名稱 (例如: 痛包組)" value={name} onChange={e=>setName(e.target.value)} autoFocus onKeyDown={e=>{if(e.key==='Enter')onConfirm(name)}}/>
+                        <div className="flex gap-2">
+                            <button onClick={onClose} className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600">取消</button>
+                            <button onClick={()=>onConfirm(name)} className="flex-1 py-2 rounded-xl bg-blue-600 text-white font-bold disabled:opacity-50" disabled={!name}>建立</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Batch Manage Bar for Collection (Updated) ---
+        const CollectionBatchBar = ({ selectionCount, onCancel, onAddToSet, onRemoveFromSet, onDelete }) => {
+            return (
+                <div className="fixed bottom-24 md:bottom-8 right-4 md:right-8 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl z-40 flex flex-col gap-3 animate-fade-in min-w-[200px]">
+                    <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+                        <span className="font-bold text-sm">已選 {selectionCount} 項</span>
+                        <button onClick={onCancel} className="text-xs text-slate-400 hover:text-white"><Icon name="X" size={16}/></button>
+                    </div>
+                    <button onClick={onAddToSet} disabled={selectionCount === 0} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors">
+                        <Icon name="Package" size={16} /> 建立小組合
+                    </button>
+                    <button onClick={onRemoveFromSet} disabled={selectionCount === 0} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors">
+                        <Icon name="LogOut" size={16} /> 移出組合
+                    </button>
+                    <button onClick={onDelete} disabled={selectionCount === 0} className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors">
+                        <Icon name="Trash2" size={16} /> 刪除
+                    </button>
+                </div>
+            );
+        };
+        
+        // --- Trade Edit Modal with Enhanced Selection & Filters ---
+        const TradeModal = ({ isOpen, onClose, tradeItem, onSave, catalogItems, customTypes }) => {
+            const [data, setData] = useState({
+                id: Date.now().toString(),
+                name: '',
+                character: '沈星回',
+                costPrice: '',
+                salePrice: '',
+                officialPrice: '', 
+                buyDate: new Date().toISOString().split('T')[0],
+                sellDate: '',
+                status: 'selling', 
+                image: '',
+                note: '',
+                quantity: 1, // Add quantity
+                setName: ''  // Add setName for batch grouping
+            });
+            const [searchMode, setSearchMode] = useState(false);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [filterChar, setFilterChar] = useState('all');
+            const [filterType, setFilterType] = useState('all');
+
+            // Batch Add States inside Trade Modal
+            const [isMultiSelect, setIsMultiSelect] = useState(false);
+            const [selectedCatalogIds, setSelectedCatalogIds] = useState(new Set());
+            const [batchEditMode, setBatchEditMode] = useState(false);
+            const [batchItems, setBatchItems] = useState([]);
+            const [batchCommonData, setBatchCommonData] = useState({ 
+                status: 'selling', 
+                buyDate: new Date().toISOString().split('T')[0], 
+                sellDate: '', 
+                note: '',
+                setName: '' // Allow grouping new trades into a set
+            });
+
+            useEffect(() => {
+                if (isOpen) {
+                    if (tradeItem) {
+                        setData({ ...tradeItem, quantity: tradeItem.quantity || 1 });
+                        setSearchMode(false);
+                        setBatchEditMode(false);
+                    }
+                    else {
+                        setData({ id: Date.now().toString(), name: '', character: '沈星回', costPrice: '', salePrice: '', officialPrice: '', buyDate: new Date().toISOString().split('T')[0], sellDate: '', status: 'selling', image: '', note: '', quantity: 1, setName: '' });
+                        setSearchMode(false);
+                        setBatchEditMode(false);
+                        setSelectedCatalogIds(new Set());
+                        setBatchItems([]);
+                    }
+                    setFilterChar('all');
+                    setFilterType('all');
+                    setSearchTerm('');
+                    setIsMultiSelect(false);
+                }
+            }, [isOpen, tradeItem]);
+
+            const filteredCatalog = useMemo(() => {
+                return catalogItems.filter(item => {
+                    const matchesSearch = searchTerm === '' || item.name.toLowerCase().includes(searchTerm.toLowerCase());
+                    const matchesChar = filterChar === 'all' || item.character === filterChar;
+                    const matchesType = filterType === 'all' || item.type === filterType;
+                    return matchesSearch && matchesChar && matchesType;
+                });
+            }, [catalogItems, searchTerm, filterChar, filterType]);
+
+            const selectCatalogItem = (item) => {
+                if (isMultiSelect) {
+                    setSelectedCatalogIds(prev => {
+                        const newSet = new Set(prev);
+                        if (newSet.has(item.id)) newSet.delete(item.id);
+                        else newSet.add(item.id);
+                        return newSet;
+                    });
+                } else {
+                    setData(prev => ({
+                        ...prev,
+                        name: item.name,
+                        character: item.character,
+                        image: item.image || '',
+                        officialPrice: item.officialPrice || '' 
+                    }));
+                    setSearchMode(false);
+                }
+            };
+
+            const proceedToBatchEdit = () => {
+                const selectedItems = catalogItems.filter(i => selectedCatalogIds.has(i.id));
+                if (selectedItems.length === 0) return;
+                
+                const initialBatchItems = selectedItems.map(item => ({
+                    ...item,
+                    tempId: Date.now() + Math.random(),
+                    costPrice: '',
+                    salePrice: '',
+                    quantity: 1
+                }));
+                
+                setBatchItems(initialBatchItems);
+                setBatchEditMode(true);
+                setSearchMode(false);
+            };
+
+            const updateBatchItem = (tempId, field, value) => {
+                setBatchItems(prev => prev.map(item => item.tempId === tempId ? { ...item, [field]: value } : item));
+            };
+
+            const handleBatchSave = () => {
+                const tradesToAdd = batchItems.map(item => ({
+                    id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                    name: item.name,
+                    character: item.character,
+                    image: item.image || '',
+                    officialPrice: item.officialPrice || '',
+                    costPrice: item.costPrice,
+                    salePrice: item.salePrice,
+                    status: batchCommonData.status,
+                    buyDate: batchCommonData.buyDate,
+                    sellDate: batchCommonData.sellDate,
+                    note: batchCommonData.note,
+                    quantity: item.quantity,
+                    setName: batchCommonData.setName
+                }));
+
+                onSave(tradesToAdd);
+            };
+
+            const toggleChar = (val) => setFilterChar(val === filterChar && val !== 'all' ? 'all' : val);
+            const toggleType = (val) => setFilterType(val === filterType && val !== 'all' ? 'all' : val);
+
+            if (!isOpen) return null;
+
+            // Batch Edit View
+            if (batchEditMode) {
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                        <div className="bg-white rounded-3xl w-full max-w-3xl p-6 space-y-4 max-h-[90vh] overflow-y-auto flex flex-col">
+                            <div className="flex justify-between items-center border-b pb-3">
+                                <h3 className="text-lg font-bold text-gray-800">批次新增交易 ({batchItems.length})</h3>
+                                <button onClick={onClose}><Icon name="X" size={20}/></button>
+                            </div>
+                            
+                            <div className="flex-1 overflow-y-auto space-y-4 p-1">
+                                {/* Common Info */}
+                                <div className="bg-gray-50 p-4 rounded-xl space-y-3 border border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="col-span-2 md:col-span-1">
+                                        <label className="text-xs text-gray-500 font-bold block mb-1">狀態</label>
+                                        <select className="w-full border p-2 rounded text-sm" value={batchCommonData.status} onChange={e=>setBatchCommonData({...batchCommonData, status: e.target.value})}>
+                                            <option value="selling">待售中</option>
+                                            <option value="sold">已售出</option>
+                                        </select>
+                                    </div>
+                                    <div className="col-span-2 md:col-span-1">
+                                        <label className="text-xs text-gray-500 font-bold block mb-1">買入日期</label>
+                                        <input type="date" className="w-full border p-2 rounded text-sm" value={batchCommonData.buyDate} onChange={e=>setBatchCommonData({...batchCommonData, buyDate: e.target.value})}/>
+                                    </div>
+                                    {batchCommonData.status === 'sold' && (
+                                        <div className="col-span-2 md:col-span-1">
+                                            <label className="text-xs text-gray-500 font-bold block mb-1">售出日期</label>
+                                            <input type="date" className="w-full border p-2 rounded text-sm" value={batchCommonData.sellDate} onChange={e=>setBatchCommonData({...batchCommonData, sellDate: e.target.value})}/>
+                                        </div>
+                                    )}
+                                    <div className="col-span-2 md:col-span-2">
+                                         <label className="text-xs text-gray-500 font-bold block mb-1">小組合 (Set) 名稱</label>
+                                         <input className="w-full border p-2 rounded text-sm" placeholder="選填 (例如: 痛包組)" value={batchCommonData.setName} onChange={e=>setBatchCommonData({...batchCommonData, setName: e.target.value})}/>
+                                    </div>
+                                    <div className="col-span-2 md:col-span-full">
+                                        <label className="text-xs text-gray-500 font-bold block mb-1">共同備註</label>
+                                        <input className="w-full border p-2 rounded text-sm" placeholder="選填..." value={batchCommonData.note} onChange={e=>setBatchCommonData({...batchCommonData, note: e.target.value})}/>
+                                    </div>
+                                </div>
+
+                                {/* Items List */}
+                                <div className="space-y-2">
+                                    {batchItems.map((item) => (
+                                        <div key={item.tempId} className="flex items-center gap-3 p-2 border rounded-lg hover:bg-gray-50">
+                                            <div className="w-12 h-12 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                                                {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-gray-400 m-auto mt-3" size={20}/>}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold truncate">{item.name}</p>
+                                                <p className="text-xs text-gray-500">{item.character} · 原價 {item.officialPrice || '?'}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-16 flex items-center border rounded bg-white px-1">
+                                                    <span className="text-xs text-gray-400 mr-1">x</span>
+                                                    <input type="number" className="w-full p-1 text-sm outline-none text-center" value={item.quantity} onChange={e=>updateBatchItem(item.tempId, 'quantity', e.target.value)}/>
+                                                </div>
+                                                <div className="w-24">
+                                                    <input type="number" className="w-full border p-1.5 rounded text-sm" placeholder="入手價" value={item.costPrice} onChange={e=>updateBatchItem(item.tempId, 'costPrice', e.target.value)}/>
+                                                </div>
+                                                <div className="w-24">
+                                                    <input type="number" className="w-full border p-1.5 rounded text-sm" placeholder={batchCommonData.status==='sold'?'售出價':'預售價'} value={item.salePrice} onChange={e=>updateBatchItem(item.tempId, 'salePrice', e.target.value)}/>
+                                                </div>
+                                                <button onClick={()=>setBatchItems(prev => prev.filter(i => i.tempId !== item.tempId))} className="text-gray-400 hover:text-red-500 p-1"><Icon name="X" size={16}/></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="pt-2 border-t flex gap-2">
+                                <button onClick={()=>setBatchEditMode(false)} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">返回選擇</button>
+                                <button onClick={handleBatchSave} className="flex-1 py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800">確認新增全部</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto flex flex-col">
+                        <div className="flex justify-between items-center border-b pb-3 flex-shrink-0">
+                            <h3 className="text-lg font-bold text-gray-800">{tradeItem ? '編輯交易' : '新增交易'}</h3>
+                            <button onClick={onClose}><Icon name="X" size={20}/></button>
+                        </div>
+
+                        {!tradeItem && !searchMode && (
+                            <div className="flex gap-2 mb-2 flex-shrink-0">
+                                <button onClick={()=>setSearchMode(true)} className="flex-1 text-sm py-2 rounded-lg border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50 hover:border-blue-400 hover:text-blue-500 transition-colors flex items-center justify-center gap-2">
+                                    <Icon name="Search" size={16}/> 從圖鑑選擇物品...
+                                </button>
+                            </div>
+                        )}
+
+                        {searchMode ? (
+                            <div className="flex-1 overflow-hidden flex flex-col min-h-[400px]">
+                                <div className="flex gap-2 mb-2">
+                                    <input className="flex-1 border p-2 rounded" placeholder="搜尋名稱..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} autoFocus/>
+                                    <button onClick={()=>{setSearchMode(false); setIsMultiSelect(false); setSelectedCatalogIds(new Set());}} className="px-3 text-sm text-gray-500 hover:text-gray-800">取消</button>
+                                </div>
+                                
+                                <div className="space-y-2 mb-2 flex-shrink-0">
+                                    <ScrollableTags items={CHARACTERS} selected={filterChar} onToggle={toggleChar} labelAll="全部角色" />
+                                    <ScrollableTags items={customTypes || DEFAULT_MERCH_TYPES} selected={filterType} onToggle={toggleType} labelAll="全部類型" />
+                                </div>
+
+                                <div className="flex items-center justify-between mb-2 px-1">
+                                    <label className="flex items-center gap-2 text-sm cursor-pointer text-blue-600 font-bold">
+                                        <input type="checkbox" className="rounded text-blue-600 focus:ring-blue-500" checked={isMultiSelect} onChange={e=>setIsMultiSelect(e.target.checked)}/> 多選模式
+                                    </label>
+                                    {isMultiSelect && <span className="text-xs text-gray-500">已選擇 {selectedCatalogIds.size} 項</span>}
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto border rounded divide-y bg-white">
+                                    {filteredCatalog.length > 0 ? filteredCatalog.map(item => {
+                                        const isSelected = selectedCatalogIds.has(item.id);
+                                        return (
+                                            <div key={item.id} onClick={()=>selectCatalogItem(item)} className={`p-2 flex items-center gap-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-100' : 'hover:bg-gray-50'}`}>
+                                                <div className="w-10 h-10 bg-gray-200 rounded overflow-hidden flex-shrink-0 relative">
+                                                    {item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Icon name="Image" size={16} className="m-auto mt-2 text-gray-400"/>}
+                                                    {isMultiSelect && isSelected && (
+                                                        <div className="absolute inset-0 bg-blue-500/30 flex items-center justify-center">
+                                                            <Icon name="Check" size={20} className="text-white drop-shadow-md"/>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="text-sm flex-1">
+                                                    <p className={`font-bold ${isSelected ? 'text-blue-800' : 'text-gray-800'}`}>{item.name}</p>
+                                                    <div className="flex gap-2 text-xs text-gray-500">
+                                                        <span>{item.character}</span><span>·</span><span>{item.type}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    }) : <div className="p-10 text-center text-gray-400 text-sm">沒有符合條件的物品</div>}
+                                </div>
+                                
+                                {isMultiSelect && (
+                                    <button 
+                                        onClick={proceedToBatchEdit} 
+                                        disabled={selectedCatalogIds.size === 0}
+                                        className="mt-2 w-full py-3 bg-blue-600 text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                                    >
+                                        確認選擇 ({selectedCatalogIds.size}) & 前往編輯
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <>
+                                <input className="w-full border p-2 rounded" placeholder="物品名稱" value={data.name} onChange={e=>setData({...data, name: e.target.value})} />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <select className="border p-2 rounded" value={data.character} onChange={e=>setData({...data, character: e.target.value})}>{CHARACTERS.map(c=><option key={c}>{c}</option>)}</select>
+                                    <select className="border p-2 rounded" value={data.status} onChange={e=>setData({...data, status: e.target.value})}>
+                                        <option value="selling">待售中</option>
+                                        <option value="sold">已售出</option>
+                                    </select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><label className="text-xs text-gray-500">原價</label><input type="text" className="w-full border p-2 rounded" value={data.officialPrice} onChange={e=>setData({...data, officialPrice: e.target.value})}/></div>
+                                    <div><label className="text-xs text-gray-500">{data.status==='sold'?'售出價格':'預售價格'} (NT$)</label><input type="number" className="w-full border p-2 rounded" value={data.salePrice} onChange={e=>setData({...data, salePrice: e.target.value})}/></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><label className="text-xs text-gray-500">入手價格 (NT$)</label><input type="number" className="w-full border p-2 rounded" value={data.costPrice} onChange={e=>setData({...data, costPrice: e.target.value})}/></div>
+                                    <div><label className="text-xs text-gray-500">買入日期</label><input type="date" className="w-full border p-2 rounded" value={data.buyDate} onChange={e=>setData({...data, buyDate: e.target.value})}/></div>
+                                </div>
+                                {data.status === 'sold' && <div className="mb-2"><label className="text-xs text-gray-500">售出日期</label><input type="date" className="w-full border p-2 rounded" value={data.sellDate} onChange={e=>setData({...data, sellDate: e.target.value})}/></div>}
+                                
+                                <div className="flex gap-3">
+                                    <div className="flex-1"><label className="text-xs text-gray-500">數量</label><input type="number" className="w-full border p-2 rounded" value={data.quantity} onChange={e=>setData({...data, quantity: e.target.value})}/></div>
+                                    <div className="flex-[2]"><label className="text-xs text-gray-500">小組合 (Set)</label><input className="w-full border p-2 rounded" placeholder="選填" value={data.setName} onChange={e=>setData({...data, setName: e.target.value})}/></div>
+                                </div>
+
+                                <input className="w-full border p-2 rounded text-xs" placeholder="圖片連結 (選填)" value={data.image} onChange={e=>setData({...data, image: e.target.value})}/>
+                                <textarea className="w-full border p-2 rounded h-20" placeholder="備註 (交易平台、買家資訊等...)" value={data.note} onChange={e=>setData({...data, note: e.target.value})}/>
+                                <button onClick={()=>onSave(data)} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800">儲存紀錄</button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [user, setUser] = useState(null);
+            
+            // --- UPDATED: Safe load initial state ---
+            const [activeTab, setActiveTab] = useState(() => safeLocalStorage.getItem('deepspace_active_tab') || 'collection');
+            const [collectionGroupingMode, setCollectionGroupingMode] = useState(() => safeLocalStorage.getItem('deepspace_collection_mode') || 'none');
+
+            const [appSettings, setAppSettings] = useState(() => {
+                const savedSettings = safeLocalStorage.getItem('deepspace_settings');
+                const defaults = {
+                    layoutCols: 4, customTypes: DEFAULT_MERCH_TYPES, customSeries: [], 
+                    customCharacters: CHARACTERS, visibleCharacters: CHARACTERS,
+                    multiSelect: { type: true, character: false, date: false, series: false },
+                    defaultPreorderCurrency: 'NT$', defaultCurrency: 'NT$', 
+                    groupAllInFilterMode: true,
+                    showAmount: true
+                };
+                if (savedSettings) {
+                    try {
+                        const parsed = JSON.parse(savedSettings);
+                        if (!parsed.visibleCharacters) parsed.visibleCharacters = CHARACTERS;
+                        if (!parsed.customCharacters) parsed.customCharacters = CHARACTERS;
+                        if (parsed.customCharacters && !parsed.customCharacters.includes("全員")) parsed.customCharacters.push("全員");
+                        if (parsed.visibleCharacters && !parsed.visibleCharacters.includes("全員")) parsed.visibleCharacters.push("全員");
+                        if (!parsed.multiSelect) parsed.multiSelect = defaults.multiSelect;
+                        if (typeof parsed.multiSelect.series === 'undefined') parsed.multiSelect.series = false;
+                        if (!parsed.defaultPreorderCurrency) parsed.defaultPreorderCurrency = 'NT$';
+                        if (!parsed.defaultCurrency) parsed.defaultCurrency = 'NT$';
+                        if (typeof parsed.groupAllInFilterMode === 'undefined') parsed.groupAllInFilterMode = true;
+                        if (typeof parsed.showAmount === 'undefined') parsed.showAmount = true;
+                        if (!parsed.customTypes) parsed.customTypes = DEFAULT_MERCH_TYPES;
+                        if (!parsed.customSeries) parsed.customSeries = []; 
+                        return parsed;
+                    } catch (e) { return defaults; }
+                }
+                return defaults;
+            });
+            
+            // ... (Standard States)
+            const [groupingMode, setGroupingMode] = useState('none'); 
+            const [selectedTypeFilters, setSelectedTypeFilters] = useState([]); 
+            const [selectedCharFilters, setSelectedCharFilters] = useState([]); 
+            const [selectedDateFilters, setSelectedDateFilters] = useState([]);
+            const [selectedSeriesFilters, setSelectedSeriesFilters] = useState([]); 
+            const [dateSortOrder, setDateSortOrder] = useState('desc'); 
+            const [exchangeRate, setExchangeRate] = useState(4.5); 
+            const [exchangeRateTimestamp, setExchangeRateTimestamp] = useState(null);
+            const [showRmbDetail, setShowRmbDetail] = useState(false);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false); 
+            const [editingItem, setEditingItem] = useState(null); 
+            const [modalMode, setModalMode] = useState('collection');
+            const [formData, setFormData] = useState({});
+            const [importJson, setImportJson] = useState('');
+            const [newTypeInput, setNewTypeInput] = useState(''); 
+            const [newSeriesInput, setNewSeriesInput] = useState(''); 
+            const [isBatchMode, setIsBatchMode] = useState(false);
+            const [batchSelection, setBatchSelection] = useState(new Set());
+            const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+            const [editingFeeTarget, setEditingFeeTarget] = useState({ date: null, type: null }); 
+            const [editingFeeValue, setEditingFeeValue] = useState('');
+            const fileInputRef = useRef(null);
+            const feeInputRef = useRef(null);
+            const dragItem = useRef();
+            const dragOverItem = useRef();
+            const [items, setItems] = useState([]); 
+            const [catalogItems, setCatalogItems] = useState([]); 
+            const [dailyFees, setDailyFees] = useState({}); 
+            const [trades, setTrades] = useState([]); 
+            
+            // NEW: Trade Batch States
+            const [isTradeBatchMode, setIsTradeBatchMode] = useState(false);
+            const [tradeBatchSelection, setTradeBatchSelection] = useState(new Set());
+            
+            // NEW: Collection Batch States
+            const [isCollectionBatchMode, setIsCollectionBatchMode] = useState(false);
+            const [collectionBatchSelection, setCollectionBatchSelection] = useState(new Set());
+            const [isSetNameModalOpen, setIsSetNameModalOpen] = useState(false);
+
+            // --- Persistence Effects ---
+            useEffect(() => { safeLocalStorage.setItem('deepspace_active_tab', activeTab); }, [activeTab]);
+            useEffect(() => { safeLocalStorage.setItem('deepspace_collection_mode', collectionGroupingMode); }, [collectionGroupingMode]);
+
+            // ... (Firebase Effects - same as before) ...
+            useEffect(() => { 
+                if (!isFirebaseInitialized) { 
+                    const localTrades = safeLocalStorage.getItem('deepspace_trades_local'); if (localTrades) setTrades(JSON.parse(localTrades)); 
+                    const localItems = safeLocalStorage.getItem('deepspace_items_v7_local'); if (localItems) setItems(JSON.parse(localItems)); 
+                    const localFees = safeLocalStorage.getItem('deepspace_daily_fees_local'); if (localFees) setDailyFees(JSON.parse(localFees)); 
+                    const localCatalog = safeLocalStorage.getItem('deepspace_catalog_v7_local'); if (localCatalog) { try { setCatalogItems(getUniqueItems(JSON.parse(localCatalog))); } catch(e){ console.error(e); } } 
+                    return; 
+                } 
+                setPersistence(auth, browserLocalPersistence).catch(console.error); 
+                const unsubscribe = onAuthStateChanged(auth, (currentUser) => { if (currentUser) { if (!currentUser.isAnonymous) setUser(currentUser); else setUser(null); } else { setUser(null); signInAnonymously(auth).catch(console.error); } }); return () => unsubscribe(); 
+            }, []);
+            
+            useEffect(() => { fetch('https://api.exchangerate-api.com/v4/latest/CNY').then(res => res.json()).then(data => { if(data && data.rates && data.rates.TWD) { setExchangeRate(data.rates.TWD); const now = new Date(); setExchangeRateTimestamp(`${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getDate().toString().padStart(2,'0')} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`); } }).catch(err => console.error("Exchange rate error", err)); }, []);
+            useEffect(() => { setSelectedTypeFilters([]); setSelectedCharFilters([]); setSelectedDateFilters([]); setSelectedSeriesFilters([]); }, [collectionGroupingMode, groupingMode]);
+            
+            useEffect(() => { 
+                if (!isFirebaseInitialized) return; 
+                if (!auth.currentUser) return; 
+                const catalogColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'public', 'data', 'catalog'); 
+                const unsubCatalog = onSnapshot(catalogColl, (snapshot) => { const cloudCatalog = snapshot.docs.map(doc => doc.data()); cloudCatalog.sort((a, b) => (a.order || 0) - (b.order || 0)); setCatalogItems(getUniqueItems(cloudCatalog)); }); 
+                let unsubCollection = () => {}; let unsubFees = () => {}; let unsubTrades = () => {}; 
+                if (user) { 
+                    const userColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'items'); 
+                    const q = query(userColl, orderBy("order", "asc")); 
+                    unsubCollection = onSnapshot(q, (snapshot) => { setItems(snapshot.docs.map(doc => doc.data())); }); 
+                    const feesColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'daily_fees'); 
+                    unsubFees = onSnapshot(feesColl, (snapshot) => { const feesMap = {}; snapshot.docs.forEach(doc => { const data = doc.data(); feesMap[doc.id] = { shipping: data.amount || 0, handling: data.handling || 0 }; }); setDailyFees(feesMap); }); 
+                    const tradeColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'trades'); 
+                    unsubTrades = onSnapshot(tradeColl, (snapshot) => { const loadedTrades = snapshot.docs.map(doc => doc.data()); loadedTrades.sort((a, b) => new Date(b.buyDate) - new Date(a.buyDate)); setTrades(loadedTrades); }); 
+                } else { 
+                    const localTrades = safeLocalStorage.getItem('deepspace_trades_local'); if(localTrades) setTrades(JSON.parse(localTrades)); 
+                } 
+                return () => { unsubCatalog(); unsubCollection(); unsubFees(); unsubTrades(); }; 
+            }, [user, auth.currentUser]);
+            
+            useEffect(() => { if (!isFirebaseInitialized || !user) { safeLocalStorage.setItem('deepspace_trades_local', JSON.stringify(trades)); } }, [trades, user]);
+            useEffect(() => { if (!isFirebaseInitialized || !user) { safeLocalStorage.setItem('deepspace_items_v7_local', JSON.stringify(items)); safeLocalStorage.setItem('deepspace_daily_fees_local', JSON.stringify(dailyFees)); } }, [items, dailyFees, user]);
+            useEffect(() => { if (!isFirebaseInitialized) safeLocalStorage.setItem('deepspace_catalog_v7_local', JSON.stringify(catalogItems)); }, [catalogItems]);
+
+            // ... (Helpers: saveToCollection, deleteFromCollection, etc.) ...
+            const handleLogin = async () => { if (window.location.protocol === 'file:') return alert("請使用 Live Server 或上傳至網頁空間開啟。"); if (!isFirebaseInitialized) return alert("請設定 Firebase Config"); try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { alert(e.message); } };
+            const handleLogout = () => signOut(auth);
+            
+            const saveToCollection = async (newItem) => { 
+                const currentMaxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0; 
+                // Use existing order if provided (from batch loop), otherwise calculate new
+                const orderToUse = newItem.order !== undefined ? newItem.order : currentMaxOrder + 1;
+                const itemWithOrder = { ...newItem, order: orderToUse }; 
+                
+                if (user && isFirebaseInitialized) { 
+                    await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, newItem.id), itemWithOrder); 
+                } else { 
+                    setItems(prev => { 
+                        const exists = prev.find(i => i.id === newItem.id); 
+                        const list = exists ? prev.map(i => i.id === newItem.id ? itemWithOrder : i) : [...prev, itemWithOrder]; 
+                        return list.sort((a, b) => (a.order || 0) - (b.order || 0)); 
+                    }); 
+                } 
+            };
+            
+            const deleteFromCollection = async (itemId) => { if (user && isFirebaseInitialized) { await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, itemId)); } else { setItems(prev => prev.filter(i => i.id !== itemId)); } };
+            const saveToCatalog = async (newItem) => { if (!isFirebaseInitialized) { setCatalogItems(prev => { const exists = prev.find(i => i.id === newItem.id); return exists ? prev.map(i => i.id === newItem.id ? newItem : i) : [...prev, newItem]; }); return; } let order = newItem.order || Date.now(); await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, newItem.id), { ...newItem, order }, { merge: true }); };
+            const deleteFromCatalog = async (itemId) => { if (confirm("警告：確定要從共用圖鑑刪除嗎？")) { if (isFirebaseInitialized) await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, itemId)); else setCatalogItems(prev => prev.filter(i => i.id !== itemId)); } };
+            
+            // Updated handleSaveFee to support Set keys (date_setName)
+            const handleSaveFee = async (id, type, amount) => { 
+                const numAmount = parseInt(amount) || 0; 
+                if (user && isFirebaseInitialized) { 
+                    const field = type === 'shipping' ? 'amount' : 'handling'; 
+                    await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/daily_fees`, id), { [field]: numAmount }, { merge: true }); 
+                } else { 
+                    setDailyFees(prev => { 
+                        const existing = prev[id] || { shipping: 0, handling: 0 }; 
+                        const safeExisting = typeof existing === 'number' ? { shipping: existing, handling: 0 } : existing; 
+                        return { ...prev, [id]: { ...safeExisting, [type]: numAmount } }; 
+                    }); 
+                } 
+                setEditingFeeTarget({ date: null, type: null }); 
+            };
+
+            const handleRemoveDuplicates = () => { if (confirm("這將移除「名稱+角色+類型+系列」完全相同的重複資料。\n\n(注意：如果是雲端模式，此操作目前僅會清理本地顯示，若要清理雲端資料庫請手動刪除)")) { setCatalogItems(prev => { const unique = getUniqueItems(prev); alert(`已清理重複資料。剩餘 ${unique.length} 筆 (原 ${prev.length} 筆)`); return unique; }); } };
+            
+            const handleAddType = () => { if (newTypeInput && !appSettings.customTypes.includes(newTypeInput)) { setAppSettings(prev => ({...prev, customTypes: [...prev.customTypes, newTypeInput]})); setNewTypeInput(''); } };
+            const handleDeleteType = (t) => { if (confirm(`確定要刪除類型「${t}」嗎？`)) { setAppSettings(prev => ({...prev, customTypes: prev.customTypes.filter(type => type !== t)})); } };
+            const handleManualSyncTypes = () => { const allItems = [...items, ...catalogItems]; const validTypes = allItems.map(i => i.type ? i.type.trim() : '').filter(t => t !== ''); const usedTypes = new Set(validTypes); setAppSettings(prev => { const currentTypes = prev.customTypes || []; const newTypes = Array.from(usedTypes).filter(t => !currentTypes.includes(t)); if (newTypes.length > 0) { alert(`已同步 ${newTypes.length} 個新類型！`); return { ...prev, customTypes: [...currentTypes, ...newTypes] }; } else { alert('目前沒有發現新類型。'); return prev; } }); };
+            const handleAddSeries = () => { if (newSeriesInput && !appSettings.customSeries.includes(newSeriesInput)) { setAppSettings(prev => ({...prev, customSeries: [...(prev.customSeries || []), newSeriesInput]})); setNewSeriesInput(''); } };
+            const handleDeleteSeries = (s) => { if (confirm(`確定要刪除系列「${s}」嗎？`)) { setAppSettings(prev => ({...prev, customSeries: prev.customSeries.filter(series => series !== s)})); } };
+            const handleManualSyncSeries = () => { const allItems = [...items, ...catalogItems]; const validSeries = allItems.map(i => i.series ? i.series.trim() : '').filter(s => s !== ''); const usedSeries = new Set(validSeries); setAppSettings(prev => { const currentSeries = prev.customSeries || []; const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s)); if (newSeries.length > 0) { alert(`已同步 ${newSeries.length} 個新系列！`); return { ...prev, customSeries: [...currentSeries, ...newSeries] }; } else { alert('目前沒有發現新系列。'); return prev; } }); };
+            
+            // --- FIX: Improved Batch Import Logic (Corrected Target: Catalog) ---
+            const handleBulkImport = async () => { 
+                if (!importJson.trim()) {
+                    alert("請輸入資料！");
+                    return;
+                }
+                
+                try { 
+                    let parsedData = []; 
+                    const text = importJson.trim(); 
+                    
+                    if (text.startsWith('[')) { 
+                        try {
+                            parsedData = JSON.parse(text); 
+                        } catch(e) {
+                            throw new Error("JSON 格式錯誤，請檢查內容。");
+                        }
+                    } else { 
+                        // Enhanced CSV/Excel Parsing
+                        const rows = text.split('\n').map(r=>r.trim()).filter(r=>r); 
+                        if(rows.length < 2) throw new Error("資料格式錯誤或行數不足");
+
+                        // Auto-detect separator
+                        const firstLine = rows[0];
+                        const sep = firstLine.includes('\t') ? '\t' : ',';
+                        
+                        const cols = firstLine.split(sep).map(s=>s.trim().replace(/^"|"$/g, '')); // Remove quotes
+                        
+                        const mapKey = { 
+                            'name': 'name', '名稱': 'name', '商品名稱': 'name', '品名': 'name', '名字': 'name',
+                            'character': 'character', '角色': 'character', '男主': 'character',
+                            'type': 'type', '類型': 'type', '種類': 'type', '周邊類型': 'type',
+                            'series': 'series', '系列': 'series', '版本': 'series',
+                            'officialprice': 'officialPrice', '原價': 'officialPrice', '價格': 'officialPrice', '金額': 'officialPrice',
+                            'image': 'image', '圖片': 'image', '圖': 'image', 'img': 'image',
+                        }; 
+                        
+                        const keys = cols.map(c => mapKey[c.toLowerCase()] || c); 
+                        
+                        if (!keys.includes('name')) {
+                            throw new Error(`找不到「名稱」欄位。\n偵測到的欄位: ${cols.join(', ')}\n請確保首行包含：名稱, 角色, 類型...`); 
+                        } 
+                        
+                        parsedData = rows.slice(1).map(row => { 
+                            // Robust splitting handling quotes if comma separated
+                            let vals;
+                            if (sep === ',') {
+                                // Simple regex for CSV splitting (handles basic quotes)
+                                vals = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || row.split(',');
+                                vals = vals.map(v => v.replace(/^"|"$/g, '').trim());
+                            } else {
+                                vals = row.split(sep).map(v => v.trim());
+                            }
+                            
+                            let obj = {}; 
+                            keys.forEach((k, i) => { 
+                                if (vals[i]) obj[k] = vals[i]; 
+                            }); 
+                            return obj; 
+                        }).filter(o => o.name); 
+                    } 
+                    
+                    if (parsedData.length === 0) throw new Error("無有效資料"); 
+                    
+                    // Update Settings (Add new types/series found in import)
+                    const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== '')); 
+                    const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== '')); 
+                    setAppSettings(prev => { 
+                        const currentTypes = prev.customTypes || []; 
+                        const newTypesToAdd = Array.from(importedTypes).filter(t => !currentTypes.includes(t)); 
+                        const currentSeries = prev.customSeries || []; 
+                        const newSeriesToAdd = Array.from(importedSeries).filter(s => !currentSeries.includes(s)); 
+                        let next = { ...prev }; 
+                        let changed = false; 
+                        if (newTypesToAdd.length > 0) { next.customTypes = [...currentTypes, ...newTypesToAdd]; changed = true; } 
+                        if (newSeriesToAdd.length > 0) { next.customSeries = [...currentSeries, ...newSeriesToAdd]; changed = true; } 
+                        return changed ? next : prev; 
+                    }); 
+                    
+                    const timestamp = Date.now(); 
+                    
+                    // Prepare all items first
+                    const newItems = parsedData.map((item, i) => ({
+                        id: item.id || `imp_${timestamp}_${i}`, 
+                        name: item.name, 
+                        character: item.character || '其他', 
+                        type: item.type || '未分類', 
+                        series: item.series || '', 
+                        officialPrice: item.officialPrice || '', 
+                        image: item.image || null, 
+                        order: timestamp + i
+                    }));
+
+                    // Batch Import Execution
+                    if (isFirebaseInitialized) {
+                        // Firebase Batch Write (Limit 500 per batch)
+                        const BATCH_SIZE = 400;
+                        for (let i = 0; i < newItems.length; i += BATCH_SIZE) {
+                            const chunk = newItems.slice(i, i + BATCH_SIZE);
+                            const batch = writeBatch(db);
+                            chunk.forEach(item => {
+                                const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, item.id);
+                                batch.set(ref, item, { merge: true });
+                            });
+                            await batch.commit();
+                        }
+                    } else {
+                        // Local State Batch Update (One-time update to prevent state thrashing)
+                        setCatalogItems(prev => {
+                            // Filter out exact ID duplicates if any, then append
+                            const existingIds = new Set(prev.map(i => i.id));
+                            const uniqueNewItems = newItems.filter(i => !existingIds.has(i.id));
+                            return getUniqueItems([...prev, ...uniqueNewItems]);
+                        });
+                    }
+                    
+                    alert(`成功匯入 ${newItems.length} 筆資料至「週邊圖鑑」！`); 
+                    setImportJson(''); 
+                    setActiveTab('templates'); // Switch to Templates tab
+                } catch (e) { 
+                    console.error(e);
+                    alert("匯入失敗: " + e.message); 
+                } 
+            };
+
+            const handleExportCatalog = () => { const dataStr = JSON.stringify(catalogItems, null, 2); setImportJson(dataStr); };
+            const handleResetData = () => { if (confirm("確定要清空本地資料嗎？此操作無法復原。")) { setItems([]); setCatalogItems([]); setDailyFees({}); safeLocalStorage.removeItem('deepspace_items_v7_local'); safeLocalStorage.removeItem('deepspace_catalog_v7_local'); safeLocalStorage.removeItem('deepspace_daily_fees_local'); alert("已清空。"); } };
+            
+            const toggleCharacterVisibility = (char) => { setAppSettings(prev => { const current = prev.visibleCharacters; if (char === "ALL") { const allMainSelected = CHARACTERS.every(c => current.includes(c)); if (allMainSelected) { return { ...prev, visibleCharacters: [] }; } else { return { ...prev, visibleCharacters: [...CHARACTERS] }; } } else { if (current.includes(char)) { return { ...prev, visibleCharacters: current.filter(c => c !== char) }; } else { return { ...prev, visibleCharacters: [...current, char] }; } } }); };
+            const toggleMultiSelect = (key) => { setAppSettings(prev => ({ ...prev, multiSelect: { ...prev.multiSelect, [key]: !prev.multiSelect[key] } })); };
+            const toggleBatchMode = () => { setIsBatchMode(prev => !prev); setBatchSelection(new Set()); };
+            const handleBatchSelect = (itemId) => { setBatchSelection(prev => { const newSet = new Set(prev); if (newSet.has(itemId)) newSet.delete(itemId); else newSet.add(itemId); return newSet; }); };
+            const openBatchModal = () => { if (batchSelection.size === 0) return alert("請至少選擇一個物品"); setIsBatchModalOpen(true); };
+            
+            // --- FIX: Simplified Batch Save Function to Avoid Stale Closures ---
+            const handleBatchSave = async (itemsToSave) => {
+                // Close modal first for UX
+                setIsBatchModalOpen(false);
+                setIsBatchMode(false);
+                setBatchSelection(new Set());
+
+                // Calculate base order ONCE to ensure consistency
+                const currentMaxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0;
+
+                // Process items using simple loop
+                for (let i = 0; i < itemsToSave.length; i++) {
+                    const item = itemsToSave[i];
+                    const uniqueId = Date.now().toString() + Math.random().toString(36).substr(2, 9) + i;
+                    const uniqueItem = {
+                        ...item,
+                        id: uniqueId,
+                        order: currentMaxOrder + 1 + i // Explicitly set order
+                    };
+                    await saveToCollection(uniqueItem);
+                }
+            };
+            
+            const openModal = (item = null, template = null, mode = 'collection') => { setModalMode(mode); const defaultData = { id: Date.now().toString(), name: '', character: '沈星回', type: '徽章', series: '', officialPrice: '', acquiredPrice: '', date: new Date().toISOString().split('T')[0], image: null, note: '', quantity: 1, isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency }; if (mode === 'catalog' && item) { setEditingItem(item); setFormData({ ...item }); } else if (mode === 'collection') { if (item) { setEditingItem(item); setFormData({ ...item, quantity: (item.quantity || 1), isPreorder: item.isPreorder || false, shippingDate: item.shippingDate || '', currency: item.currency || (item.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency), setName: item.setName || '' }); } else if (template) { setEditingItem(null); setFormData({ ...defaultData, ...template, quantity: 1, id: Date.now().toString(), isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency, acquiredPrice: '', setName: '' }); } else { setEditingItem(null); setFormData(defaultData); } } setIsModalOpen(true); };
+            const handleSave = async () => { if (!formData.name) return alert("請輸入名稱"); const timestamp = Date.now(); setAppSettings(prev => { let next = { ...prev }; let changed = false; if (formData.type && !prev.customTypes.includes(formData.type)) { next.customTypes = [...prev.customTypes, formData.type]; changed = true; } if (formData.series && !prev.customSeries.includes(formData.series)) { next.customSeries = [...prev.customSeries, formData.series]; changed = true; } return changed ? next : prev; }); const qty = Math.max(1, parseInt(formData.quantity) || 1); const finalAcquiredPrice = formData.acquiredPrice === '' || formData.acquiredPrice === undefined || formData.acquiredPrice === null ? 0 : formData.acquiredPrice; if (modalMode === 'catalog') { const itemToSave = { ...formData }; delete itemToSave.quantity; delete itemToSave.acquiredPrice; delete itemToSave.date; delete itemToSave.note; delete itemToSave.isPreorder; delete itemToSave.shippingDate; delete itemToSave.currency; delete itemToSave.setName; await saveToCatalog(itemToSave); } else { const itemToSave = { ...formData, acquiredPrice: finalAcquiredPrice, quantity: qty }; if (editingItem) { await saveToCollection(itemToSave); } else { const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0; const newItem = { ...itemToSave, id: timestamp.toString(), order: maxOrder + 1 }; await saveToCollection(newItem); } } setIsModalOpen(false); };
+            const handleKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); handleSave(); } };
+            const handleDragStart = (e, position) => { dragItem.current = position; };
+            const handleDragEnter = (e, position) => { dragOverItem.current = position; };
+            const commitBatches = async (batchArray) => { const chunkSize = 400; for (let i = 0; i < batchArray.length; i += chunkSize) { const batch = writeBatch(db); const chunk = batchArray.slice(i, i + chunkSize); chunk.forEach(op => batch.update(op.ref, op.data)); await batch.commit(); } };
+            const handleSort = async () => { if (collectionGroupingMode !== 'none') return; const stacks = groupedData.collection['全部'] ? getStackedItems(groupedData.collection['全部'], 'none') : []; const copyStacks = [...stacks]; const dragItemContent = copyStacks[dragItem.current]; copyStacks.splice(dragItem.current, 1); copyStacks.splice(dragOverItem.current, 0, dragItemContent); dragItem.current = null; dragOverItem.current = null; const newItems = []; const updates = []; copyStacks.forEach((stack, index) => { stack.instances.forEach(inst => { const newOrder = index; const updatedItem = { ...inst, order: newOrder }; newItems.push(updatedItem); if (user && isFirebaseInitialized) { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, inst.id); updates.push({ ref, data: { order: newOrder } }); } }); }); setItems(prevItems => { const orderMap = new Map(); newItems.forEach(i => orderMap.set(i.id, i.order)); const updatedList = prevItems.map(item => { if (orderMap.has(item.id)) { return { ...item, order: orderMap.get(item.id) }; } return item; }); return updatedList.sort((a, b) => (a.order || 0) - (b.order || 0)); }); if (user && isFirebaseInitialized && updates.length > 0) { try { await commitBatches(updates); } catch (e) { console.error("Batch update failed", e); alert("排序儲存失敗"); } } };
+
+            // --- Trade Logic ---
+            const [isTradeModalOpen, setIsTradeModalOpen] = useState(false);
+            const [editingTrade, setEditingTrade] = useState(null);
+
+            const handleSaveTrade = async (tradeData) => {
+                const tradesToProcess = Array.isArray(tradeData) ? tradeData : [tradeData];
+                if (tradesToProcess.length === 0) return;
+                if (!tradesToProcess[0].name) return alert("請輸入物品名稱");
+                if (user && isFirebaseInitialized) {
+                    const batch = writeBatch(db);
+                    tradesToProcess.forEach(t => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, t.id); batch.set(ref, t); });
+                    await batch.commit();
+                } else {
+                    setTrades(prev => { const ids = new Set(tradesToProcess.map(t => t.id)); const filtered = prev.filter(t => !ids.has(t.id)); return [...tradesToProcess, ...filtered]; });
+                }
+                setIsTradeModalOpen(false);
+            };
+            const handleDeleteTrade = async (tradeId) => { if(!confirm("確定要刪除這筆交易紀錄嗎？")) return; if(user && isFirebaseInitialized) { await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, tradeId)); } else { setTrades(prev => prev.filter(t => t.id !== tradeId)); } };
+            const markAsSold = async (trade) => { const updated = { ...trade, status: 'sold', sellDate: new Date().toISOString().split('T')[0] }; if(user && isFirebaseInitialized) { await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, updated.id), updated); } else { setTrades(prev => prev.map(t => t.id === trade.id ? updated : t)); } };
+            const openTradeModal = (trade = null) => { setEditingTrade(trade); setIsTradeModalOpen(true); };
+            const toggleTradeBatchMode = () => { setIsTradeBatchMode(prev => !prev); setTradeBatchSelection(new Set()); };
+            const handleTradeBatchSelect = (tradeId) => { setTradeBatchSelection(prev => { const newSet = new Set(prev); if(newSet.has(tradeId)) newSet.delete(tradeId); else newSet.add(tradeId); return newSet; }); };
+            const handleBatchTradeSell = async () => { if(tradeBatchSelection.size === 0) return; if(!confirm(`確定要將這 ${tradeBatchSelection.size} 筆標記為已售出嗎？`)) return; const sellDate = new Date().toISOString().split('T')[0]; if (user && isFirebaseInitialized) { const batch = writeBatch(db); tradeBatchSelection.forEach(id => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, id); const original = trades.find(t => t.id === id); if(original && original.status !== 'sold') { batch.update(ref, { status: 'sold', sellDate }); } }); await batch.commit(); } else { setTrades(prev => prev.map(t => { if(tradeBatchSelection.has(t.id)) { return { ...t, status: 'sold', sellDate }; } return t; })); } setIsTradeBatchMode(false); setTradeBatchSelection(new Set()); };
+            const handleBatchDeleteTrade = async () => { if(tradeBatchSelection.size === 0) return; if(!confirm(`警告：確定要刪除這 ${tradeBatchSelection.size} 筆交易紀錄嗎？`)) return; if (user && isFirebaseInitialized) { const batch = writeBatch(db); tradeBatchSelection.forEach(id => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, id); batch.delete(ref); }); await batch.commit(); } else { setTrades(prev => prev.filter(t => !tradeBatchSelection.has(t.id))); } setIsTradeBatchMode(false); setTradeBatchSelection(new Set()); };
+            const tradeStats = useMemo(() => { let soldCount = 0; let forSaleCount = 0; let totalCost = 0; let totalRevenue = 0; trades.forEach(t => { const cost = Number(t.costPrice) || 0; const sale = Number(t.salePrice) || 0; if(t.status === 'sold') { soldCount++; totalCost += cost; totalRevenue += sale; } else { forSaleCount++; } }); return { soldCount, forSaleCount, netProfit: totalRevenue - totalCost, totalRevenue }; }, [trades]);
+
+            // --- Collection Batch Set Logic ---
+            const toggleCollectionBatchMode = () => { setIsCollectionBatchMode(prev => !prev); setCollectionBatchSelection(new Set()); };
+            const handleCollectionBatchSelect = (itemIds) => { 
+                setCollectionBatchSelection(prev => { 
+                    const newSet = new Set(prev); 
+                    const ids = Array.isArray(itemIds) ? itemIds : [itemIds];
+                    
+                    // Check if all items in this group are already selected
+                    const allSelected = ids.every(id => newSet.has(id));
+                    
+                    if (allSelected) {
+                        ids.forEach(id => newSet.delete(id));
+                    } else {
+                        ids.forEach(id => newSet.add(id));
+                    }
+                    return newSet; 
+                }); 
+            };
+            const handleBatchDeleteCollection = async () => { if(collectionBatchSelection.size === 0) return; if(!confirm(`確定要刪除這 ${collectionBatchSelection.size} 個收藏品嗎？`)) return; if(user && isFirebaseInitialized) { const batch = writeBatch(db); collectionBatchSelection.forEach(id => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, id); batch.delete(ref); }); await batch.commit(); } else { setItems(prev => prev.filter(i => !collectionBatchSelection.has(i.id))); } setIsCollectionBatchMode(false); setCollectionBatchSelection(new Set()); };
+            
+            // --- NEW: Remove From Set Function ---
+            const handleBatchRemoveFromSet = async () => {
+                if (collectionBatchSelection.size === 0) return;
+                if (!confirm(`確定要將這 ${collectionBatchSelection.size} 個物品移出組合嗎？(變回散貨)`)) return;
+
+                if (user && isFirebaseInitialized) {
+                    const batch = writeBatch(db);
+                    collectionBatchSelection.forEach(id => {
+                        const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, id);
+                        batch.update(ref, { setName: deleteField() }); // Use deleteField to remove the field
+                    });
+                    await batch.commit();
+                } else {
+                    setItems(prev => prev.map(i => collectionBatchSelection.has(i.id) ? { ...i, setName: undefined } : i));
+                }
+                setIsCollectionBatchMode(false);
+                setCollectionBatchSelection(new Set());
+            };
+
+            const handleBatchSetGroup = () => {
+                 if (collectionBatchSelection.size === 0) return;
+                 setIsSetNameModalOpen(true);
+            };
+
+            const confirmSetGroup = async (setName) => {
+                if (user && isFirebaseInitialized) {
+                    const batch = writeBatch(db);
+                    collectionBatchSelection.forEach(id => {
+                        const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, id);
+                        batch.update(ref, { setName: setName });
+                    });
+                    await batch.commit();
+                } else {
+                    setItems(prev => prev.map(i => collectionBatchSelection.has(i.id) ? { ...i, setName: setName } : i));
+                }
+                setIsSetNameModalOpen(false);
+                setIsCollectionBatchMode(false);
+                setCollectionBatchSelection(new Set());
+            };
+
+            // --- Data Filters & Grouping ---
+            const getEffectiveDate = (item) => item.isPreorder ? item.shippingDate : item.date;
+            const getStackedItems = (sourceItems, mode) => { const map = new Map(); const stacks = []; sourceItems.forEach(item => { const key = item.name; if (!map.has(key)) { const stack = { ...item, instances: [item], totalCount: (item.quantity || 1) }; map.set(key, stack); stacks.push(stack); } else { const stack = map.get(key); stack.instances.push(item); stack.totalCount += (item.quantity || 1); } }); return stacks; };
+            const toggleFilter = (filterState, setFilterState, value, multiSelectEnabled) => { if (value === 'all') { setFilterState([]); return; } if (multiSelectEnabled) { if (filterState.includes(value)) { setFilterState(prev => prev.filter(v => v !== value)); } else { setFilterState(prev => [...prev, value]); } } else { if (filterState.includes(value)) { setFilterState([]); } else { setFilterState([value]); } } };
+            const getFilteredList = (list, mode, typeFilters, charFilters, dateFilters, seriesFilters) => { let processed = list.filter(i => appSettings.visibleCharacters.includes(i.character)); if (mode === 'type' && typeFilters.length > 0) processed = processed.filter(i => typeFilters.includes(i.type)); if (mode === 'character' && charFilters.length > 0) processed = processed.filter(i => charFilters.includes(i.character)); if (mode === 'date' && dateFilters.length > 0) processed = processed.filter(i => { const effDate = getEffectiveDate(i); return dateFilters.includes(effDate); }); if (mode === 'series' && seriesFilters.length > 0) processed = processed.filter(i => seriesFilters.includes(i.series)); return processed; };
+            const getGroupedData = (list, mode, sortOrder, typeFilters, charFilters, dateFilters, seriesFilters) => { const processedList = getFilteredList(list, mode, typeFilters, charFilters, dateFilters, seriesFilters); const isAllSelected = (mode === 'type' && typeFilters.length === 0) || (mode === 'character' && charFilters.length === 0) || (mode === 'series' && seriesFilters.length === 0) || (mode === 'date' && dateFilters.length === 0); if (mode === 'none') { return { '全部': processedList }; } if (isAllSelected && !appSettings.groupAllInFilterMode) { return { '全部': processedList }; } const grouped = processedList.reduce((acc, item) => { let key = ''; if (mode === 'series') key = item.series || '其他系列'; else if (mode === 'type') key = item.type || '其他類型'; else if (mode === 'character') key = item.character || '其他角色'; else if (mode === 'date') key = getEffectiveDate(item) || '未知日期'; if (!acc[key]) acc[key] = []; acc[key].push(item); return acc; }, {}); if (mode === 'date') { const keys = Object.keys(grouped).sort((a,b) => { if(a==='未知日期') return 1; if(b==='未知日期') return -1; return sortOrder==='desc' ? new Date(b)-new Date(a) : new Date(a)-new Date(b); }); const sorted = {}; keys.forEach(k=>sorted[k]=grouped[k]); return sorted; } if (mode === 'type') { const sorted = {}; appSettings.customTypes.forEach(t => { if (grouped[t]) sorted[t] = grouped[t]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } if (mode === 'series') { const sorted = {}; (appSettings.customSeries || []).forEach(s => { if (grouped[s]) sorted[s] = grouped[s]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } if (mode === 'character') { const sorted = {}; appSettings.customCharacters.forEach(char => { if (grouped[char]) sorted[char] = grouped[char]; }); Object.keys(grouped).forEach(k => { if (!sorted[k]) sorted[k] = grouped[k]; }); return sorted; } return grouped; };
+            const groupedData = useMemo(() => ({ collection: getGroupedData(items, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters), catalog: getGroupedData(catalogItems, groupingMode, 'desc', selectedTypeFilters, selectedCharFilters, [], selectedSeriesFilters) }), [items, catalogItems, groupingMode, collectionGroupingMode, dateSortOrder, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters, appSettings.visibleCharacters, appSettings.groupAllInFilterMode, appSettings.customCharacters, appSettings.customTypes, appSettings.customSeries]);
+
+            const stats = useMemo(() => {
+                const visibleItems = items.filter(i => appSettings.visibleCharacters.includes(i.character));
+                const totalCount = visibleItems.length;
+                let totalNT = 0, totalR = 0;
+                
+                const charCost = {};
+                CHARACTERS.forEach(c => charCost[c] = 0);
+                charCost["其他"] = 0;
+
+                visibleItems.forEach(item => {
+                    const price = Number(item.acquiredPrice || 0);
+                    const qty = item.quantity || 1; 
+                    if (item.currency === 'r') {
+                        totalR += price * qty;
+                        charCost[item.character] = (charCost[item.character] || 0) + (price * exchangeRate * qty);
+                    } else {
+                        totalNT += price * qty;
+                        charCost[item.character] = (charCost[item.character] || 0) + (price * qty);
+                    }
+                });
+
+                Object.values(dailyFees).forEach(feeObj => {
+                    if (typeof feeObj === 'object') {
+                        totalNT += Number(feeObj.shipping || 0);
+                        totalNT += Number(feeObj.handling || 0);
+                    } else {
+                        totalNT += Number(feeObj || 0);
+                    }
+                });
+
+                const grandTotal = totalNT + (totalR * exchangeRate);
+                const byChar = visibleItems.reduce((acc, item) => { acc[item.character] = (acc[item.character] || 0) + (item.quantity || 1); return acc; }, {});
+                
+                return { totalCount, totalNT, totalR, grandTotal, byChar, charCost };
+            }, [items, dailyFees, appSettings.visibleCharacters, exchangeRate]);
+
+            const chartData = useMemo(() => {
+                return Object.entries(stats.byChar).map(([name, value]) => ({ name, value })).filter(i => i.value > 0);
+            }, [stats.byChar]);
+
+            const costChartData = useMemo(() => {
+                return Object.entries(stats.charCost).map(([name, value]) => ({ name, value: Math.round(value) })).filter(i => i.value > 0).sort((a,b) => b.value - a.value);
+            }, [stats.charCost]);
+
+            const availableTypes = useMemo(() => { const source = activeTab === 'templates' ? catalogItems : items; const types = new Set(source.map(i => i.type).filter(Boolean)); return appSettings.customTypes.filter(t => types.has(t)).concat(Array.from(types).filter(t => !appSettings.customTypes.includes(t))); }, [items, catalogItems, appSettings.customTypes, activeTab]);
+            const availableSeries = useMemo(() => { const source = activeTab === 'collection' ? items : catalogItems; const series = new Set(source.map(i => i.series).filter(Boolean)); return (appSettings.customSeries || []).filter(s => series.has(s)).concat(Array.from(series).filter(s => !(appSettings.customSeries || []).includes(s))); }, [items, catalogItems, appSettings.customSeries, activeTab]);
+            const availableDates = useMemo(() => { const dates = new Set(items.map(i => getEffectiveDate(i)).filter(Boolean)); return Array.from(dates).sort((a, b) => { return dateSortOrder === 'desc' ? new Date(b) - new Date(a) : new Date(a) - new Date(b); }); }, [items, dateSortOrder]);
+            const preorderDates = useMemo(() => { const set = new Set(); items.forEach(i => { if (i.isPreorder && i.shippingDate) set.add(i.shippingDate); }); return set; }, [items]);
+
+            // --- UPDATED: Grouped Data Logic for Trade History ---
+            const getTradeGroupedData = (tradeList) => {
+                const grouped = {};
+                tradeList.forEach(t => {
+                    const date = t.status === 'sold' ? (t.sellDate || '未知日期') : (t.buyDate || '未知日期');
+                    if (!grouped[date]) grouped[date] = [];
+                    grouped[date].push(t);
+                });
+                
+                const dates = Object.keys(grouped).sort((a,b) => new Date(b) - new Date(a));
+                
+                return dates.map(date => {
+                    const items = grouped[date];
+                    const sets = {};
+                    const loose = [];
+                    items.forEach(i => {
+                        if (i.setName) {
+                            if (!sets[i.setName]) sets[i.setName] = [];
+                            sets[i.setName].push(i);
+                        } else {
+                            loose.push(i);
+                        }
+                    });
+                    
+                    const total = items.reduce((sum, i) => sum + ((Number(i.salePrice) || 0) * (i.quantity || 1)), 0);
+                    return { date, items, sets, loose, total };
+                });
+            };
+
+            const gridStyle = { display: 'grid', gridTemplateColumns: `repeat(${appSettings.layoutCols}, minmax(0, 1fr))`, gap: '1rem' };
+
+            return (
+                <div className="min-h-screen bg-gray-50 pb-24 md:pb-0 md:pl-64">
+                    <aside className="hidden md:flex fixed left-0 top-0 h-full w-64 bg-slate-900 text-white flex-col shadow-2xl z-30">
+                        <div className="p-6 border-b border-slate-800"><h1 className="text-2xl font-bold tracking-wider flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400"><Icon name="Star" className="text-yellow-400" size={24} /> 深空收藏艙</h1></div>
+                        <div className="px-4 py-4 flex flex-col gap-2">
+                            {user && !user.isAnonymous ? <div className="bg-slate-800 rounded-xl p-3 flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-white font-bold">{user.photoURL?<img src={user.photoURL} className="w-full h-full rounded-full"/>:user.email[0].toUpperCase()}</div><div className="flex-1 min-w-0"><p className="text-sm font-bold truncate">{user.displayName||'獵人'}</p><p className="text-xs text-slate-400">已連線</p></div><button onClick={handleLogout}><Icon name="LogOut" size={16}/></button></div> : <button onClick={handleLogin} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl flex items-center justify-center gap-2"><Icon name="LogIn" size={18}/> Google 登入</button>}
+                        </div>
+                        <nav className="flex-1 px-4 space-y-2">
+                            <button onClick={()=>setActiveTab('collection')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab==='collection'?'bg-blue-600 text-white':'hover:bg-slate-800 text-slate-300'}`}><Icon name="Package" size={20}/>我的收藏庫</button>
+                            <button onClick={()=>setActiveTab('templates')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab==='templates'?'bg-blue-600 text-white':'hover:bg-slate-800 text-slate-300'}`}><Icon name="ShoppingBag" size={20}/>週邊圖鑑</button>
+                            <button onClick={()=>setActiveTab('trade')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab==='trade'?'bg-blue-600 text-white':'hover:bg-slate-800 text-slate-300'}`}><Icon name="ArrowRightLeft" size={20}/>交易手帳</button>
+                            <button onClick={()=>setActiveTab('stats')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab==='stats'?'bg-blue-600 text-white':'hover:bg-slate-800 text-slate-300'}`}><Icon name="User" size={20}/>獵人檔案</button>
+                        </nav>
+                        <div className="px-4 pb-2"><button onClick={()=>setIsSettingsOpen(true)} className="w-full border border-slate-700 text-slate-400 text-xs py-1.5 rounded-lg flex items-center justify-center gap-1 hover:bg-slate-800 hover:text-slate-200"><Icon name="Settings" size={14}/> 設定</button></div>
+                        <div className="p-4 bg-slate-800"><div className="flex flex-col gap-1"><p className="text-xs text-slate-400">總估算價值 (NT$)</p><p className="text-xl font-bold text-green-400">{Math.round(stats.grandTotal).toLocaleString()}</p></div></div>
+                    </aside>
+
+                    <div className="md:hidden bg-slate-900 text-white p-4 sticky top-0 z-20 shadow-lg flex justify-between items-center">
+                        <div className="flex items-center gap-2"><Icon name="Star" className="text-yellow-400" size={20}/><span className="font-bold">深空收藏艙</span></div>
+                        <div className="flex gap-2 items-center"><button onClick={()=>setIsSettingsOpen(true)}><Icon name="Settings" size={20}/></button>{user && !user.isAnonymous ? <img src={user.photoURL} onClick={handleLogout} className="w-8 h-8 rounded-full border-2 border-blue-500"/> : <button onClick={handleLogin}><Icon name="LogIn"/></button>}</div>
+                    </div>
+
+                    <main className="p-4 md:p-8 max-w-6xl mx-auto">
+                        {/* Collection Tab */}
+                        {activeTab === 'collection' && (
+                            <div className="space-y-6 animate-fade-in">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div className="flex-1 flex items-center gap-4"><h2 className="text-2xl font-bold text-gray-800">我的收藏庫 <span className="text-xs font-normal text-gray-400 ml-2">{user && !user.isAnonymous ? '(雲端私有)' : '(本機暫存)'}</span></h2><button onClick={()=>openModal(null, null, 'collection')} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-md"><Icon name="Plus" size={16}/> 新增</button></div>
+                                    <div className="flex gap-2 overflow-x-auto scrollbar-hide">{collectionGroupingMode==='date' && <button onClick={()=>setDateSortOrder(p=>p==='desc'?'asc':'desc')} className="px-3 py-1.5 text-xs border rounded-lg bg-white text-blue-600 flex gap-1"><Icon name={dateSortOrder==='desc'?'ArrowDownNarrowWide':'ArrowUpNarrowWide'} size={14}/> {dateSortOrder==='desc'?'從新到舊':'從舊到新'}</button>}{[{id:'none',l:'全部'},{id:'series',l:'依系列'},{id:'type',l:'依類型'},{id:'character',l:'依角色'},{id:'date',l:'依收物日'}].map(m=><button key={m.id} onClick={()=>setCollectionGroupingMode(m.id)} className={`px-3 py-1.5 text-xs border rounded-lg whitespace-nowrap ${collectionGroupingMode===m.id?'bg-slate-900 text-white':'bg-white text-gray-500'}`}>{m.l}</button>)}</div>
+                                </div>
+                                {collectionGroupingMode === 'series' && <FilterBar options={availableSeries} selected={selectedSeriesFilters} toggle={(val)=>toggleFilter(selectedSeriesFilters, setSelectedSeriesFilters, val, appSettings.multiSelect.series)} multi={appSettings.multiSelect.series} />}
+                                {collectionGroupingMode === 'type' && <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />}
+                                {collectionGroupingMode === 'character' && <FilterBar options={appSettings.customCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />}
+                                {collectionGroupingMode === 'date' && <FilterBar options={availableDates} selected={selectedDateFilters} toggle={(val)=>toggleFilter(selectedDateFilters, setSelectedDateFilters, val, appSettings.multiSelect.date)} multi={appSettings.multiSelect.date} highlightSet={preorderDates} />}
+                                <div className="space-y-8">
+                                    {Object.entries(groupedData.collection).map(([gName, gItems]) => {
+                                        let dayTotalDisplay = null;
+                                        // Logic for Small Sets (only in Date view)
+                                        let renderItems = [];
+                                        if (collectionGroupingMode === 'date' && gName !== '全部') {
+                                            // Group by 'setName' FIRST to calculate set fees
+                                            const sets = {};
+                                            const loose = [];
+                                            gItems.forEach(i => {
+                                                if (i.setName && i.setName.trim() !== '') {
+                                                    if (!sets[i.setName]) sets[i.setName] = [];
+                                                    sets[i.setName].push(i);
+                                                } else {
+                                                    loose.push(i);
+                                                }
+                                            });
+
+                                            // Calculate Items Total (Price * Qty)
+                                            const itemsTotalNT = gItems.reduce((sum, item) => {
+                                                const p = Number(item.acquiredPrice || 0);
+                                                const q = item.quantity || 1;
+                                                return sum + (item.currency === 'r' ? p * exchangeRate * q : p * q);
+                                            }, 0);
+
+                                            // Calculate Generic Day Fees (Only if there are loose items)
+                                            let dayFee = dailyFees[gName];
+                                            if (typeof dayFee === 'number') dayFee = { shipping: dayFee, handling: 0 };
+                                            dayFee = dayFee || { shipping: 0, handling: 0 };
+                                            
+                                            // FIX: Only apply generic day fees if there are loose items to attribute them to
+                                            const genericFees = loose.length > 0 ? ((Number(dayFee.shipping) || 0) + (Number(dayFee.handling) || 0)) : 0;
+
+                                            // Calculate Set Specific Fees
+                                            const setFeesTotal = Object.keys(sets).reduce((sum, setName) => {
+                                                const setKey = `${gName}_${setName}`;
+                                                let sFee = dailyFees[setKey];
+                                                if (typeof sFee === 'number') sFee = { shipping: sFee, handling: 0 };
+                                                sFee = sFee || { shipping: 0, handling: 0 };
+                                                return sum + (Number(sFee.shipping) || 0) + (Number(sFee.handling) || 0);
+                                            }, 0);
+
+                                            const total = itemsTotalNT + genericFees + setFeesTotal;
+                                            
+                                            // 運費包手按鈕 (Generic for day)
+                                            const feeControls = (setKey) => (
+                                                <div className="flex items-center gap-2">
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); 
+                                                        let val = dailyFees[setKey];
+                                                        if (typeof val === 'number') val = { shipping: val };
+                                                        setEditingFeeValue(val?.shipping || ''); 
+                                                    }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${(() => {
+                                                        let val = dailyFees[setKey];
+                                                        if (typeof val === 'number') val = { shipping: val };
+                                                        return (val?.shipping || 0) > 0;
+                                                    })() ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{(() => {
+                                                        let val = dailyFees[setKey];
+                                                        if (typeof val === 'number') val = { shipping: val };
+                                                        const s = val?.shipping || 0;
+                                                        return s > 0 ? `運費 ${s}` : '+ 運費';
+                                                    })()} <Icon name="Truck" size={10} /></button>)}
+                                                    
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); 
+                                                        let val = dailyFees[setKey];
+                                                        if (typeof val === 'number') val = { shipping: val, handling: 0 };
+                                                        setEditingFeeValue(val?.handling || ''); 
+                                                    }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${(() => {
+                                                        let val = dailyFees[setKey];
+                                                        if (typeof val === 'number') val = { shipping: val, handling: 0 };
+                                                        return (val?.handling || 0) > 0;
+                                                    })() ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{(() => {
+                                                        let val = dailyFees[setKey];
+                                                        if (typeof val === 'number') val = { shipping: val, handling: 0 };
+                                                        const h = val?.handling || 0;
+                                                        return h > 0 ? `包手 ${h}` : '+ 包手';
+                                                    })()} <Icon name="Package" size={10} /></button>)}
+                                                </div>
+                                            );
+
+                                            dayTotalDisplay = (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100"><Icon name="Banknote" size={14}/>NT$ {Math.round(total).toLocaleString()}</span>
+                                                    {/* Only show generic day fee controls if there are loose items */}
+                                                    {loose.length > 0 && feeControls(gName)} 
+                                                </div>
+                                            );
+
+                                            renderItems = (
+                                                <React.Fragment>
+                                                    {Object.entries(sets).map(([setName, setItems], idx) => {
+                                                        const setKey = `${gName}_${setName}`;
+                                                        let setFee = dailyFees[setKey];
+                                                        if (typeof setFee === 'number') setFee = { shipping: setFee, handling: 0 };
+                                                        setFee = setFee || { shipping: 0, handling: 0 };
+                                                        
+                                                        // Calculate Set Total (Items + Fees)
+                                                        const setItemTotal = setItems.reduce((sum, item) => {
+                                                            const p = Number(item.acquiredPrice || 0);
+                                                            const q = item.quantity || 1;
+                                                            return sum + (item.currency === 'r' ? p * exchangeRate * q : p * q);
+                                                        }, 0);
+                                                        const setGrandTotal = setItemTotal + (Number(setFee.shipping)||0) + (Number(setFee.handling)||0);
+
+                                                        return (
+                                                            <div key={setName} className="col-span-full bg-blue-50/50 rounded-2xl border-2 border-dashed border-blue-200 p-4 relative mt-6 mb-2">
+                                                                <div className="absolute -top-3 left-4 flex items-center gap-2 flex-wrap">
+                                                                    <div className="bg-blue-100 text-blue-700 px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm border border-blue-200">
+                                                                        <Icon name="Package" size={12} /> {setName} 
+                                                                        <span className="ml-1 text-blue-500 border-l border-blue-200 pl-1">NT${Math.round(setGrandTotal).toLocaleString()}</span>
+                                                                    </div>
+                                                                    {/* Fee controls for this specific set */}
+                                                                    {feeControls(setKey)}
+                                                                </div>
+                                                                <div style={gridStyle} className="mt-2">
+                                                                    {getStackedItems(setItems, 'none').map((s, i) => (
+                                                                        <StackCard 
+                                                                            key={s.id} stack={s} index={i} isDraggable={false} openModal={openModal} deleteFromCollection={deleteFromCollection} 
+                                                                            showAmount={appSettings.showAmount} isBatchMode={isCollectionBatchMode} isSelected={collectionBatchSelection.has(s.id)} onToggleSelect={handleCollectionBatchSelect} 
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    
+                                                    {loose.length > 0 && (
+                                                        <div style={gridStyle} className="mt-4">
+                                                            {getStackedItems(loose, collectionGroupingMode).map((s,i) => (
+                                                                <StackCard 
+                                                                    key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'} onDragStart={handleDragStart} onDragEnter={handleDragEnter} onDragEnd={handleSort} openModal={openModal} deleteFromCollection={deleteFromCollection} 
+                                                                    showAmount={appSettings.showAmount} isBatchMode={isCollectionBatchMode} isSelected={collectionBatchSelection.has(s.id)} onToggleSelect={handleCollectionBatchSelect} 
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        } else {
+                                            renderItems = (
+                                                <div style={gridStyle}>
+                                                    {getStackedItems(gItems, collectionGroupingMode).map((s,i) => (
+                                                        <StackCard 
+                                                            key={s.id} stack={s} index={i} isDraggable={collectionGroupingMode==='none'} onDragStart={handleDragStart} onDragEnter={handleDragEnter} onDragEnd={handleSort} openModal={openModal} deleteFromCollection={deleteFromCollection} 
+                                                            showAmount={appSettings.showAmount} isBatchMode={isCollectionBatchMode} isSelected={collectionBatchSelection.has(s.id)} onToggleSelect={handleCollectionBatchSelect} 
+                                                        />
+                                                    ))}
+                                                </div>
+                                            );
+                                        }
+
+                                        return <div key={gName} className="animate-fade-in">{collectionGroupingMode!=='none' && gName !== '全部' && (<div className="flex items-center gap-2 mb-4 mt-6 first:mt-0"><div className={`h-6 w-1 rounded-full ${preorderDates.has(gName) ? 'bg-yellow-400' : 'bg-blue-500'}`}></div><h3 className="font-bold text-lg text-gray-700 flex items-center">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({gItems.length})</span></h3>{dayTotalDisplay}</div>)}{collectionGroupingMode === 'date' && gName !== '全部' ? <div className="flex flex-col gap-4">{renderItems}</div> : renderItems}</div>;
+                                    })}
+                                    {items.length===0 && <div className="text-center py-20 text-gray-400 border-2 border-dashed rounded-3xl">尚無收藏</div>}
+                                </div>
+
+                                {/* Collection Batch Action Bar */}
+                                {isCollectionBatchMode && (
+                                    <CollectionBatchBar 
+                                        selectionCount={collectionBatchSelection.size} 
+                                        onCancel={toggleCollectionBatchMode} 
+                                        onAddToSet={handleBatchSetGroup} 
+                                        onRemoveFromSet={handleBatchRemoveFromSet}
+                                        onDelete={handleBatchDeleteCollection} 
+                                    />
+                                )}
+                                
+                                {/* Batch Mode Toggle FAB */}
+                                {!isCollectionBatchMode && (
+                                    <button 
+                                        onClick={toggleCollectionBatchMode}
+                                        className="fixed bottom-24 md:bottom-10 right-6 bg-slate-900 text-white p-4 rounded-full shadow-2xl hover:bg-slate-800 z-30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
+                                        title="批量管理"
+                                    >
+                                        <Icon name="CheckSquare" size={24} />
+                                    </button>
+                                )}
+
+                                {/* Set Name Modal */}
+                                <SetNameModal 
+                                    isOpen={isSetNameModalOpen} 
+                                    onClose={() => setIsSetNameModalOpen(false)} 
+                                    onConfirm={confirmSetGroup} 
+                                />
+                            </div>
+                        )}
+
+                        {/* Templates Tab */}
+                        {activeTab === 'templates' && (
+                            <div className="space-y-6 animate-fade-in pb-20 md:pb-0">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4"><div><h2 className="text-2xl font-bold text-gray-800">週邊圖鑑</h2></div><div className="flex gap-2 items-center"><button onClick={toggleBatchMode} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${isBatchMode ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}><Icon name={isBatchMode ? "CheckSquare" : "Square"} size={16}/> 批次新增</button><div className="h-6 w-px bg-gray-300 mx-2"></div>{[{id:'none',l:'全部'},{id:'series',l:'依系列'},{id:'type',l:'依類型'},{id:'character',l:'依角色'}].map(m=><button key={m.id} onClick={()=>setGroupingMode(m.id)} className={`px-3 py-1.5 text-xs border rounded-lg ${groupingMode===m.id?'bg-slate-900 text-white':'bg-white text-gray-500'}`}>{m.l}</button>)}</div></div>
+                                {groupingMode === 'series' && <FilterBar options={availableSeries} selected={selectedSeriesFilters} toggle={(val)=>toggleFilter(selectedSeriesFilters, setSelectedSeriesFilters, val, appSettings.multiSelect.series)} multi={appSettings.multiSelect.series} />}
+                                {groupingMode === 'type' && <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />}
+                                {groupingMode === 'character' && <FilterBar options={appSettings.customCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />}
+                                <div className="space-y-8">
+                                    {Object.entries(groupedData.catalog).map(([gName, gItems]) => (<div key={gName} className="animate-fade-in">{groupingMode !== 'none' && gName !== '全部' && <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0"><div className="h-6 w-1 bg-blue-500 rounded-full"></div><h3 className="font-bold text-lg text-gray-700">{gName} <span className="text-xs text-gray-400 font-normal ml-1">({gItems.length})</span></h3></div>}<div style={gridStyle}>{gItems.map((item,i) => (<CatalogCard key={item.id} item={item} index={i} openModal={openModal} deleteFromCatalog={deleteFromCatalog} isBatchMode={isBatchMode} isSelected={batchSelection.has(item.id)} onToggleSelect={handleBatchSelect} />))}</div></div>))}
+                                    {catalogItems.length===0 && <div className="text-center py-20 text-gray-400">圖鑑目前是空的</div>}
+                                </div>
+                                {isBatchMode && (<div className="fixed bottom-20 md:bottom-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-4 animate-fade-in"><span className="font-bold text-sm">已選擇 {batchSelection.size} 項</span><div className="h-4 w-px bg-slate-700"></div><button onClick={() => setIsBatchMode(false)} className="text-sm text-slate-300 hover:text-white">取消</button><button onClick={openBatchModal} disabled={batchSelection.size === 0} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-full text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed">確認新增</button></div>)}
+                            </div>
+                        )}
+
+                        {/* NEW: Trades Tab */}
+                        {activeTab === 'trade' && (
+                            <div className="space-y-6 animate-fade-in pb-20 md:pb-0">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div><h2 className="text-2xl font-bold text-gray-800">交易手帳</h2><p className="text-xs text-gray-400">記錄買賣與管理待售物</p></div>
+                                    <div className="flex gap-2">
+                                        <button onClick={toggleTradeBatchMode} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${isTradeBatchMode ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                            <Icon name={isTradeBatchMode ? "CheckSquare" : "Square"} size={16}/> 批次管理
+                                        </button>
+                                        <button onClick={()=>openTradeModal()} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-md"><Icon name="Plus" size={16}/> 新增紀錄</button>
+                                    </div>
+                                </div>
+
+                                {/* Trade Stats Bar */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                                        <p className="text-xs text-gray-400">待售物品</p>
+                                        <p className="text-xl font-bold text-blue-600">{tradeStats.forSaleCount}</p>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                                        <p className="text-xs text-gray-400">已售出</p>
+                                        <p className="text-xl font-bold text-slate-700">{tradeStats.soldCount}</p>
+                                    </div>
+                                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                                        <p className="text-xs text-gray-400">總銷售額</p>
+                                        <p className="text-xl font-bold text-slate-700">${tradeStats.totalRevenue}</p>
+                                    </div>
+                                    <div className={`p-4 rounded-xl shadow-sm border ${tradeStats.netProfit >= 0 ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+                                        <p className={`text-xs ${tradeStats.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>淨損益</p>
+                                        <p className={`text-xl font-bold ${tradeStats.netProfit >= 0 ? 'text-green-700' : 'text-red-700'}`}>{tradeStats.netProfit >= 0 ? '+' : ''}{tradeStats.netProfit}</p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-8">
+                                    {/* For Sale Section */}
+                                    <div>
+                                        <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><div className="w-1 h-5 bg-blue-500 rounded-full"></div> 上架 / 待售區</h3>
+                                        <div style={gridStyle}>
+                                            {trades.filter(t => t.status !== 'sold').map(trade => (
+                                                <TradeCard key={trade.id} trade={trade} openModal={openTradeModal} deleteTrade={handleDeleteTrade} markAsSold={markAsSold} isBatchMode={isTradeBatchMode} isSelected={tradeBatchSelection.has(trade.id)} onToggleSelect={handleTradeBatchSelect} />
+                                            ))}
+                                            {trades.filter(t => t.status !== 'sold').length === 0 && <div className="col-span-full text-center py-10 text-gray-400 bg-white rounded-xl border border-dashed">目前沒有待售物品</div>}
+                                        </div>
+                                    </div>
+
+                                    {/* Sold History Section */}
+                                    <div>
+                                        <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><div className="w-1 h-5 bg-green-500 rounded-full"></div> 已售出紀錄</h3>
+                                        
+                                        <div className="space-y-8">
+                                            {getTradeGroupedData(trades.filter(t => t.status === 'sold')).map((dayGroup) => {
+                                                const { date, sets, loose, total } = dayGroup;
+                                                
+                                                return (
+                                                    <div key={date} className="animate-fade-in">
+                                                        <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0">
+                                                            <div className="h-6 w-1 rounded-full bg-green-500"></div>
+                                                            <h3 className="font-bold text-lg text-gray-700 flex items-center">
+                                                                {date} <span className="text-xs text-gray-400 font-normal ml-1">({dayGroup.items.length})</span>
+                                                            </h3>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                                                        <Icon name="Banknote" size={14}/>NT$ {Math.round(total).toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Render Sets */}
+                                                        <div className="flex flex-col gap-4">
+                                                            {Object.entries(sets).map(([setName, setItems]) => {
+                                                                const setTotal = setItems.reduce((sum, i) => sum + ((Number(i.salePrice) || 0) * (i.quantity || 1)), 0);
+                                                                return (
+                                                                    <div key={setName} className="col-span-full bg-green-50/50 rounded-2xl border-2 border-dashed border-green-200 p-4 relative mt-2 mb-2">
+                                                                            <div className="absolute -top-3 left-4 flex items-center gap-2 flex-wrap">
+                                                                                <div className="bg-green-100 text-green-700 px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm border border-green-200">
+                                                                                    <Icon name="Package" size={12} /> {setName} 
+                                                                                    <span className="ml-1 text-green-600 border-l border-green-200 pl-1">NT${Math.round(setTotal).toLocaleString()}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div style={gridStyle} className="mt-2">
+                                                                                {setItems.map((trade) => (
+                                                                                    <TradeCard key={trade.id} trade={trade} openModal={openTradeModal} deleteTrade={handleDeleteTrade} markAsSold={markAsSold} isBatchMode={isTradeBatchMode} isSelected={tradeBatchSelection.has(trade.id)} onToggleSelect={handleTradeBatchSelect} />
+                                                                                ))}
+                                                                            </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            
+                                                            {/* Render Loose Items */}
+                                                            {loose.length > 0 && (
+                                                                <div style={gridStyle}>
+                                                                    {loose.map((trade) => (
+                                                                        <TradeCard key={trade.id} trade={trade} openModal={openTradeModal} deleteTrade={handleDeleteTrade} markAsSold={markAsSold} isBatchMode={isTradeBatchMode} isSelected={tradeBatchSelection.has(trade.id)} onToggleSelect={handleTradeBatchSelect} />
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            
+                                            {trades.filter(t => t.status === 'sold').length === 0 && <div className="col-span-full text-center py-10 text-gray-400">尚無售出紀錄</div>}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Trade Batch Action Bar */}
+                                {isTradeBatchMode && (
+                                    <div className="fixed bottom-8 right-8 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl z-40 flex flex-col gap-3 animate-fade-in min-w-[200px]">
+                                            <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+                                                <span className="font-bold text-sm">已選 {tradeBatchSelection.size} 項</span>
+                                                <button onClick={() => {setIsTradeBatchMode(false); setTradeBatchSelection(new Set());}} className="text-xs text-slate-400 hover:text-white"><Icon name="X" size={16}/></button>
+                                            </div>
+                                            <button 
+                                                onClick={handleBatchTradeSell} 
+                                                disabled={tradeBatchSelection.size === 0}
+                                                className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                                            >
+                                                <Icon name="CheckCircle2" size={16} /> 標記售出
+                                            </button>
+                                            <button 
+                                                onClick={handleBatchDeleteTrade} 
+                                                disabled={tradeBatchSelection.size === 0}
+                                                className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                                            >
+                                                <Icon name="Trash2" size={16} /> 刪除
+                                            </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Stats Tab */}
+                        {activeTab === 'stats' && (
+                            <div className="space-y-6 animate-fade-in">
+                                <h2 className="text-2xl font-bold text-gray-800">消費報告</h2>
+                                <p className="text-sm text-gray-500 mb-4 font-medium">目前匯率: 1r ≈ {exchangeRate} NT$ {exchangeRateTimestamp && <span className="text-gray-400 text-xs ml-1">(更新於: {exchangeRateTimestamp})</span>}</p>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="bg-slate-900 rounded-2xl p-6 text-white"><p className="text-slate-400 text-sm">總估算價值 (NT$)</p><p className="text-3xl font-bold">{Math.round(stats.grandTotal).toLocaleString()}</p></div>
+                                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 grid grid-cols-2 gap-4">
+                                     <div><p className="text-xs text-gray-500">台幣支出 (NT$)</p><p className="text-xl font-bold text-slate-800">{stats.totalNT.toLocaleString()}</p></div>
+                                     <div className="relative"><div className="flex justify-between items-start"><p className="text-xs text-gray-500">人民幣支出 (r)</p><button onClick={() => setShowRmbDetail(!showRmbDetail)} className="text-[10px] text-blue-500 hover:underline bg-blue-50 px-2 py-0.5 rounded">{showRmbDetail ? "還原" : "換算"}</button></div>{showRmbDetail ? (<div className="animate-fade-in mt-1"><p className="text-sm font-bold text-slate-800">{stats.totalR.toLocaleString()} <span className="text-xs font-normal text-gray-400">r</span></p><p className="text-xs text-gray-400 my-0.5">×</p><p className="text-sm font-bold text-slate-800">{exchangeRate} <span className="text-xs font-normal text-gray-400">匯率</span></p><div className="border-t border-gray-200 my-1"></div><p className="text-sm font-bold text-green-600">= NT$ {Math.round(stats.totalR * exchangeRate).toLocaleString()}</p></div>) : (<p className="text-xl font-bold text-slate-800">{stats.totalR.toLocaleString()}</p>)}</div>
+                                    </div>
+                                    
+                                    {/* Charts Section */}
+                                    <div className="bg-white rounded-2xl p-6 shadow-sm col-span-3 space-y-6">
+                                        <h3 className="font-bold text-gray-700 border-b pb-2">收藏分布與花費</h3>
+                                        {/* Error Fallback */}
+                                        {!RechartsObj.PieChart ? (
+                                            <div className="text-center py-10 text-gray-500">圖表載入失敗，請檢查網路連線或重新整理頁面。</div>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                {/* Count Chart */}
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-gray-500 mb-4 text-center">收藏數量佔比</h4>
+                                                    <div className="h-64">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <PieChart>
+                                                                <Pie data={chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                                                    {chartData.map((entry, index) => (<Cell key={`cell-${index}`} fill={CHART_COLORS[entry.name] || CHART_COLORS["其他"]} />))}
+                                                                </Pie>
+                                                                <Tooltip />
+                                                                <Legend verticalAlign="bottom" height={36}/>
+                                                            </PieChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
+                                                </div>
+
+                                                {/* Cost Chart */}
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-gray-500 mb-4 text-center">花費金額排名 (NT$)</h4>
+                                                    <div className="h-64">
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <BarChart data={costChartData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                                                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                                                                <XAxis type="number" hide />
+                                                                <YAxis type="category" dataKey="name" width={60} tick={{fontSize: 12}} />
+                                                                <Tooltip cursor={{fill: 'transparent'}} formatter={(value) => `$${value.toLocaleString()}`} />
+                                                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
+                                                                    {costChartData.map((entry, index) => (
+                                                                        <Cell key={`cell-${index}`} fill={CHART_COLORS[entry.name] || CHART_COLORS["其他"]} />
+                                                                    ))}
+                                                                </Bar>
+                                                            </BarChart>
+                                                        </ResponsiveContainer>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {isSettingsOpen && <SettingsModal isOpen={isSettingsOpen} onClose={()=>setIsSettingsOpen(false)} appSettings={appSettings} setAppSettings={setAppSettings} importJson={importJson} setImportJson={setImportJson} handleBulkImport={handleBulkImport} handleExportCatalog={handleExportCatalog} handleResetData={handleResetData} handleAddType={handleAddType} handleDeleteType={handleDeleteType} newTypeInput={newTypeInput} setNewTypeInput={setNewTypeInput} handleManualSyncTypes={handleManualSyncTypes} handleAddSeries={handleAddSeries} handleDeleteSeries={handleDeleteSeries} newSeriesInput={newSeriesInput} setNewSeriesInput={setNewSeriesInput} handleManualSyncSeries={handleManualSyncSeries} handleRemoveDuplicates={handleRemoveDuplicates} />}
+                    {isBatchModalOpen && <BatchAddModal isOpen={isBatchModalOpen} onClose={() => setIsBatchModalOpen(false)} selectedItems={catalogItems.filter(i => batchSelection.has(i.id))} onSave={handleBatchSave} />}
+                    {isModalOpen && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"><div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"><div className="flex justify-between items-center"><h3 className="font-bold">{modalMode === 'catalog' ? (editingItem ? '編輯公開圖鑑' : '新增公開圖鑑') : (editingItem ? '編輯我的收藏' : '加入我的收藏')}</h3><button onClick={()=>setIsModalOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button></div><div onClick={()=>fileInputRef.current.click()} className="w-32 h-32 mx-auto border-2 border-dashed rounded flex items-center justify-center cursor-pointer">{formData.image?<img src={formData.image} className="w-full h-full object-cover"/>:<Icon name="Upload"/>}<input type="file" ref={fileInputRef} className="hidden" onChange={(e)=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=()=>setFormData(p=>({...p,image:r.result}));r.readAsDataURL(f);}}}/></div><input type="text" className="w-full border p-2 rounded mt-2 text-xs text-gray-500" placeholder="或貼上圖片連結..." value={formData.image || ''} onChange={e=>setFormData({...formData, image: e.target.value})} /><input className="w-full border p-2 rounded mt-2" placeholder="名稱" value={formData.name} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,name:e.target.value})} autoFocus={!editingItem && !formData.name} /><div className="grid grid-cols-2 gap-2 mt-2"><select className="border p-2 rounded" value={formData.character} onChange={e=>setFormData({...formData,character:e.target.value})}>{CHARACTERS.map(c=><option key={c}>{c}</option>)}</select><input className="border p-2 rounded" placeholder="系列" value={formData.series} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,series:e.target.value})}/></div><div className="grid grid-cols-2 gap-2 mt-2"><input className="border p-2 rounded" list="types-list" placeholder="類型" value={formData.type} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,type:e.target.value})}/><datalist id="types-list">{appSettings.customTypes.map(t=><option key={t} value={t}/>)}</datalist><input type="text" className="border p-2 rounded" placeholder="原價" value={formData.officialPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/></div>{modalMode === 'collection' && (<><hr className="border-gray-100 mt-2" /><div className="flex items-center gap-2 mb-2 mt-2"><input type="checkbox" id="isPreorder" checked={formData.isPreorder || false} onChange={e=>setFormData({...formData, isPreorder: e.target.checked})} className="w-4 h-4 text-blue-600 rounded"/><label htmlFor="isPreorder" className="text-sm font-bold text-gray-700">預購商品</label></div><div className="flex items-center gap-2 mb-2"><label className="text-sm">數量:</label><input type="number" className="border p-1 w-16 rounded" value={formData.quantity} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div><div className="grid grid-cols-2 gap-2"><div className="relative"><input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})} autoFocus={!editingItem && formData.name}/><select className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0" value={formData.currency || (formData.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency)} onChange={e=>setFormData({...formData, currency: e.target.value})}><option value="NT$">NT$</option><option value="r">r</option></select></div>{formData.isPreorder ? (<div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span><input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/></div>) : (<div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500">收物日期</span><input type="date" className="border p-2 rounded w-full" value={formData.date} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,date:e.target.value})}/></div>)}</div><textarea className="w-full border p-2 rounded h-20 mt-2" placeholder="備註..." value={formData.note} onChange={e=>setFormData({...formData,note:e.target.value})}/></>)}<div className="flex gap-2 mt-4">{editingItem && modalMode === 'collection' && (<button onClick={async () => {if(confirm('確定要刪除此收藏嗎？')) {await deleteFromCollection(editingItem.id);setIsModalOpen(false);}}} className="bg-red-50 text-red-500 border border-red-200 px-4 rounded hover:bg-red-100"><Icon name="Trash2" size={18} /></button>)}<button onClick={handleSave} className="flex-1 bg-slate-900 text-white py-3 rounded hover:bg-slate-800">{modalMode === 'catalog' ? '更新圖鑑 (公開)' : '儲存收藏'}</button></div></div></div>)}
+
+                    {isTradeModalOpen && <TradeModal isOpen={isTradeModalOpen} onClose={()=>setIsTradeModalOpen(false)} tradeItem={editingTrade} onSave={handleSaveTrade} catalogItems={catalogItems} customTypes={appSettings.customTypes} />}
+
+                    <div className="md:hidden fixed bottom-0 w-full bg-white border-t p-2 flex justify-around z-40">
+                        <button onClick={()=>setActiveTab('collection')}><Icon name="Package"/><span className="text-xs">收藏</span></button>
+                        <button onClick={()=>setActiveTab('templates')}><Icon name="ShoppingBag"/><span className="text-xs">圖鑑</span></button>
+                        <button onClick={()=>setActiveTab('trade')}><Icon name="ArrowRightLeft"/><span className="text-xs">交易</span></button>
+                        <button onClick={()=>setActiveTab('stats')}><Icon name="User"/><span className="text-xs">檔案</span></button>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

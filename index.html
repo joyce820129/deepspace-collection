@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>深空收藏艙 | 獵人週邊管理 (匯入完美版)</title>
+    <title>深空收藏艙 | 獵人週邊管理 (金額計算修正版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1362,19 +1362,7 @@
                                         // Logic for Small Sets (only in Date view)
                                         let renderItems = [];
                                         if (collectionGroupingMode === 'date' && gName !== '全部') {
-                                            const dayStats = gItems.reduce((acc, item) => { const p = Number(item.acquiredPrice || 0); if (item.currency === 'r') acc.r += p; else acc.nt += p; return acc; }, { nt: 0, r: 0 });
-                                            const dayFee = dailyFees[gName]; const shipping = (typeof dayFee === 'object' ? dayFee.shipping : dayFee) || 0; const handling = (typeof dayFee === 'object' ? dayFee.handling : 0) || 0;
-                                            const total = dayStats.nt + (dayStats.r * exchangeRate) + shipping + handling;
-                                            
-                                            // 運費包手按鈕 (Generic for day)
-                                            const feeControls = (setKey) => (
-                                                <div className="flex items-center gap-2">
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); setEditingFeeValue(dailyFees[setKey]?.shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.shipping > 0 ? `運費 ${dailyFees[setKey].shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); setEditingFeeValue(dailyFees[setKey]?.handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.handling > 0 ? `包手 ${dailyFees[setKey].handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
-                                                </div>
-                                            );
-
-                                            // Group by 'setName'
+                                            // Group by 'setName' FIRST to calculate set fees
                                             const sets = {};
                                             const loose = [];
                                             gItems.forEach(i => {
@@ -1385,6 +1373,34 @@
                                                     loose.push(i);
                                                 }
                                             });
+
+                                            // Calculate Items Total (Price * Qty)
+                                            const itemsTotalNT = gItems.reduce((sum, item) => {
+                                                const p = Number(item.acquiredPrice || 0);
+                                                const q = item.quantity || 1;
+                                                return sum + (item.currency === 'r' ? p * exchangeRate * q : p * q);
+                                            }, 0);
+
+                                            // Calculate Generic Day Fees
+                                            const dayFee = dailyFees[gName] || { shipping: 0, handling: 0 };
+                                            const genericFees = (Number(dayFee.shipping) || 0) + (Number(dayFee.handling) || 0);
+
+                                            // Calculate Set Specific Fees
+                                            const setFeesTotal = Object.keys(sets).reduce((sum, setName) => {
+                                                const setKey = `${gName}_${setName}`;
+                                                const sFee = dailyFees[setKey] || { shipping: 0, handling: 0 };
+                                                return sum + (Number(sFee.shipping) || 0) + (Number(sFee.handling) || 0);
+                                            }, 0);
+
+                                            const total = itemsTotalNT + genericFees + setFeesTotal;
+                                            
+                                            // 運費包手按鈕 (Generic for day)
+                                            const feeControls = (setKey) => (
+                                                <div className="flex items-center gap-2">
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); setEditingFeeValue(dailyFees[setKey]?.shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.shipping > 0 ? `運費 ${dailyFees[setKey].shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); setEditingFeeValue(dailyFees[setKey]?.handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.handling > 0 ? `包手 ${dailyFees[setKey].handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
+                                                </div>
+                                            );
 
                                             dayTotalDisplay = (
                                                 <div className="flex items-center gap-2">

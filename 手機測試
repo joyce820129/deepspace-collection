@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>深空收藏艙 | 獵人週邊管理</title>
+    
+    <!-- PWA & Mobile Web App Settings -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="深空收藏">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- 設定網頁小圖示 (Favicon & Apple Touch Icon) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f172a%22/><path d=%22M50 20 L59 42 L82 42 L64 57 L71 80 L50 67 L29 80 L36 57 L18 42 L41 42 Z%22 fill=%22%23facc15%22 stroke=%22%23facc15%22 stroke-width=%222%22 stroke-linejoin=%22round%22/></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f172a%22/><path d=%22M50 20 L59 42 L82 42 L64 57 L71 80 L50 67 L29 80 L36 57 L18 42 L41 42 Z%22 fill=%22%23facc15%22 stroke=%22%23facc15%22 stroke-width=%222%22 stroke-linejoin=%22round%22/></svg>">
+
+    <!-- Web App Manifest (Data URI for Single File Portability) -->
+    <link rel="manifest" href='data:application/manifest+json;base64,eyJkZXNjcmlwdGlvbiI6IueMjuS6uuaciOmCAuWtmOaUr+eZuSIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiaWNvbnMiOlt7InNyYyI6Imh0dHBzOi8vdmlhLnBsYWNlaG9sZGVyLmNvbS8xOTIiLCJzaXplcyI6IjE5MngxOTIiLCJ0eXBlIjoiaW1hZ2UvcG5nIn1dLCJuYW1lIjoi5rex56m65pS26JeP6IlgIiwic2hvcnRfbmFtZSI6Iuexu+mueSIsInN0YXJ0X3VybCI6Ii4iLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzBmMTcyYSIsInRoZW1lX2NvbG9yIjoiIzBmMTcyYSJ9'>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        deep: {
+                            900: '#0f172a',
+                            800: '#1e293b',
+                            50: '#f8fafc',
+                        },
+                        accent: {
+                            blue: '#3b82f6',
+                            purple: '#8b5cf6',
+                        }
+                    },
+                    animation: {
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'fade-in': 'fadeIn 0.2s ease-out',
+                        'scale-in': 'scaleIn 0.1s ease-out',
+                    },
+                    keyframes: {
+                        slideUp: {
+                            '0%': { transform: 'translateY(100%)' },
+                            '100%': { transform: 'translateY(0)' },
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        scaleIn: {
+                            '0%': { transform: 'scale(0.95)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+        body { 
+            font-family: 'Noto Sans TC', sans-serif; 
+            background-color: #f1f5f9;
+            /* 模擬深空背景的微細質感 */
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 20px 20px;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none; /* 防止 iOS 下拉重整 */
+        }
+        
+        /* 隱藏捲軸但保留功能 */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .glass-nav {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        /* 模態框在手機上全螢幕/底部抽屜 */
+        .modal-content {
+            @apply fixed bottom-0 left-0 right-0 w-full bg-white rounded-t-[32px] p-6 max-h-[90vh] overflow-y-auto shadow-[0_-10px_40px_rgba(0,0,0,0.1)];
+            animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        @media (min-width: 768px) {
+            .modal-content {
+                @apply relative bottom-auto left-auto right-auto w-full max-w-lg rounded-3xl shadow-2xl h-auto max-h-[85vh];
+                animation: scaleIn 0.2s ease-out;
+            }
+        }
+
+        input, select, textarea {
+            @apply bg-gray-50 border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all duration-200;
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased selection:bg-blue-100 selection:text-blue-900">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch, getDoc, updateDoc, deleteField } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        const { useState, useEffect, useMemo, useRef, memo } = React;
+        
+        const RechartsObj = window.Recharts || {};
+        const { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } = RechartsObj;
+
+        // --- Firebase Config (保持不變) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDxpH_rteE6PJq_bMmg3X2CxTs1lrQmhZA",
+            authDomain: "deepspace-collection.firebaseapp.com",
+            projectId: "deepspace-collection",
+            storageBucket: "deepspace-collection.firebasestorage.app",
+            messagingSenderId: "129454784064",
+            appId: "1:129454784064:web:38e7f8ffcf99d9a61ea9a5",
+            measurementId: "G-GCCS7NBT15"
+        };
+        const GLOBAL_APP_ID = "deepspace_shared_v1";
+
+        let auth, db;
+        let isFirebaseInitialized = false;
+
+        if (Object.keys(firebaseConfig).length > 0) {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                isFirebaseInitialized = true;
+            } catch (e) { console.error("Firebase init error:", e); }
+        } else if (typeof __firebase_config !== 'undefined') {
+            try {
+                const app = initializeApp(JSON.parse(__firebase_config));
+                auth = getAuth(app);
+                db = getFirestore(app);
+                isFirebaseInitialized = true;
+            } catch(e) { console.log("Preview env init failed", e); }
+        }
+
+        // --- Safe LocalStorage Helper ---
+        const safeLocalStorage = {
+            getItem: (key) => { try { return localStorage.getItem(key); } catch (e) { return null; } },
+            setItem: (key, value) => { try { localStorage.setItem(key, value); } catch (e) { } },
+            removeItem: (key) => { try { localStorage.removeItem(key); } catch (e) { } }
+        };
+
+        const CHARACTERS = ["沈星回", "黎深", "祁煜", "秦徹", "夏以晝", "全員"];
+        const DEFAULT_MERCH_TYPES = ["徽章", "立牌", "拍立得", "小卡", "相卡", "明信片", "雷射票", "書籤", "透卡", "貼紙", "色紙", "簽名板", "杯墊", "吊飾", "公仔", "娃娃", "卡冊", "其他"];
+        
+        // 調整主題色，使其更柔和現代
+        const CHARACTER_THEMES = {
+            "沈星回": { bg: "bg-purple-50", text: "text-purple-600", border: "border-purple-200", badge: "bg-purple-100 text-purple-700", ring: "focus:ring-purple-200" },
+            "黎深": { bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-200", badge: "bg-blue-100 text-blue-700", ring: "focus:ring-blue-200" },
+            "祁煜": { bg: "bg-pink-50", text: "text-pink-600", border: "border-pink-200", badge: "bg-pink-100 text-pink-700", ring: "focus:ring-pink-200" },
+            "秦徹": { bg: "bg-red-50", text: "text-red-600", border: "border-red-200", badge: "bg-red-100 text-red-700", ring: "focus:ring-red-200" },
+            "夏以晝": { bg: "bg-orange-50", text: "text-orange-600", border: "border-orange-200", badge: "bg-orange-100 text-orange-700", ring: "focus:ring-orange-200" },
+            "全員": { bg: "bg-slate-50", text: "text-slate-600", border: "border-slate-200", badge: "bg-slate-200 text-slate-700", ring: "focus:ring-slate-200" },
+            "其他": { bg: "bg-gray-50", text: "text-gray-600", border: "border-gray-200", badge: "bg-gray-100 text-gray-700", ring: "focus:ring-gray-200" }
+        };
+        const CHART_COLORS = { "沈星回": "#9333ea", "黎深": "#2563eb", "祁煜": "#db2777", "秦徹": "#dc2626", "夏以晝": "#ea580c", "全員": "#475569", "其他": "#9ca3af" };
+
+        const getUniqueItems = (items) => {
+            if (!Array.isArray(items)) return [];
+            const seen = new Set();
+            return items.filter(item => {
+                if (!item) return false;
+                const name = (item.name || '').trim().toLowerCase();
+                const char = (item.character || '').trim().toLowerCase();
+                const type = (item.type || '').trim().toLowerCase();
+                const series = (item.series || '').trim().toLowerCase();
+                const key = `${name}|${char}|${type}|${series}`;
+                if (seen.has(key)) return false; 
+                seen.add(key);
+                return true;
+            });
+        };
+
+        // --- Components ---
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const containerRef = useRef(null);
+            useEffect(() => {
+                const container = containerRef.current;
+                if (!container || !window.lucide) return;
+                container.innerHTML = '';
+                const iconNode = window.lucide.icons[name];
+                if (iconNode) {
+                    const svgElement = window.lucide.createElement(iconNode);
+                    svgElement.setAttribute('width', size);
+                    svgElement.setAttribute('height', size);
+                    if (className) svgElement.setAttribute('class', className);
+                    svgElement.setAttribute('stroke-width', 2); // Thicker stroke for mobile readability
+                    container.appendChild(svgElement);
+                }
+            }, [name, size, className]);
+            return <span ref={containerRef} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}></span>;
+        };
+
+        const FilterBar = memo(({ options, selected, toggle, multi, highlightSet }) => {
+            const [isExpanded, setIsExpanded] = useState(false);
+            return (
+                <div className="sticky top-0 z-10 py-2 bg-slate-50/95 backdrop-blur-sm transition-all">
+                    <div className="flex gap-2 overflow-x-auto scrollbar-hide px-4 pb-1 items-center">
+                        <button type="button" onClick={() => toggle('all')} className={`px-4 py-1.5 text-xs font-bold rounded-full whitespace-nowrap transition-all flex-shrink-0 shadow-sm ${selected.length === 0 ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}>{multi ? "全選" : "全部"}</button>
+                        {options.map(opt => {
+                            const isHighlight = highlightSet && highlightSet.has(opt);
+                            const isSelected = selected.includes(opt);
+                            const theme = CHARACTER_THEMES[opt] || CHARACTER_THEMES['其他'];
+                            return <button type="button" key={opt} onClick={() => toggle(opt)} className={`px-4 py-1.5 text-xs font-medium rounded-full whitespace-nowrap transition-all flex-shrink-0 shadow-sm border ${isSelected ? 'bg-blue-600 text-white border-blue-600' : (isHighlight ? 'bg-yellow-50 text-yellow-700 border-yellow-300 ring-1 ring-yellow-200' : 'bg-white text-slate-600 border-slate-200')}`}>{opt}</button>;
+                        })}
+                        {multi && <button type="button" onClick={() => toggle('all')} className="px-3 py-1.5 text-xs rounded-full bg-slate-200 text-slate-600 whitespace-nowrap flex-shrink-0"><Icon name="RotateCcw" size={12}/></button>}
+                    </div>
+                </div>
+            );
+        });
+
+        // Updated StackCard for Mobile UI
+        const StackCard = memo(({ stack, index, openModal, deleteFromCollection, isDraggable, onDragStart, onDragEnter, onDragEnd, showAmount = true, isBatchMode = false, isSelected = false, onToggleSelect = null }) => {
+            const theme = CHARACTER_THEMES[stack.character] || CHARACTER_THEMES["其他"];
+            
+            // Consolidated logic (kept same)
+            const consolidated = useMemo(() => {
+                const map = new Map();
+                stack.instances.forEach(inst => {
+                    const key = `${inst.date}-${inst.acquiredPrice}-${inst.isPreorder}-${inst.shippingDate}-${inst.currency}`;
+                    const itemQty = inst.quantity || 1;
+                    if (!map.has(key)) map.set(key, { ...inst, count: itemQty }); else map.get(key).count += itemQty;
+                });
+                const result = Array.from(map.values());
+                result.sort((a, b) => {
+                    const dateA = a.isPreorder ? a.shippingDate : a.date;
+                    const dateB = b.isPreorder ? b.shippingDate : b.date;
+                    if (!dateA && !dateB) return 0;
+                    if (!dateA) return 1;
+                    if (!dateB) return -1;
+                    return new Date(dateA) - new Date(dateB);
+                });
+                return result;
+            }, [stack.instances]);
+
+            const handleCardClick = (e) => {
+                if (isBatchMode && onToggleSelect) {
+                    e.stopPropagation();
+                    onToggleSelect(stack.instances.map(i => i.id));
+                } else if (!isBatchMode) {
+                    openModal(stack.instances[0], null, 'collection'); // Open first instance for edit on click
+                }
+            };
+
+            return (
+                <div 
+                    onClick={handleCardClick}
+                    className={`relative bg-white rounded-2xl overflow-hidden shadow-sm transition-all duration-300 border
+                        ${isDraggable && !isBatchMode ? '' : ''}
+                        ${isBatchMode ? 'active:scale-95' : 'hover:shadow-md hover:-translate-y-1'}
+                        ${isSelected ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50/50' : 'border-slate-100'}
+                    `}
+                >
+                    {/* Batch Selection Overlay */}
+                    {isBatchMode && (
+                        <div className={`absolute top-2 right-2 z-20 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'bg-white/80 border-slate-300'}`}>
+                            {isSelected && <Icon name="Check" size={14} className="text-white" />}
+                        </div>
+                    )}
+
+                    {/* Image Area - Aspect Ratio optimized */}
+                    <div className="aspect-[1/1] w-full relative bg-slate-50">
+                         {/* Count Badge */}
+                        {stack.totalCount > 1 && (
+                            <div className="absolute top-2 left-2 z-10 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/20">
+                                x{stack.totalCount}
+                            </div>
+                        )}
+                        
+                        {/* Character Tag */}
+                        {!isBatchMode && (
+                            <div className={`absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm backdrop-blur-md border border-white/40 ${theme.badge}`}>
+                                {stack.character}
+                            </div>
+                        )}
+
+                        {stack.image ? (
+                            <img src={stack.image} className="w-full h-full object-cover transition-transform duration-500 hover:scale-105" loading="lazy" />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                <Icon name="Image" size={32} />
+                            </div>
+                        )}
+                        
+                        {/* Bottom Gradient for Text Readability if needed */}
+                        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/5 to-transparent pointer-events-none"></div>
+                    </div>
+
+                    {/* Content Area */}
+                    <div className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                            <h3 className="font-bold text-slate-800 text-sm line-clamp-2 leading-tight">{stack.name}</h3>
+                        </div>
+                        
+                        {showAmount && (
+                            <div className="mt-2 space-y-1.5">
+                                {consolidated.slice(0, 2).map((inst, idx) => (
+                                    <div key={idx} className="flex items-center justify-between text-xs">
+                                        <div className="flex items-center gap-1.5 text-slate-500">
+                                            {inst.isPreorder ? <Icon name="Clock" size={10} className="text-orange-400"/> : <Icon name="Calendar" size={10}/>}
+                                            <span className="scale-90 origin-left">{inst.isPreorder ? (inst.shippingDate?.slice(5) || '待定') : inst.date?.slice(5)}</span>
+                                        </div>
+                                        <div className="font-bold text-slate-700">
+                                           {inst.currency === 'r' ? `¥${inst.acquiredPrice}` : `$${inst.acquiredPrice}`}
+                                        </div>
+                                    </div>
+                                ))}
+                                {consolidated.length > 2 && (
+                                    <div className="text-[10px] text-slate-400 text-center mt-1 pt-1 border-t border-slate-50">
+                                        還有 {consolidated.length - 2} 筆紀錄...
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        });
+
+        const CatalogCard = memo(({ item, index, openModal, deleteFromCatalog, isBatchMode, isSelected, onToggleSelect }) => {
+            const theme = CHARACTER_THEMES[item.character] || CHARACTER_THEMES["其他"];
+            return (
+                <div 
+                    onClick={(e) => { if(isBatchMode) { e.stopPropagation(); onToggleSelect(item.id); } else { openModal(null, item, 'collection'); } }} 
+                    className={`bg-white rounded-2xl shadow-sm border overflow-hidden relative group transition-all duration-300
+                        ${isBatchMode ? 'active:scale-95' : 'hover:shadow-md'}
+                        ${isSelected ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50/30' : 'border-slate-100'}
+                    `}
+                >
+                    <div className="aspect-square bg-slate-50 relative">
+                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+                        
+                        {/* Actions Overlay (Desktop hover / Mobile touch safe zones) */}
+                        {!isBatchMode && (
+                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={(e) => {e.stopPropagation(); openModal(item, null, 'catalog');}} className="w-7 h-7 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-slate-600 shadow-sm hover:text-blue-600"><Icon name="Edit3" size={12} /></button>
+                                <button onClick={(e) => {e.stopPropagation(); deleteFromCatalog(item.id);}} className="w-7 h-7 bg-white/90 backdrop-blur rounded-full flex items-center justify-center text-slate-600 shadow-sm hover:text-red-600"><Icon name="Trash2" size={12} /></button>
+                            </div>
+                        )}
+
+                        {/* Batch Checkbox */}
+                        {isBatchMode && (
+                            <div className={`absolute top-2 right-2 z-20 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'bg-white/80 border-slate-300'}`}>
+                                {isSelected && <Icon name="Check" size={14} className="text-white" />}
+                            </div>
+                        )}
+
+                         {/* Add Icon for Quick Add Visual */}
+                         {!isBatchMode && (
+                             <div className="absolute bottom-2 right-2 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-lg shadow-blue-600/30 transform translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all">
+                                 <Icon name="Plus" size={18}/>
+                             </div>
+                         )}
+                    </div>
+                    
+                    <div className="p-3">
+                        <div className="flex gap-1.5 mb-1.5 flex-wrap">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${theme.badge}`}>{item.character}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500">{item.type}</span>
+                        </div>
+                        <h3 className="font-bold text-slate-800 text-sm truncate">{item.name}</h3>
+                        <div className="mt-1 flex items-baseline justify-end">
+                            <span className="text-sm font-bold text-slate-400">{item.officialPrice ? (isNaN(item.officialPrice) ? item.officialPrice : `¥${item.officialPrice}`) : ''}</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        });
+
+        const TradeCard = memo(({ trade, openModal, deleteTrade, markAsSold, isBatchMode, isSelected, onToggleSelect }) => {
+            const isSold = trade.status === 'sold';
+            const profit = ((Number(trade.salePrice) || 0) - (Number(trade.costPrice) || 0)) * (trade.quantity||1);
+            
+            return (
+                <div 
+                    onClick={(e) => { if(isBatchMode) { e.stopPropagation(); onToggleSelect(trade.id); } else { openModal(trade); }}}
+                    className={`bg-white rounded-2xl p-3 shadow-sm border flex gap-3 relative transition-all active:scale-[0.98]
+                        ${isSold ? 'opacity-80 bg-slate-50' : ''}
+                        ${isSelected ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50' : 'border-slate-100'}
+                    `}
+                >
+                    {isBatchMode && (
+                        <div className={`absolute top-2 right-2 z-20 w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-300'}`}>
+                            {isSelected && <Icon name="Check" size={12} className="text-white" />}
+                        </div>
+                    )}
+
+                    <div className="w-20 h-20 bg-slate-100 rounded-xl flex-shrink-0 overflow-hidden">
+                        {trade.image ? <img src={trade.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-slate-300 m-auto mt-6" size={24}/>}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                        <div>
+                            <div className="flex justify-between items-start">
+                                <h3 className={`font-bold text-sm truncate pr-6 ${isSold ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{trade.name}</h3>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${CHARACTER_THEMES[trade.character]?.badge || 'bg-slate-100'}`}>{trade.character}</span>
+                                {trade.setName && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-md flex items-center gap-0.5"><Icon name="Package" size={10}/> {trade.setName}</span>}
+                            </div>
+                        </div>
+                        
+                        <div className="flex justify-between items-end mt-2">
+                            <div className="text-xs text-slate-500">
+                                <div>成本: <span className="font-medium text-slate-700">${trade.costPrice}</span></div>
+                                <div className={isSold ? "text-slate-400" : "text-blue-600 font-bold"}>{isSold ? '售出' : '預售'}: ${trade.salePrice}</div>
+                            </div>
+                            
+                            {!isBatchMode && !isSold && (
+                                <button onClick={(e)=>{e.stopPropagation(); markAsSold(trade)}} className="bg-slate-900 text-white text-[10px] px-3 py-1.5 rounded-full font-bold shadow-md active:bg-slate-700 flex items-center gap-1">
+                                    <Icon name="CheckCircle2" size={12}/> 售出
+                                </button>
+                            )}
+                            {isSold && (
+                                <span className={`text-xs font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                    {profit >= 0 ? '+' : ''}{profit}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        });
+
+        // --- Layout Shell ---
+        const Layout = ({ children, activeTab, setActiveTab, user, onSettings, onLogin, onLogout }) => {
+            return (
+                <div className="flex h-screen w-full overflow-hidden bg-[#f8fafc]">
+                    {/* Desktop Sidebar (Left) - Only visible on md+ */}
+                    <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 h-full z-20 shadow-xl">
+                         <div className="p-6">
+                            <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                                <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-yellow-400"><Icon name="Star" size={16} fill="currentColor"/></div>
+                                深空收藏艙
+                            </h1>
+                        </div>
+                        
+                        <nav className="flex-1 px-4 space-y-1">
+                            {[
+                                { id: 'collection', icon: 'Package', label: '我的收藏' },
+                                { id: 'templates', icon: 'Library', label: '週邊圖鑑' },
+                                { id: 'trade', icon: 'ArrowRightLeft', label: '交易手帳' },
+                                { id: 'stats', icon: 'PieChart', label: '消費分析' }
+                            ].map(item => (
+                                <button 
+                                    key={item.id} 
+                                    onClick={() => setActiveTab(item.id)}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-sm ${activeTab === item.id ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
+                                >
+                                    <Icon name={item.icon} size={20} /> {item.label}
+                                </button>
+                            ))}
+                        </nav>
+
+                        <div className="p-4 border-t border-slate-100 space-y-2">
+                             {user ? (
+                                <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-3 border border-slate-100">
+                                    <img src={user.photoURL || `https://ui-avatars.com/api/?name=${user.email}`} className="w-8 h-8 rounded-full bg-white"/>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-bold truncate">{user.displayName || '獵人'}</p>
+                                        <button onClick={onLogout} className="text-[10px] text-red-500 font-bold">登出</button>
+                                    </div>
+                                    <button onClick={onSettings} className="p-1.5 rounded-lg hover:bg-white text-slate-400 hover:text-slate-600 transition-colors"><Icon name="Settings" size={16}/></button>
+                                </div>
+                            ) : (
+                                <button onClick={onLogin} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-200">
+                                    <Icon name="LogIn" size={16}/> 登入雲端
+                                </button>
+                            )}
+                        </div>
+                    </aside>
+
+                    {/* Main Content Area */}
+                    <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+                        {/* Mobile Header (Sticky) */}
+                        <header className="md:hidden flex items-center justify-between px-5 py-4 bg-white/90 backdrop-blur-md sticky top-0 z-30 border-b border-slate-100 shadow-sm">
+                            <h1 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                                <Icon name="Star" size={18} className="text-yellow-500" fill="currentColor"/> 收藏艙
+                            </h1>
+                            <div className="flex gap-3 items-center">
+                                <button onClick={onSettings} className="text-slate-500 active:text-slate-900"><Icon name="Settings" size={22}/></button>
+                                {user ? (
+                                    <img src={user.photoURL} className="w-8 h-8 rounded-full border border-slate-200" onClick={() => { if(confirm('登出?')) onLogout(); }}/>
+                                ) : (
+                                    <button onClick={onLogin} className="text-blue-600 font-bold text-sm">登入</button>
+                                )}
+                            </div>
+                        </header>
+
+                        {/* Scrollable Content */}
+                        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8 pb-24 md:pb-8 relative">
+                             {children}
+                        </main>
+
+                        {/* Mobile Bottom Navigation (Floating Glass) */}
+                        <div className="md:hidden fixed bottom-6 left-4 right-4 z-40">
+                            <nav className="bg-slate-900/90 backdrop-blur-xl text-slate-400 rounded-2xl shadow-2xl shadow-slate-900/20 flex justify-around items-center h-16 px-2 border border-white/10">
+                                {[
+                                    { id: 'collection', icon: 'Package', label: '收藏' },
+                                    { id: 'templates', icon: 'Library', label: '圖鑑' },
+                                    { id: 'trade', icon: 'ArrowRightLeft', label: '交易' },
+                                    { id: 'stats', icon: 'PieChart', label: '檔案' }
+                                ].map(item => {
+                                    const isActive = activeTab === item.id;
+                                    return (
+                                        <button 
+                                            key={item.id} 
+                                            onClick={() => setActiveTab(item.id)}
+                                            className={`flex flex-col items-center justify-center w-16 h-full transition-all duration-300 relative ${isActive ? 'text-white' : ''}`}
+                                        >
+                                            <div className={`transition-all duration-300 transform ${isActive ? '-translate-y-1' : ''}`}>
+                                                <Icon name={item.icon} size={24} className={isActive ? 'drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]' : ''} strokeWidth={isActive ? 2.5 : 2} />
+                                            </div>
+                                            {isActive && <div className="absolute bottom-2 w-1 h-1 bg-white rounded-full"></div>}
+                                            {/* <span className={`text-[10px] font-medium transition-all ${isActive ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 hidden'}`}>{item.label}</span> */}
+                                        </button>
+                                    );
+                                })}
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Modals (Responsive Wrapper) ---
+        const ModalWrapper = ({ isOpen, onClose, title, children, footer }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-black/40 backdrop-blur-[2px] transition-opacity duration-300">
+                    {/* Backdrop Click */}
+                    <div className="absolute inset-0" onClick={onClose}></div>
+                    
+                    <div className="modal-content flex flex-col">
+                        <div className="flex justify-between items-center mb-4 flex-shrink-0">
+                            <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto md:hidden absolute top-3 left-0 right-0"></div> {/* Handle for mobile */}
+                            <h3 className="text-xl font-bold text-slate-900 mt-2 md:mt-0">{title}</h3>
+                            <button onClick={onClose} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"><Icon name="X" size={20}/></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto -mx-2 px-2 pb-4 space-y-4">
+                            {children}
+                        </div>
+                        {footer && <div className="pt-4 border-t border-slate-100 mt-auto">{footer}</div>}
+                    </div>
+                </div>
+            );
+        };
+
+        // Reusing logic from previous app with UI refinements
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [activeTab, setActiveTab] = useState(() => safeLocalStorage.getItem('deepspace_active_tab') || 'collection');
+            const [collectionGroupingMode, setCollectionGroupingMode] = useState(() => safeLocalStorage.getItem('deepspace_collection_mode') || 'none');
+            
+            // Settings State
+            const [appSettings, setAppSettings] = useState(() => {
+                const saved = safeLocalStorage.getItem('deepspace_settings');
+                const defaults = {
+                    layoutCols: 4, customTypes: DEFAULT_MERCH_TYPES, customSeries: [], 
+                    customCharacters: CHARACTERS, visibleCharacters: CHARACTERS,
+                    multiSelect: { type: true, character: false, date: false, series: false },
+                    defaultPreorderCurrency: 'NT$', defaultCurrency: 'NT$', 
+                    groupAllInFilterMode: true, showAmount: true
+                };
+                try { return saved ? { ...defaults, ...JSON.parse(saved) } : defaults; } catch { return defaults; }
+            });
+
+            // Data States
+            const [items, setItems] = useState([]); 
+            const [catalogItems, setCatalogItems] = useState([]); 
+            const [trades, setTrades] = useState([]); 
+            const [dailyFees, setDailyFees] = useState({});
+
+            // UI States
+            const [groupingMode, setGroupingMode] = useState('none'); 
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [modalMode, setModalMode] = useState('collection');
+            const [formData, setFormData] = useState({});
+            const [editingItem, setEditingItem] = useState(null);
+            
+            // Filter States
+            const [selectedTypeFilters, setSelectedTypeFilters] = useState([]); 
+            const [selectedCharFilters, setSelectedCharFilters] = useState([]); 
+            const [selectedDateFilters, setSelectedDateFilters] = useState([]);
+            const [selectedSeriesFilters, setSelectedSeriesFilters] = useState([]); 
+
+            // Batch States
+            const [isBatchMode, setIsBatchMode] = useState(false);
+            const [batchSelection, setBatchSelection] = useState(new Set());
+            const [isCollectionBatchMode, setIsCollectionBatchMode] = useState(false);
+            const [collectionBatchSelection, setCollectionBatchSelection] = useState(new Set());
+            const [isTradeBatchMode, setIsTradeBatchMode] = useState(false);
+            const [tradeBatchSelection, setTradeBatchSelection] = useState(new Set());
+
+            // Calculated States
+            const [exchangeRate, setExchangeRate] = useState(4.5);
+            
+            // Persistence & Firebase Logic (Same as original)
+            useEffect(() => { safeLocalStorage.setItem('deepspace_active_tab', activeTab); }, [activeTab]);
+            useEffect(() => { safeLocalStorage.setItem('deepspace_collection_mode', collectionGroupingMode); }, [collectionGroupingMode]);
+            
+            useEffect(() => { 
+                if (!isFirebaseInitialized) { 
+                    const localTrades = safeLocalStorage.getItem('deepspace_trades_local'); if (localTrades) setTrades(JSON.parse(localTrades)); 
+                    const localItems = safeLocalStorage.getItem('deepspace_items_v7_local'); if (localItems) setItems(JSON.parse(localItems)); 
+                    const localFees = safeLocalStorage.getItem('deepspace_daily_fees_local'); if (localFees) setDailyFees(JSON.parse(localFees)); 
+                    const localCatalog = safeLocalStorage.getItem('deepspace_catalog_v7_local'); if (localCatalog) { try { setCatalogItems(getUniqueItems(JSON.parse(localCatalog))); } catch(e){ console.error(e); } } 
+                    return; 
+                } 
+                setPersistence(auth, browserLocalPersistence).catch(console.error); 
+                const unsubscribe = onAuthStateChanged(auth, (currentUser) => { if (currentUser) { if (!currentUser.isAnonymous) setUser(currentUser); else setUser(null); } else { setUser(null); signInAnonymously(auth).catch(console.error); } }); return () => unsubscribe(); 
+            }, []);
+
+            useEffect(() => { fetch('https://api.exchangerate-api.com/v4/latest/CNY').then(res => res.json()).then(data => { if(data && data.rates && data.rates.TWD) setExchangeRate(data.rates.TWD); }).catch(err => console.error(err)); }, []);
+
+            useEffect(() => { 
+                if (!isFirebaseInitialized) return; 
+                if (!auth.currentUser) return; 
+                const catalogColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'public', 'data', 'catalog'); 
+                const unsubCatalog = onSnapshot(catalogColl, (snapshot) => { const cloudCatalog = snapshot.docs.map(doc => doc.data()); cloudCatalog.sort((a, b) => (a.order || 0) - (b.order || 0)); setCatalogItems(getUniqueItems(cloudCatalog)); }); 
+                let unsubCollection = () => {}; let unsubFees = () => {}; let unsubTrades = () => {}; 
+                if (user) { 
+                    const userColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'items'); 
+                    const q = query(userColl, orderBy("order", "asc")); 
+                    unsubCollection = onSnapshot(q, (snapshot) => { setItems(snapshot.docs.map(doc => doc.data())); }); 
+                    const feesColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'daily_fees'); 
+                    unsubFees = onSnapshot(feesColl, (snapshot) => { const feesMap = {}; snapshot.docs.forEach(doc => { const data = doc.data(); feesMap[doc.id] = { shipping: data.amount || 0, handling: data.handling || 0 }; }); setDailyFees(feesMap); }); 
+                    const tradeColl = collection(db, 'artifacts', GLOBAL_APP_ID, 'users', user.uid, 'trades'); 
+                    unsubTrades = onSnapshot(tradeColl, (snapshot) => { const loadedTrades = snapshot.docs.map(doc => doc.data()); loadedTrades.sort((a, b) => new Date(b.buyDate) - new Date(a.buyDate)); setTrades(loadedTrades); }); 
+                } 
+                return () => { unsubCatalog(); unsubCollection(); unsubFees(); unsubTrades(); }; 
+            }, [user, auth.currentUser]);
+
+            // Save handlers
+            const handleLogin = async () => { if (!isFirebaseInitialized) return alert("Setup Config"); try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch (e) { alert(e.message); } };
+            const handleLogout = () => signOut(auth);
+
+             // Helpers for filtering and grouping (Same logic)
+            const getEffectiveDate = (item) => item.isPreorder ? item.shippingDate : item.date;
+            const getFilteredList = (list, mode, typeFilters, charFilters, dateFilters, seriesFilters) => {
+                 let processed = list.filter(i => appSettings.visibleCharacters.includes(i.character));
+                 if (mode === 'type' && typeFilters.length > 0) processed = processed.filter(i => typeFilters.includes(i.type));
+                 if (mode === 'character' && charFilters.length > 0) processed = processed.filter(i => charFilters.includes(i.character));
+                 if (mode === 'date' && dateFilters.length > 0) processed = processed.filter(i => dateFilters.includes(getEffectiveDate(i)));
+                 if (mode === 'series' && seriesFilters.length > 0) processed = processed.filter(i => seriesFilters.includes(i.series));
+                 return processed;
+            };
+
+            const groupedData = useMemo(() => {
+                const getGrouped = (list, mode) => {
+                    const filtered = getFilteredList(list, mode, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters);
+                    if (mode === 'none') return { '全部': filtered };
+                    return filtered.reduce((acc, item) => {
+                        let key = '';
+                        if (mode === 'series') key = item.series || '其他系列';
+                        else if (mode === 'type') key = item.type || '其他類型';
+                        else if (mode === 'character') key = item.character || '其他角色';
+                        else if (mode === 'date') key = getEffectiveDate(item) || '未知日期';
+                        if (!acc[key]) acc[key] = [];
+                        acc[key].push(item);
+                        return acc;
+                    }, {});
+                };
+                return {
+                    collection: getGrouped(items, collectionGroupingMode),
+                    catalog: getGrouped(catalogItems, groupingMode)
+                };
+            }, [items, catalogItems, groupingMode, collectionGroupingMode, selectedTypeFilters, selectedCharFilters, selectedDateFilters, selectedSeriesFilters]);
+
+            const availableTypes = useMemo(() => [...new Set([...items, ...catalogItems].map(i => i.type).filter(Boolean))], [items, catalogItems]);
+            const availableSeries = useMemo(() => [...new Set([...items, ...catalogItems].map(i => i.series).filter(Boolean))], [items, catalogItems]);
+            const availableDates = useMemo(() => [...new Set(items.map(i => getEffectiveDate(i)).filter(Boolean))].sort((a,b)=>new Date(b)-new Date(a)), [items]);
+            
+            // Toggle Filters
+            const toggleFilter = (current, setFn, val, multi) => {
+                if (val === 'all') { setFn([]); return; }
+                if (multi) setFn(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+                else setFn(prev => prev.includes(val) ? [] : [val]);
+            };
+
+             // Modal Actions
+            const openModal = (item = null, template = null, mode = 'collection') => { 
+                setModalMode(mode); 
+                const defaultData = { id: Date.now().toString(), name: '', character: '沈星回', type: '徽章', quantity: 1, currency: appSettings.defaultCurrency }; 
+                if (mode === 'catalog' && item) { setEditingItem(item); setFormData({ ...item }); } 
+                else if (mode === 'collection') { 
+                    if (item) { setEditingItem(item); setFormData({ ...item }); } 
+                    else if (template) { setEditingItem(null); setFormData({ ...defaultData, ...template, id: Date.now().toString() }); } 
+                    else { setEditingItem(null); setFormData(defaultData); } 
+                } 
+                setIsModalOpen(true); 
+            };
+
+            const handleSave = async () => {
+                const itemToSave = { ...formData, acquiredPrice: formData.acquiredPrice || 0, quantity: Math.max(1, parseInt(formData.quantity)||1) };
+                if (modalMode === 'collection') {
+                    if (user && isFirebaseInitialized) await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, itemToSave.id), itemToSave);
+                    else setItems(prev => { const exists = prev.find(i=>i.id===itemToSave.id); return exists ? prev.map(i=>i.id===itemToSave.id?itemToSave:i) : [...prev, itemToSave]});
+                } else {
+                     if (user && isFirebaseInitialized) await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, itemToSave.id), itemToSave);
+                     else setCatalogItems(prev => { const exists = prev.find(i=>i.id===itemToSave.id); return exists ? prev.map(i=>i.id===itemToSave.id?itemToSave:i) : [...prev, itemToSave]});
+                }
+                setIsModalOpen(false);
+            };
+
+            const deleteItem = async (id, mode) => {
+                if(!confirm("確定刪除?")) return;
+                if(mode==='collection') {
+                     if (user && isFirebaseInitialized) await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, id));
+                     else setItems(prev => prev.filter(i=>i.id!==id));
+                } else {
+                     if (user && isFirebaseInitialized) await deleteDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, id));
+                     else setCatalogItems(prev => prev.filter(i=>i.id!==id));
+                }
+            };
+
+            // Main Render
+            return (
+                <Layout activeTab={activeTab} setActiveTab={setActiveTab} user={user} onSettings={()=>setIsSettingsOpen(true)} onLogin={handleLogin} onLogout={handleLogout}>
+                    
+                    {/* --- Collection Tab --- */}
+                    {activeTab === 'collection' && (
+                        <div className="space-y-6 max-w-5xl mx-auto">
+                            {/* Header Actions */}
+                            <div className="flex flex-col gap-4">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">我的收藏庫</h2>
+                                    <div className="flex gap-2">
+                                         <button onClick={()=>{setIsCollectionBatchMode(!isCollectionBatchMode); setCollectionBatchSelection(new Set());}} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isCollectionBatchMode ? 'bg-blue-600 text-white shadow-lg shadow-blue-300' : 'bg-white text-slate-500 shadow-sm border border-slate-200'}`}>
+                                            <Icon name={isCollectionBatchMode ? "CheckSquare" : "ListChecks"} size={20}/>
+                                        </button>
+                                        <button onClick={()=>openModal(null, null, 'collection')} className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-lg shadow-slate-900/30 active:scale-95 transition-transform">
+                                            <Icon name="Plus" size={24}/>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {/* View Modes Scroll */}
+                                <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
+                                     {[{id:'none',l:'全部'},{id:'series',l:'系列'},{id:'type',l:'類型'},{id:'character',l:'角色'},{id:'date',l:'日期'}].map(m=>(
+                                        <button key={m.id} onClick={()=>setCollectionGroupingMode(m.id)} className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${collectionGroupingMode===m.id?'bg-slate-800 text-white shadow-md':'bg-white text-slate-500 border border-slate-200'}`}>{m.l}</button>
+                                     ))}
+                                </div>
+
+                                {/* Filters */}
+                                {collectionGroupingMode === 'series' && <FilterBar options={availableSeries} selected={selectedSeriesFilters} toggle={(v)=>toggleFilter(selectedSeriesFilters, setSelectedSeriesFilters, v, appSettings.multiSelect.series)} multi={appSettings.multiSelect.series} />}
+                                {collectionGroupingMode === 'type' && <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(v)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, v, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />}
+                                {collectionGroupingMode === 'character' && <FilterBar options={CHARACTERS} selected={selectedCharFilters} toggle={(v)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, v, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />}
+                                {collectionGroupingMode === 'date' && <FilterBar options={availableDates} selected={selectedDateFilters} toggle={(v)=>toggleFilter(selectedDateFilters, setSelectedDateFilters, v, appSettings.multiSelect.date)} multi={appSettings.multiSelect.date} />}
+                            </div>
+
+                            {/* Content Grid */}
+                            <div className="space-y-8 pb-20">
+                                {Object.entries(groupedData.collection).map(([gName, gItems]) => (
+                                    <div key={gName} className="animate-fade-in">
+                                        {collectionGroupingMode !== 'none' && gName !== '全部' && (
+                                            <div className="flex items-center gap-3 mb-4 sticky top-12 z-0 bg-slate-50/90 backdrop-blur py-2">
+                                                <div className="h-6 w-1.5 rounded-full bg-blue-500"></div>
+                                                <h3 className="font-bold text-lg text-slate-700">{gName} <span className="text-sm text-slate-400 font-normal ml-1">({gItems.length})</span></h3>
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-6">
+                                            {/* Logic to stack items based on grouping needs to be applied here - Simplified for UI demo to just render items or stacks */}
+                                            {/* In a real scenario, use the getStackedItems helper from original code */}
+                                            {gItems.map((item, idx) => (
+                                                <StackCard 
+                                                    key={item.id} 
+                                                    stack={{...item, instances: [item], totalCount: item.quantity||1}} 
+                                                    index={idx} 
+                                                    openModal={openModal} 
+                                                    showAmount={appSettings.showAmount}
+                                                    isBatchMode={isCollectionBatchMode}
+                                                    isSelected={collectionBatchSelection.has(item.id)}
+                                                    onToggleSelect={(ids) => {
+                                                        setCollectionBatchSelection(prev => {
+                                                            const next = new Set(prev);
+                                                            ids.forEach(id => next.has(id) ? next.delete(id) : next.add(id));
+                                                            return next;
+                                                        })
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                                {items.length === 0 && <div className="flex flex-col items-center justify-center py-20 text-slate-400"><Icon name="PackageOpen" size={48} className="mb-4 opacity-50"/><p>尚無收藏</p></div>}
+                            </div>
+                            
+                            {/* Floating Batch Actions Bar (Mobile) */}
+                            {isCollectionBatchMode && (
+                                <div className="fixed bottom-24 md:bottom-8 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-auto bg-slate-900 text-white rounded-2xl shadow-2xl p-4 z-50 animate-slide-up flex items-center justify-between gap-6 md:min-w-[400px]">
+                                    <span className="font-bold whitespace-nowrap pl-2">已選 {collectionBatchSelection.size}</span>
+                                    <div className="flex gap-2">
+                                        <button className="px-4 py-2 bg-red-600 rounded-xl font-bold text-sm" onClick={() => { if(confirm('刪除?')) { /* Batch delete logic */ setIsCollectionBatchMode(false); } }}>刪除</button>
+                                        <button className="px-4 py-2 bg-white text-slate-900 rounded-xl font-bold text-sm" onClick={() => setIsCollectionBatchMode(false)}>完成</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* --- Templates Tab --- */}
+                    {activeTab === 'templates' && (
+                        <div className="space-y-6 max-w-5xl mx-auto">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-2xl font-black text-slate-800 tracking-tight">週邊圖鑑</h2>
+                                <button onClick={()=>openModal(null, null, 'catalog')} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md">新增圖鑑</button>
+                            </div>
+                            
+                            <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                                 {[{id:'none',l:'全部'},{id:'series',l:'系列'},{id:'type',l:'類型'}].map(m=>(
+                                    <button key={m.id} onClick={()=>setGroupingMode(m.id)} className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${groupingMode===m.id?'bg-slate-800 text-white shadow-md':'bg-white text-slate-500 border border-slate-200'}`}>{m.l}</button>
+                                 ))}
+                            </div>
+
+                            <div className="space-y-8 pb-20">
+                                {Object.entries(groupedData.catalog).map(([gName, gItems]) => (
+                                    <div key={gName}>
+                                        {groupingMode !== 'none' && <h3 className="font-bold text-lg text-slate-700 mb-4 sticky top-0 bg-slate-50 py-2 z-10">{gName}</h3>}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-6">
+                                            {gItems.map((item, i) => (
+                                                <CatalogCard key={item.id} item={item} index={i} openModal={openModal} deleteFromCatalog={(id)=>deleteItem(id,'catalog')} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* --- Edit Modal --- */}
+                    <ModalWrapper isOpen={isModalOpen} onClose={()=>setIsModalOpen(false)} title={modalMode==='collection'?(editingItem?'編輯收藏':'新增收藏'):'編輯圖鑑'}
+                        footer={
+                            <div className="flex gap-3">
+                                {editingItem && <button onClick={()=>deleteItem(editingItem.id, modalMode)} className="px-4 py-3 bg-red-50 text-red-600 rounded-xl font-bold"><Icon name="Trash2" size={20}/></button>}
+                                <button onClick={handleSave} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold text-lg shadow-lg shadow-slate-900/20 active:scale-95 transition-transform">儲存</button>
+                            </div>
+                        }
+                    >
+                        <div className="space-y-4">
+                            {/* Image Uploader */}
+                            <div className="flex justify-center mb-6">
+                                <div className="relative w-32 h-32 bg-slate-100 rounded-2xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden">
+                                    {formData.image ? <img src={formData.image} className="w-full h-full object-cover"/> : <Icon name="Upload" className="text-slate-400"/>}
+                                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e)=>{
+                                        const file=e.target.files[0];
+                                        if(file){
+                                            const reader=new FileReader();
+                                            reader.onload=()=>setFormData(p=>({...p,image:reader.result}));
+                                            reader.readAsDataURL(file);
+                                        }
+                                    }}/>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase ml-1">名稱</label>
+                                <input className="w-full p-3 rounded-xl font-bold" value={formData.name||''} onChange={e=>setFormData({...formData,name:e.target.value})} placeholder="輸入名稱..."/>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">角色</label>
+                                    <select className="w-full p-3 rounded-xl appearance-none" value={formData.character} onChange={e=>setFormData({...formData,character:e.target.value})}>
+                                        {CHARACTERS.map(c=><option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">類型</label>
+                                    <input className="w-full p-3 rounded-xl" list="types" value={formData.type||''} onChange={e=>setFormData({...formData,type:e.target.value})}/>
+                                    <datalist id="types">{DEFAULT_MERCH_TYPES.map(t=><option key={t} value={t}/>)}</datalist>
+                                </div>
+                            </div>
+                            
+                            {modalMode === 'collection' && (
+                                <>
+                                <div className="bg-slate-100 p-4 rounded-2xl space-y-3">
+                                    <div className="flex gap-3">
+                                        <div className="flex-1">
+                                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">價格</label>
+                                            <div className="relative">
+                                                <span className="absolute left-3 top-3 text-slate-400">$</span>
+                                                <input type="number" className="w-full p-3 pl-6 rounded-xl" value={formData.acquiredPrice||''} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})}/>
+                                            </div>
+                                        </div>
+                                         <div className="w-24">
+                                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">幣種</label>
+                                            <select className="w-full p-3 rounded-xl" value={formData.currency} onChange={e=>setFormData({...formData,currency:e.target.value})}>
+                                                <option value="NT$">NT$</option>
+                                                <option value="r">r</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 items-center">
+                                        <div className="flex-1">
+                                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">數量</label>
+                                            <input type="number" className="w-full p-3 rounded-xl" value={formData.quantity} onChange={e=>setFormData({...formData,quantity:e.target.value})}/>
+                                        </div>
+                                        <label className="flex items-center gap-2 p-3 bg-white rounded-xl h-[48px] mt-4">
+                                            <input type="checkbox" className="w-5 h-5 rounded text-blue-600" checked={formData.isPreorder||false} onChange={e=>setFormData({...formData,isPreorder:e.target.checked})}/>
+                                            <span className="font-bold text-sm">預購</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                </>
+                            )}
+                        </div>
+                    </ModalWrapper>
+
+                </Layout>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

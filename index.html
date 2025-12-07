@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>深空收藏艙 | 獵人週邊管理 (匯入修正版)</title>
+    <title>深空收藏艙 | 獵人週邊管理 (匯入完美版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -48,7 +48,6 @@
 
         const { useState, useEffect, useMemo, useRef, memo } = React;
         
-        // 安全地獲取 Recharts 對象
         const RechartsObj = window.Recharts || {};
         const { 
             PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, 
@@ -984,7 +983,7 @@
             const handleDeleteSeries = (s) => { if (confirm(`確定要刪除系列「${s}」嗎？`)) { setAppSettings(prev => ({...prev, customSeries: prev.customSeries.filter(series => series !== s)})); } };
             const handleManualSyncSeries = () => { const allItems = [...items, ...catalogItems]; const validSeries = allItems.map(i => i.series ? i.series.trim() : '').filter(s => s !== ''); const usedSeries = new Set(validSeries); setAppSettings(prev => { const currentSeries = prev.customSeries || []; const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s)); if (newSeries.length > 0) { alert(`已同步 ${newSeries.length} 個新系列！`); return { ...prev, customSeries: [...currentSeries, ...newSeries] }; } else { alert('目前沒有發現新系列。'); return prev; } }); };
             
-            // --- FIX: Improved Batch Import Logic ---
+            // --- FIX: Improved Batch Import Logic (Corrected Target: Catalog) ---
             const handleBulkImport = async () => { 
                 if (!importJson.trim()) {
                     alert("請輸入資料！");
@@ -1019,18 +1018,11 @@
                             'series': 'series', '系列': 'series', '版本': 'series',
                             'officialprice': 'officialPrice', '原價': 'officialPrice', '價格': 'officialPrice', '金額': 'officialPrice',
                             'image': 'image', '圖片': 'image', '圖': 'image', 'img': 'image',
-                            // Add fields for direct collection import
-                            'cost': 'acquiredPrice', '成本': 'acquiredPrice', '入手價': 'acquiredPrice', '購入價': 'acquiredPrice',
-                            'date': 'date', '日期': 'date', '收物日': 'date', '購買日': 'date',
-                            'note': 'note', '備註': 'note',
-                            'qty': 'quantity', '數量': 'quantity', 'count': 'quantity'
                         }; 
                         
                         const keys = cols.map(c => mapKey[c.toLowerCase()] || c); 
                         
                         if (!keys.includes('name')) {
-                            // Try to fallback: treat the whole line as name if only 1 column? 
-                            // Better to throw error with hint.
                             throw new Error(`找不到「名稱」欄位。\n偵測到的欄位: ${cols.join(', ')}\n請確保首行包含：名稱, 角色, 類型...`); 
                         } 
                         
@@ -1055,7 +1047,7 @@
                     
                     if (parsedData.length === 0) throw new Error("無有效資料"); 
                     
-                    // Update Settings
+                    // Update Settings (Add new types/series found in import)
                     const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== '')); 
                     const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== '')); 
                     setAppSettings(prev => { 
@@ -1070,37 +1062,46 @@
                         return changed ? next : prev; 
                     }); 
                     
-                    let count = 0; 
                     const timestamp = Date.now(); 
                     
-                    // Show processing message if many items
-                    if(parsedData.length > 50) alert(`正在處理 ${parsedData.length} 筆資料...`);
+                    // Prepare all items first
+                    const newItems = parsedData.map((item, i) => ({
+                        id: item.id || `imp_${timestamp}_${i}`, 
+                        name: item.name, 
+                        character: item.character || '其他', 
+                        type: item.type || '未分類', 
+                        series: item.series || '', 
+                        officialPrice: item.officialPrice || '', 
+                        image: item.image || null, 
+                        order: timestamp + i
+                    }));
 
-                    // Import to "Catalog" (Public/Templates)
-                    for (let i = 0; i < parsedData.length; i++) {
-                        const item = parsedData[i];
-                        const newItem = { 
-                            id: item.id || `imp_${timestamp}_${i}`, 
-                            name: item.name, 
-                            character: item.character || '其他', 
-                            type: item.type || '未分類', 
-                            series: item.series || '', 
-                            officialPrice: item.officialPrice || '', 
-                            image: item.image || null, 
-                            order: timestamp + i
-                        }; 
-                        
-                        // Use saveToCatalog
-                        if(isFirebaseInitialized) {
-                             await saveToCatalog(newItem);
-                        } else {
-                             await saveToCatalog(newItem); 
+                    // Batch Import Execution
+                    if (isFirebaseInitialized) {
+                        // Firebase Batch Write (Limit 500 per batch)
+                        const BATCH_SIZE = 400;
+                        for (let i = 0; i < newItems.length; i += BATCH_SIZE) {
+                            const chunk = newItems.slice(i, i + BATCH_SIZE);
+                            const batch = writeBatch(db);
+                            chunk.forEach(item => {
+                                const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/public/data/catalog`, item.id);
+                                batch.set(ref, item, { merge: true });
+                            });
+                            await batch.commit();
                         }
-                        count++; 
-                    } 
+                    } else {
+                        // Local State Batch Update (One-time update to prevent state thrashing)
+                        setCatalogItems(prev => {
+                            // Filter out exact ID duplicates if any, then append
+                            const existingIds = new Set(prev.map(i => i.id));
+                            const uniqueNewItems = newItems.filter(i => !existingIds.has(i.id));
+                            return getUniqueItems([...prev, ...uniqueNewItems]);
+                        });
+                    }
                     
-                    alert(`成功匯入 ${count} 筆資料至「週邊圖鑑」！`); 
+                    alert(`成功匯入 ${newItems.length} 筆資料至「週邊圖鑑」！`); 
                     setImportJson(''); 
+                    setActiveTab('templates'); // Switch to Templates tab
                 } catch (e) { 
                     console.error(e);
                     alert("匯入失敗: " + e.message); 

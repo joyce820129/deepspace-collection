@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>深空收藏艙 | 獵人週邊管理 (穩定修復版)</title>
+    <title>深空收藏艙 | 獵人週邊管理 (匯入增強版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -453,7 +453,7 @@
                 {settingsTab === 'filters_config' && (<div className="space-y-4 animate-fade-in"><p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p><div className="space-y-3">{['series', 'type', 'character', 'date'].map(key => (<label key={key} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.multiSelect?.[key]} onChange={() => toggleMultiSelect(key)} /><span className="text-sm font-medium">依{key==='series'?'系列':key==='type'?'類型':key==='character'?'角色':'收物日'} - 多選</span></label>))}</div></div>)}
                 {settingsTab === 'types' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} /><button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label><button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">{customTypes.map((t, index) => (<div key={t} draggable onDragStart={(e) => { dragTypeItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragTypeOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleTypeSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{t}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
                 {settingsTab === 'series' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增系列</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新系列名稱..." value={newSeriesInput} onKeyDown={(e) => e.key === 'Enter' && handleAddSeries()} onChange={e=>setNewSeriesInput(e.target.value)} /><button onClick={handleAddSeries} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前系列列表 (拖曳可排序)</label><button onClick={handleManualSyncSeries} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步系列</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100 min-h-[50px]">{customSeries.map((s, index) => (<div key={s} draggable onDragStart={(e) => { dragSeriesItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragSeriesOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleSeriesSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{s}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteSeries(s);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
-                {settingsTab === 'data' && (<div className="space-y-4 animate-fade-in"><div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800"><p className="font-bold mb-1">批次匯入：</p><p>貼上 Excel 或 JSON。匯入後將存入共用圖鑑。</p></div><textarea className="w-full h-32 p-3 border rounded-xl text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea><div className="flex gap-2"><button onClick={handleBulkImport} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 shadow-sm">匯入</button><button onClick={handleExportCatalog} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded hover:bg-gray-50">匯出</button></div><hr /><button onClick={handleRemoveDuplicates} className="w-full text-blue-600 border border-blue-200 py-3 rounded-xl hover:bg-blue-50 text-sm mb-2 font-bold flex items-center justify-center gap-2"><Icon name="Eraser" size={16}/> 清理重複資料 (本地)</button><button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-3 rounded-xl hover:bg-red-50 text-sm font-bold flex items-center justify-center gap-2"><Icon name="AlertTriangle" size={16}/> 清空本地快取資料</button></div>)}
+                {settingsTab === 'data' && (<div className="space-y-4 animate-fade-in"><div className="bg-blue-50 p-4 rounded-xl text-sm text-blue-800"><p className="font-bold mb-1">批次匯入：</p><p>貼上 Excel 或 JSON。匯入後將存入「我的收藏庫」。</p></div><textarea className="w-full h-32 p-3 border rounded-xl text-xs" value={importJson} onChange={e=>setImportJson(e.target.value)} placeholder="貼上內容..."></textarea><div className="flex gap-2"><button onClick={handleBulkImport} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 shadow-sm">匯入</button><button onClick={handleExportCatalog} className="flex-1 border border-gray-300 text-gray-600 py-2 rounded hover:bg-gray-50">匯出</button></div><hr /><button onClick={handleRemoveDuplicates} className="w-full text-blue-600 border border-blue-200 py-3 rounded-xl hover:bg-blue-50 text-sm mb-2 font-bold flex items-center justify-center gap-2"><Icon name="Eraser" size={16}/> 清理重複資料 (本地)</button><button onClick={handleResetData} className="w-full text-red-500 border border-red-200 py-3 rounded-xl hover:bg-red-50 text-sm font-bold flex items-center justify-center gap-2"><Icon name="AlertTriangle" size={16}/> 清空本地快取資料</button></div>)}
                 </div>
                 </div></div>
             );
@@ -984,7 +984,128 @@
             const handleDeleteSeries = (s) => { if (confirm(`確定要刪除系列「${s}」嗎？`)) { setAppSettings(prev => ({...prev, customSeries: prev.customSeries.filter(series => series !== s)})); } };
             const handleManualSyncSeries = () => { const allItems = [...items, ...catalogItems]; const validSeries = allItems.map(i => i.series ? i.series.trim() : '').filter(s => s !== ''); const usedSeries = new Set(validSeries); setAppSettings(prev => { const currentSeries = prev.customSeries || []; const newSeries = Array.from(usedSeries).filter(s => !currentSeries.includes(s)); if (newSeries.length > 0) { alert(`已同步 ${newSeries.length} 個新系列！`); return { ...prev, customSeries: [...currentSeries, ...newSeries] }; } else { alert('目前沒有發現新系列。'); return prev; } }); };
             
-            const handleBulkImport = async () => { if (!importJson.trim()) return; try { let parsedData = []; const text = importJson.trim(); if (text.startsWith('[')) { parsedData = JSON.parse(text); } else { const rows = text.split('\n').map(r=>r.trim()).filter(r=>r); const header = rows[0].toLowerCase(); const sep = header.includes('\t') ? '\t' : ','; const cols = rows[0].split(sep).map(s=>s.trim()); const mapKey = { 'name': 'name', '名稱': 'name', 'character': 'character', '角色': 'character', 'type': 'type', '類型': 'type', 'series': 'series', '系列': 'series', 'officialprice': 'officialPrice', '原價': 'officialPrice', 'image': 'image', '圖片': 'image' }; const keys = cols.map(c => mapKey[c.toLowerCase()] || c); if (!keys.includes('name')) throw new Error("缺少 'name' 或 '名稱' 欄位"); parsedData = rows.slice(1).map(row => { const vals = row.split(sep); let obj = {}; keys.forEach((k, i) => { if (vals[i]) obj[k] = vals[i].trim(); }); return obj; }).filter(o => o.name); } if (parsedData.length === 0) throw new Error("無有效資料"); const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== '')); const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== '')); setAppSettings(prev => { const currentTypes = prev.customTypes || []; const newTypesToAdd = Array.from(importedTypes).filter(t => !currentTypes.includes(t)); const currentSeries = prev.customSeries || []; const newSeriesToAdd = Array.from(importedSeries).filter(s => !currentSeries.includes(s)); let next = { ...prev }; let changed = false; if (newTypesToAdd.length > 0) { next.customTypes = [...currentTypes, ...newTypesToAdd]; changed = true; } if (newSeriesToAdd.length > 0) { next.customSeries = [...currentSeries, ...newSeriesToAdd]; changed = true; } return changed ? next : prev; }); let count = 0; const timestamp = Date.now(); let newItemsBatch = []; for (const item of parsedData) { const newItem = { id: item.id || `imp_${timestamp}_${count}`, name: item.name, character: item.character || '其他', type: item.type || '未分類', series: item.series || '', officialPrice: item.officialPrice || '', image: item.image || null, order: timestamp + count }; if(isFirebaseInitialized) { await saveToCatalog(newItem); } else { newItemsBatch.push(newItem); } count++; } if (!isFirebaseInitialized && newItemsBatch.length > 0) { setCatalogItems(prev => getUniqueItems([...prev, ...newItemsBatch])); } alert(`匯入成功 ${parsedData.length} 筆`); setImportJson(''); } catch (e) { alert("匯入失敗: " + e.message); } };
+            // --- FIX: Improved Batch Import Logic ---
+            const handleBulkImport = async () => { 
+                if (!importJson.trim()) {
+                    alert("請輸入資料！");
+                    return;
+                }
+                
+                try { 
+                    let parsedData = []; 
+                    const text = importJson.trim(); 
+                    
+                    if (text.startsWith('[')) { 
+                        try {
+                            parsedData = JSON.parse(text); 
+                        } catch(e) {
+                            throw new Error("JSON 格式錯誤，請檢查內容。");
+                        }
+                    } else { 
+                        // Enhanced CSV/Excel Parsing
+                        const rows = text.split('\n').map(r=>r.trim()).filter(r=>r); 
+                        if(rows.length < 2) throw new Error("資料格式錯誤或行數不足");
+
+                        // Auto-detect separator
+                        const firstLine = rows[0];
+                        const sep = firstLine.includes('\t') ? '\t' : ',';
+                        
+                        const cols = firstLine.split(sep).map(s=>s.trim().replace(/^"|"$/g, '')); // Remove quotes
+                        
+                        const mapKey = { 
+                            'name': 'name', '名稱': 'name', '商品名稱': 'name', '品名': 'name', '名字': 'name',
+                            'character': 'character', '角色': 'character', '男主': 'character',
+                            'type': 'type', '類型': 'type', '種類': 'type', '周邊類型': 'type',
+                            'series': 'series', '系列': 'series', '版本': 'series',
+                            'officialprice': 'officialPrice', '原價': 'officialPrice', '價格': 'officialPrice', '金額': 'officialPrice',
+                            'image': 'image', '圖片': 'image', '圖': 'image', 'img': 'image',
+                            // Add fields for direct collection import
+                            'cost': 'acquiredPrice', '成本': 'acquiredPrice', '入手價': 'acquiredPrice', '購入價': 'acquiredPrice',
+                            'date': 'date', '日期': 'date', '收物日': 'date', '購買日': 'date',
+                            'note': 'note', '備註': 'note',
+                            'qty': 'quantity', '數量': 'quantity', 'count': 'quantity'
+                        }; 
+                        
+                        const keys = cols.map(c => mapKey[c.toLowerCase()] || c); 
+                        
+                        if (!keys.includes('name')) {
+                            // Try to fallback: treat the whole line as name if only 1 column? 
+                            // Better to throw error with hint.
+                            throw new Error(`找不到「名稱」欄位。\n偵測到的欄位: ${cols.join(', ')}\n請確保首行包含：名稱, 角色, 類型...`); 
+                        } 
+                        
+                        parsedData = rows.slice(1).map(row => { 
+                            // Robust splitting handling quotes if comma separated
+                            let vals;
+                            if (sep === ',') {
+                                // Simple regex for CSV splitting (handles basic quotes)
+                                vals = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || row.split(',');
+                                vals = vals.map(v => v.replace(/^"|"$/g, '').trim());
+                            } else {
+                                vals = row.split(sep).map(v => v.trim());
+                            }
+                            
+                            let obj = {}; 
+                            keys.forEach((k, i) => { 
+                                if (vals[i]) obj[k] = vals[i]; 
+                            }); 
+                            return obj; 
+                        }).filter(o => o.name); 
+                    } 
+                    
+                    if (parsedData.length === 0) throw new Error("無有效資料"); 
+                    
+                    // Update Settings
+                    const importedTypes = new Set(parsedData.map(i => i.type).filter(t => t && t.trim() !== '')); 
+                    const importedSeries = new Set(parsedData.map(i => i.series).filter(s => s && s.trim() !== '')); 
+                    setAppSettings(prev => { 
+                        const currentTypes = prev.customTypes || []; 
+                        const newTypesToAdd = Array.from(importedTypes).filter(t => !currentTypes.includes(t)); 
+                        const currentSeries = prev.customSeries || []; 
+                        const newSeriesToAdd = Array.from(importedSeries).filter(s => !currentSeries.includes(s)); 
+                        let next = { ...prev }; 
+                        let changed = false; 
+                        if (newTypesToAdd.length > 0) { next.customTypes = [...currentTypes, ...newTypesToAdd]; changed = true; } 
+                        if (newSeriesToAdd.length > 0) { next.customSeries = [...currentSeries, ...newSeriesToAdd]; changed = true; } 
+                        return changed ? next : prev; 
+                    }); 
+                    
+                    let count = 0; 
+                    const timestamp = Date.now(); 
+                    
+                    // Show processing message if many items
+                    if(parsedData.length > 50) alert(`正在處理 ${parsedData.length} 筆資料...`);
+
+                    // Import to "My Collection" (Private) instead of Catalog (Public) to avoid permission issues
+                    for (let i = 0; i < parsedData.length; i++) {
+                        const item = parsedData[i];
+                        const newItem = { 
+                            id: item.id || `imp_${timestamp}_${i}`, 
+                            name: item.name, 
+                            character: item.character || '其他', 
+                            type: item.type || '未分類', 
+                            series: item.series || '', 
+                            officialPrice: item.officialPrice || '', 
+                            image: item.image || null, 
+                            order: timestamp + i,
+                            // Default fields for collection items
+                            date: new Date().toISOString().split('T')[0],
+                            quantity: 1,
+                            currency: 'NT$'
+                        }; 
+                        
+                        await saveToCollection(newItem);
+                        count++; 
+                    } 
+                    
+                    alert(`成功匯入 ${count} 筆資料至「我的收藏庫」！`); 
+                    setImportJson(''); 
+                } catch (e) { 
+                    console.error(e);
+                    alert("匯入失敗: " + e.message); 
+                } 
+            };
+
             const handleExportCatalog = () => { const dataStr = JSON.stringify(catalogItems, null, 2); setImportJson(dataStr); };
             const handleResetData = () => { if (confirm("確定要清空本地資料嗎？此操作無法復原。")) { setItems([]); setCatalogItems([]); setDailyFees({}); safeLocalStorage.removeItem('deepspace_items_v7_local'); safeLocalStorage.removeItem('deepspace_catalog_v7_local'); safeLocalStorage.removeItem('deepspace_daily_fees_local'); alert("已清空。"); } };
             

@@ -479,7 +479,7 @@
         // --- Batch Manage Bar for Collection (Updated) ---
         const CollectionBatchBar = ({ selectionCount, onCancel, onAddToSet, onRemoveFromSet, onDelete }) => {
             return (
-                <div className="fixed bottom-8 right-8 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl z-40 flex flex-col gap-3 animate-fade-in min-w-[200px]">
+                <div className="fixed bottom-24 md:bottom-8 right-4 md:right-8 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl z-40 flex flex-col gap-3 animate-fade-in min-w-[200px]">
                     <div className="flex justify-between items-center border-b border-slate-700 pb-2">
                         <span className="font-bold text-sm">已選 {selectionCount} 項</span>
                         <button onClick={onCancel} className="text-xs text-slate-400 hover:text-white"><Icon name="X" size={16}/></button>
@@ -505,14 +505,14 @@
                 character: '沈星回',
                 costPrice: '',
                 salePrice: '',
-                officialPrice: '', 
+                officialPrice: '', 
                 buyDate: new Date().toISOString().split('T')[0],
                 sellDate: '',
-                status: 'selling', 
+                status: 'selling', 
                 image: '',
                 note: '',
                 quantity: 1, // Add quantity
-                setName: ''  // Add setName for batch grouping
+                setName: ''  // Add setName for batch grouping
             });
             const [searchMode, setSearchMode] = useState(false);
             const [searchTerm, setSearchTerm] = useState('');
@@ -524,10 +524,10 @@
             const [selectedCatalogIds, setSelectedCatalogIds] = useState(new Set());
             const [batchEditMode, setBatchEditMode] = useState(false);
             const [batchItems, setBatchItems] = useState([]);
-            const [batchCommonData, setBatchCommonData] = useState({ 
-                status: 'selling', 
-                buyDate: new Date().toISOString().split('T')[0], 
-                sellDate: '', 
+            const [batchCommonData, setBatchCommonData] = useState({ 
+                status: 'selling', 
+                buyDate: new Date().toISOString().split('T')[0], 
+                sellDate: '', 
                 note: '',
                 setName: '' // Allow grouping new trades into a set
             });
@@ -576,7 +576,7 @@
                         name: item.name,
                         character: item.character,
                         image: item.image || '',
-                        officialPrice: item.officialPrice || '' 
+                        officialPrice: item.officialPrice || '' 
                     }));
                     setSearchMode(false);
                 }
@@ -1469,6 +1469,17 @@
                                         onRemoveFromSet={handleBatchRemoveFromSet}
                                         onDelete={handleBatchDeleteCollection} 
                                     />
+                                )}
+                                
+                                {/* Batch Mode Toggle FAB */}
+                                {!isCollectionBatchMode && (
+                                    <button 
+                                        onClick={toggleCollectionBatchMode}
+                                        className="fixed bottom-24 md:bottom-10 right-6 bg-slate-900 text-white p-4 rounded-full shadow-2xl hover:bg-slate-800 z-30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
+                                        title="批量管理"
+                                    >
+                                        <Icon name="CheckSquare" size={24} />
+                                    </button>
                                 )}
 
                                 {/* Set Name Modal */}

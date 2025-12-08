@@ -236,6 +236,7 @@
                                     {!isBatchMode && (
                                         <button 
                                             type="button"
+                                            // FIX: Stop propagation to prevent drag start
                                             onMouseDown={(e) => e.stopPropagation()} 
                                             onClick={(e)=>{
                                                 e.preventDefault();
@@ -265,7 +266,8 @@
                         {isBatchMode && (<div className={`absolute inset-0 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500/20' : 'bg-black/0 group-hover:bg-black/5'}`}><div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white/80 border-gray-300'}`}>{isSelected && <Icon name="Check" size={18} />}</div></div>)}
                         {!isBatchMode && (
                             <>
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                {/* FIX: Add pointer-events-none to overlay to prevent it blocking clicks */}
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none" />
                                 <button 
                                     type="button"
                                     onMouseDown={(e) => e.stopPropagation()} 
@@ -359,6 +361,7 @@
                                     type="button"
                                     onMouseDown={(e) => e.stopPropagation()} 
                                     onClick={(e)=>{
+                                        e.preventDefault();
                                         e.stopPropagation(); 
                                         openModal(trade)
                                     }} 
@@ -370,6 +373,7 @@
                                     type="button"
                                     onMouseDown={(e) => e.stopPropagation()} 
                                     onClick={(e)=>{
+                                        e.preventDefault();
                                         e.stopPropagation(); 
                                         deleteTrade(trade.id)
                                     }} 
@@ -404,6 +408,7 @@
                                 type="button"
                                 onMouseDown={(e) => e.stopPropagation()} 
                                 onClick={(e)=>{
+                                    e.preventDefault();
                                     e.stopPropagation(); 
                                     markAsSold(trade)
                                 }} 
@@ -416,70 +421,6 @@
                 </div>
             );
         });
-
-        // --- NEW: Restored ItemModal Component ---
-        const ItemModal = ({ isOpen, onClose, formData, setFormData, onSave, mode, characters, types, series }) => {
-            if (!isOpen) return null;
-
-            return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto flex flex-col shadow-2xl">
-                        <div className="flex justify-between items-center border-b pb-3 flex-shrink-0">
-                            <h3 className="text-lg font-bold text-gray-800">{mode === 'catalog' ? '編輯圖鑑' : '編輯收藏'}</h3>
-                            <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button>
-                        </div>
-                        
-                        <div className="flex-1 overflow-y-auto space-y-4 p-1">
-                            {/* Image & Basic Info */}
-                            <div className="flex gap-4">
-                                <div className="w-24 h-24 bg-gray-100 rounded-xl overflow-hidden flex-shrink-0 border relative group">
-                                    {formData.image ? <img src={formData.image} className="w-full h-full object-cover"/> : <Icon name="Image" className="text-gray-300 m-auto mt-8" size={32}/>}
-                                </div>
-                                <div className="flex-1 space-y-2">
-                                    <div><label className="text-xs text-gray-500 font-bold ml-1">圖片連結</label><input className="w-full border p-2 rounded-lg text-xs bg-gray-50 focus:bg-white transition-colors" placeholder="貼上圖片 URL..." value={formData.image || ''} onChange={e => setFormData({ ...formData, image: e.target.value })} /></div>
-                                    <div><label className="text-xs text-gray-500 font-bold ml-1">名稱</label><input className="w-full border p-2 rounded-lg text-sm font-bold" placeholder="物品名稱" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} /></div>
-                                </div>
-                            </div>
-
-                            {/* Classification */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <div><label className="text-xs text-gray-500 font-bold ml-1">角色</label><select className="w-full border p-2 rounded-lg bg-white" value={formData.character} onChange={e => setFormData({ ...formData, character: e.target.value })}>{characters.map(c => <option key={c}>{c}</option>)}</select></div>
-                                <div><label className="text-xs text-gray-500 font-bold ml-1">類型</label><div className="relative"><input list="types" className="w-full border p-2 rounded-lg" value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value })} /><datalist id="types">{types.map(t => <option key={t} value={t} />)}</datalist></div></div>
-                                <div><label className="text-xs text-gray-500 font-bold ml-1">系列</label><div className="relative"><input list="series" className="w-full border p-2 rounded-lg" value={formData.series} onChange={e => setFormData({ ...formData, series: e.target.value })} /><datalist id="series">{series.map(s => <option key={s} value={s} />)}</datalist></div></div>
-                                <div><label className="text-xs text-gray-500 font-bold ml-1">原價 (r)</label><input type="text" className="w-full border p-2 rounded-lg" value={formData.officialPrice} onChange={e => setFormData({ ...formData, officialPrice: e.target.value })} /></div>
-                            </div>
-
-                            {/* Collection Specifics */}
-                            {mode === 'collection' && (
-                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3">
-                                    <h4 className="font-bold text-sm text-slate-700 flex items-center gap-2"><Icon name="Tag" size={14}/> 收藏資訊</h4>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div><label className="text-xs text-gray-500 font-bold ml-1">入手價格</label><div className="flex"><input type="number" className="w-full border-y border-l p-2 rounded-l-lg" value={formData.acquiredPrice} onChange={e => setFormData({ ...formData, acquiredPrice: e.target.value })} /><select className="border rounded-r-lg bg-white px-1 text-xs font-bold text-gray-600" value={formData.currency} onChange={e => setFormData({ ...formData, currency: e.target.value })}><option value="NT$">NT$</option><option value="r">r</option></select></div></div>
-                                        <div><label className="text-xs text-gray-500 font-bold ml-1">數量</label><input type="number" className="w-full border p-2 rounded-lg" value={formData.quantity} onChange={e => setFormData({ ...formData, quantity: e.target.value })} /></div>
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1"><input type="checkbox" id="isPreorder" className="rounded text-blue-600" checked={formData.isPreorder} onChange={e => setFormData({ ...formData, isPreorder: e.target.checked })} /><label htmlFor="isPreorder" className="text-sm font-bold text-gray-700 select-none cursor-pointer">這是預購商品</label></div>
-                                        {formData.isPreorder ? (
-                                            <div><label className="text-xs text-orange-500 font-bold ml-1">預計出貨日</label><input type="date" className="w-full border p-2 rounded-lg border-orange-200 bg-orange-50" value={formData.shippingDate} onChange={e => setFormData({ ...formData, shippingDate: e.target.value })} /></div>
-                                        ) : (
-                                            <div><label className="text-xs text-gray-500 font-bold ml-1">收物日期</label><input type="date" className="w-full border p-2 rounded-lg" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} /></div>
-                                        )}
-                                    </div>
-                                    <div><label className="text-xs text-gray-500 font-bold ml-1">小組合 (Set) 名稱</label><input className="w-full border p-2 rounded-lg text-sm" placeholder="選填 (例如: 痛包組)" value={formData.setName || ''} onChange={e => setFormData({ ...formData, setName: e.target.value })} /></div>
-                                </div>
-                            )}
-
-                            <div><label className="text-xs text-gray-500 font-bold ml-1">備註</label><textarea className="w-full border p-2 rounded-lg h-20 text-sm" value={formData.note} onChange={e => setFormData({ ...formData, note: e.target.value })} /></div>
-                        </div>
-
-                        <div className="pt-2 border-t flex gap-2">
-                            <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 font-bold">取消</button>
-                            <button onClick={() => onSave()} className="flex-1 py-3 rounded-xl bg-slate-900 text-white hover:bg-slate-800 font-bold shadow-lg">儲存</button>
-                        </div>
-                    </div>
-                </div>
-            );
-        };
 
         const BatchAddModal = ({ isOpen, onClose, selectedItems, onSave }) => {
             const [commonDate, setCommonDate] = useState(new Date().toISOString().split('T')[0]);
@@ -734,7 +675,7 @@
                     };
                     
                     if (selectionSource === 'collection') {
-                          setData(prev => ({
+                         setData(prev => ({
                             ...prev,
                             ...commonData,
                             costPrice: item.acquiredPrice || '',
@@ -785,10 +726,11 @@
                     sellDate: batchCommonData.sellDate,
                     note: batchCommonData.note,
                     quantity: item.quantity,
-                    setName: batchCommonData.setName
+                    setName: batchCommonData.setName,
+                    originalCollectionId: selectionSource === 'collection' ? item.id : null
                 }));
 
-                onSave(tradesToAdd);
+                onSave(tradesToAdd, selectionSource === 'collection');
             };
 
             const toggleChar = (val) => setFilterChar(val === filterChar && val !== 'all' ? 'all' : val);
@@ -908,8 +850,8 @@
                                 </div>
                                 
                                 <div className="space-y-2 mb-2 flex-shrink-0">
-                                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide"><button onClick={()=>toggleChar('all')} className={`px-2 py-1 text-xs rounded-full border whitespace-nowrap ${filterChar==='all'?'bg-slate-800 text-white':'bg-white text-gray-500'}`}>全部角色</button>{CHARACTERS.map(c=><button key={c} onClick={()=>toggleChar(c)} className={`px-2 py-1 text-xs rounded-full border whitespace-nowrap ${filterChar===c?'bg-blue-100 text-blue-700 border-blue-300':'bg-white text-gray-500'}`}>{c}</button>)}</div>
-                                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide"><button onClick={()=>toggleType('all')} className={`px-2 py-1 text-xs rounded-full border whitespace-nowrap ${filterType==='all'?'bg-slate-800 text-white':'bg-white text-gray-500'}`}>全部類型</button>{customTypes.map(t=><button key={t} onClick={()=>toggleType(t)} className={`px-2 py-1 text-xs rounded-full border whitespace-nowrap ${filterType===t?'bg-blue-100 text-blue-700 border-blue-300':'bg-white text-gray-500'}`}>{t}</button>)}</div>
+                                    <ScrollableTags items={CHARACTERS} selected={filterChar} onToggle={toggleChar} labelAll="全部角色" />
+                                    <ScrollableTags items={customTypes || DEFAULT_MERCH_TYPES} selected={filterType} onToggle={toggleType} labelAll="全部類型" />
                                 </div>
 
                                 <div className="flex items-center justify-between mb-2 px-1">
@@ -1327,72 +1269,7 @@
             };
             
             const openModal = (item = null, template = null, mode = 'collection') => { setModalMode(mode); const defaultData = { id: Date.now().toString(), name: '', character: '沈星回', type: '徽章', series: '', officialPrice: '', acquiredPrice: '', date: new Date().toISOString().split('T')[0], image: null, note: '', quantity: 1, isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency }; if (mode === 'catalog' && item) { setEditingItem(item); setFormData({ ...item }); } else if (mode === 'collection') { if (item) { setEditingItem(item); setFormData({ ...item, quantity: (item.quantity || 1), isPreorder: item.isPreorder || false, shippingDate: item.shippingDate || '', currency: item.currency || (item.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency), setName: item.setName || '' }); } else if (template) { setEditingItem(null); setFormData({ ...defaultData, ...template, quantity: 1, id: Date.now().toString(), isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency, acquiredPrice: '', setName: '' }); } else { setEditingItem(null); setFormData(defaultData); } } setIsModalOpen(true); };
-            const handleSave = async (customData = null, shouldDeduct = false) => { 
-                const dataToSave = customData || formData;
-                if (!dataToSave.name) return alert("請輸入名稱"); 
-                
-                const timestamp = Date.now(); 
-                
-                // Add new types/series to settings
-                setAppSettings(prev => { 
-                    let next = { ...prev }; 
-                    let changed = false; 
-                    if (dataToSave.type && !prev.customTypes.includes(dataToSave.type)) { next.customTypes = [...prev.customTypes, dataToSave.type]; changed = true; } 
-                    if (dataToSave.series && !prev.customSeries.includes(dataToSave.series)) { next.customSeries = [...prev.customSeries, dataToSave.series]; changed = true; } 
-                    return changed ? next : prev; 
-                }); 
-
-                const qty = Math.max(1, parseInt(dataToSave.quantity) || 1); 
-                const finalAcquiredPrice = dataToSave.acquiredPrice === '' || dataToSave.acquiredPrice === undefined || dataToSave.acquiredPrice === null ? 0 : dataToSave.acquiredPrice; 
-                
-                if (modalMode === 'catalog') { 
-                    const itemToSave = { ...dataToSave }; 
-                    // Clean up collection-specific fields for catalog
-                    delete itemToSave.quantity; delete itemToSave.acquiredPrice; delete itemToSave.date; delete itemToSave.note; delete itemToSave.isPreorder; delete itemToSave.shippingDate; delete itemToSave.currency; delete itemToSave.setName; 
-                    await saveToCatalog(itemToSave); 
-                } else if (isTradeModalOpen) {
-                    // Handling Trade Save
-                      const tradeToSave = {
-                        ...dataToSave,
-                        // Ensure trade specific fields are correct if needed
-                      };
-                      await handleSaveTrade(tradeToSave); // Use existing handleSaveTrade
-                      
-                      // Handle Collection Deduction
-                      if (shouldDeduct && dataToSave.originalCollectionId) {
-                          const originalItem = items.find(i => i.id === dataToSave.originalCollectionId);
-                          if (originalItem) {
-                              const newQty = (originalItem.quantity || 1) - (dataToSave.quantity || 1);
-                              if (newQty > 0) {
-                                  // Update quantity
-                                  if(user && isFirebaseInitialized) {
-                                       await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, originalItem.id), { ...originalItem, quantity: newQty });
-                                  } else {
-                                       setItems(prev => prev.map(i => i.id === originalItem.id ? { ...i, quantity: newQty } : i));
-                                  }
-                              } else {
-                                  // Remove item if quantity becomes 0 or less
-                                  if(confirm(`收藏庫中的「${originalItem.name}」數量將歸零，是否同時刪除該收藏？`)) {
-                                       await deleteFromCollection(originalItem.id);
-                                  }
-                              }
-                          }
-                      }
-                      return; // Exit early as handleSaveTrade handles closing
-                } else { 
-                    // Collection Save
-                    const itemToSave = { ...dataToSave, acquiredPrice: finalAcquiredPrice, quantity: qty }; 
-                    if (editingItem) { 
-                        await saveToCollection(itemToSave); 
-                    } else { 
-                        const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0; 
-                        const newItem = { ...itemToSave, id: timestamp.toString(), order: maxOrder + 1 }; 
-                        await saveToCollection(newItem); 
-                    } 
-                } 
-                setIsModalOpen(false); 
-            };
-            
+            const handleSave = async () => { if (!formData.name) return alert("請輸入名稱"); const timestamp = Date.now(); setAppSettings(prev => { let next = { ...prev }; let changed = false; if (formData.type && !prev.customTypes.includes(formData.type)) { next.customTypes = [...prev.customTypes, formData.type]; changed = true; } if (formData.series && !prev.customSeries.includes(formData.series)) { next.customSeries = [...prev.customSeries, formData.series]; changed = true; } return changed ? next : prev; }); const qty = Math.max(1, parseInt(formData.quantity) || 1); const finalAcquiredPrice = formData.acquiredPrice === '' || formData.acquiredPrice === undefined || formData.acquiredPrice === null ? 0 : formData.acquiredPrice; if (modalMode === 'catalog') { const itemToSave = { ...formData }; delete itemToSave.quantity; delete itemToSave.acquiredPrice; delete itemToSave.date; delete itemToSave.note; delete itemToSave.isPreorder; delete itemToSave.shippingDate; delete itemToSave.currency; delete itemToSave.setName; await saveToCatalog(itemToSave); } else { const itemToSave = { ...formData, acquiredPrice: finalAcquiredPrice, quantity: qty }; if (editingItem) { await saveToCollection(itemToSave); } else { const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0; const newItem = { ...itemToSave, id: timestamp.toString(), order: maxOrder + 1 }; await saveToCollection(newItem); } } setIsModalOpen(false); };
             const handleKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); handleSave(); } };
             const handleDragStart = (e, position) => { dragItem.current = position; };
             const handleDragEnter = (e, position) => { dragOverItem.current = position; };
@@ -1409,24 +1286,10 @@
                 if (!tradesToProcess[0].name) return alert("請輸入物品名稱");
                 if (user && isFirebaseInitialized) {
                     const batch = writeBatch(db);
-                    tradesToProcess.forEach(t => { 
-                        // Remove temporary fields not needed in DB
-                        const { originalCollectionId, ...cleanTrade } = t;
-                        const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, t.id); 
-                        batch.set(ref, cleanTrade); 
-                    });
+                    tradesToProcess.forEach(t => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, t.id); batch.set(ref, t); });
                     await batch.commit();
                 } else {
-                    setTrades(prev => { 
-                        const ids = new Set(tradesToProcess.map(t => t.id)); 
-                        const filtered = prev.filter(t => !ids.has(t.id)); 
-                        // Clean locally too
-                        const cleanTrades = tradesToProcess.map(t => {
-                             const { originalCollectionId, ...rest } = t;
-                             return rest;
-                        });
-                        return [...cleanTrades, ...filtered]; 
-                    });
+                    setTrades(prev => { const ids = new Set(tradesToProcess.map(t => t.id)); const filtered = prev.filter(t => !ids.has(t.id)); return [...tradesToProcess, ...filtered]; });
                 }
                 setIsTradeModalOpen(false);
             };
@@ -1634,37 +1497,22 @@
                                             // 運費包手按鈕 (Generic for day)
                                             const feeControls = (setKey) => (
                                                 <div className="flex items-center gap-2">
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); 
-                                                                                        let val = dailyFees[setKey];
-                                                                                        if (typeof val === 'number') val = { shipping: val };
-                                                                                        setEditingFeeValue(val?.shipping || ''); 
-                                                                                    }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${(() => {
-                                                                                        let val = dailyFees[setKey];
-                                                                                        if (typeof val === 'number') val = { shipping: val };
-                                                                                        return (val?.shipping || 0) > 0;
-                                                                                    })() ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{(() => {
-                                                                                        let val = dailyFees[setKey];
-                                                                                        if (typeof val === 'number') val = { shipping: val };
-                                                                                        const s = val?.shipping || 0;
-                                                                                        return s > 0 ? `運費 ${s}` : '+ 運費';
-                                                                                    })()} <Icon name="Truck" size={10} /></button>)}
-                                                    
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); 
-                                                                                        let val = dailyFees[setKey];
-                                                                                        if (typeof val === 'number') val = { shipping: val, handling: 0 };
-                                                                                        setEditingFeeValue(val?.handling || ''); 
-                                                                                    }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${(() => {
-                                                                                        let val = dailyFees[setKey];
-                                                                                        if (typeof val === 'number') val = { shipping: val, handling: 0 };
-                                                                                        return (val?.handling || 0) > 0;
-                                                                                    })() ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{(() => {
-                                                                                        let val = dailyFees[setKey];
-                                                                                        if (typeof val === 'number') val = { shipping: val, handling: 0 };
-                                                                                        const h = val?.handling || 0;
-                                                                                        return h > 0 ? `包手 ${h}` : '+ 包手';
-                                                                                    })()} <Icon name="Package" size={10} /></button>)}
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); setEditingFeeValue(dailyFees[setKey]?.shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.shipping > 0 ? `運費 ${dailyFees[setKey].shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); setEditingFeeValue(dailyFees[setKey]?.handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.handling > 0 ? `包手 ${dailyFees[setKey].handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
                                                 </div>
                                             );
+
+                                            // Group by 'setName'
+                                            const sets = {};
+                                            const loose = [];
+                                            gItems.forEach(i => {
+                                                if (i.setName && i.setName.trim() !== '') {
+                                                    if (!sets[i.setName]) sets[i.setName] = [];
+                                                    sets[i.setName].push(i);
+                                                } else {
+                                                    loose.push(i);
+                                                }
+                                            });
 
                                             dayTotalDisplay = (
                                                 <div className="flex items-center gap-2">
@@ -1678,9 +1526,7 @@
                                                 <React.Fragment>
                                                     {Object.entries(sets).map(([setName, setItems], idx) => {
                                                         const setKey = `${gName}_${setName}`;
-                                                        let setFee = dailyFees[setKey];
-                                                        if (typeof setFee === 'number') setFee = { shipping: setFee, handling: 0 };
-                                                        setFee = setFee || { shipping: 0, handling: 0 };
+                                                        const setFee = dailyFees[setKey] || { shipping: 0, handling: 0 };
                                                         
                                                         // Calculate Set Total (Items + Fees)
                                                         const setItemTotal = setItems.reduce((sum, item) => {
@@ -1986,8 +1832,8 @@
 
                     {isSettingsOpen && <SettingsModal isOpen={isSettingsOpen} onClose={()=>setIsSettingsOpen(false)} appSettings={appSettings} setAppSettings={setAppSettings} importJson={importJson} setImportJson={setImportJson} handleBulkImport={handleBulkImport} handleExportCatalog={handleExportCatalog} handleResetData={handleResetData} handleAddType={handleAddType} handleDeleteType={handleDeleteType} newTypeInput={newTypeInput} setNewTypeInput={setNewTypeInput} handleManualSyncTypes={handleManualSyncTypes} handleAddSeries={handleAddSeries} handleDeleteSeries={handleDeleteSeries} newSeriesInput={newSeriesInput} setNewSeriesInput={setNewSeriesInput} handleManualSyncSeries={handleManualSyncSeries} handleRemoveDuplicates={handleRemoveDuplicates} />}
                     {isBatchModalOpen && <BatchAddModal isOpen={isBatchModalOpen} onClose={() => setIsBatchModalOpen(false)} selectedItems={catalogItems.filter(i => batchSelection.has(i.id))} onSave={handleBatchSave} />}
-                    
-                    {/* Updated TradeModal with Collection Selection Support */}
+                    {isModalOpen && (<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"><div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto"><div className="flex justify-between items-center"><h3 className="font-bold">{modalMode === 'catalog' ? (editingItem ? '編輯公開圖鑑' : '新增公開圖鑑') : (editingItem ? '編輯我的收藏' : '加入我的收藏')}</h3><button onClick={()=>setIsModalOpen(false)} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button></div><div onClick={()=>fileInputRef.current.click()} className="w-32 h-32 mx-auto border-2 border-dashed rounded flex items-center justify-center cursor-pointer">{formData.image?<img src={formData.image} className="w-full h-full object-cover"/>:<Icon name="Upload"/>}<input type="file" ref={fileInputRef} className="hidden" onChange={(e)=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=()=>setFormData(p=>({...p,image:r.result}));r.readAsDataURL(f);}}}/></div><input type="text" className="w-full border p-2 rounded mt-2 text-xs text-gray-500" placeholder="或貼上圖片連結..." value={formData.image || ''} onChange={e=>setFormData({...formData, image: e.target.value})} /><input className="w-full border p-2 rounded mt-2" placeholder="名稱" value={formData.name} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,name:e.target.value})} autoFocus={!editingItem && !formData.name} /><div className="grid grid-cols-2 gap-2 mt-2"><select className="border p-2 rounded" value={formData.character} onChange={e=>setFormData({...formData,character:e.target.value})}>{CHARACTERS.map(c=><option key={c}>{c}</option>)}</select><input className="border p-2 rounded" placeholder="系列" value={formData.series} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,series:e.target.value})}/></div><div className="grid grid-cols-2 gap-2 mt-2"><input className="border p-2 rounded" list="types-list" placeholder="類型" value={formData.type} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,type:e.target.value})}/><datalist id="types-list">{appSettings.customTypes.map(t=><option key={t} value={t}/>)}</datalist><input type="text" className="border p-2 rounded" placeholder="原價" value={formData.officialPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,officialPrice:e.target.value})}/></div>{modalMode === 'collection' && (<><hr className="border-gray-100 mt-2" /><div className="flex items-center gap-2 mb-2 mt-2"><input type="checkbox" id="isPreorder" checked={formData.isPreorder || false} onChange={e=>setFormData({...formData, isPreorder: e.target.checked})} className="w-4 h-4 text-blue-600 rounded"/><label htmlFor="isPreorder" className="text-sm font-bold text-gray-700">預購商品</label></div><div className="flex items-center gap-2 mb-2"><label className="text-sm">數量:</label><input type="number" className="border p-1 w-16 rounded" value={formData.quantity} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,quantity:e.target.value})}/></div><div className="grid grid-cols-2 gap-2"><div className="relative"><input type="number" className="border p-2 rounded w-full pr-12" placeholder="入手價格" value={formData.acquiredPrice} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,acquiredPrice:e.target.value})} autoFocus={!editingItem && formData.name}/><select className="absolute right-1 top-1 bottom-1 bg-gray-100 border-none text-xs rounded focus:ring-0" value={formData.currency || (formData.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency)} onChange={e=>setFormData({...formData, currency: e.target.value})}><option value="NT$">NT$</option><option value="r">r</option></select></div>{formData.isPreorder ? (<div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-orange-500">預計出貨</span><input type="date" className="border p-2 rounded w-full border-orange-300" value={formData.shippingDate} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,shippingDate:e.target.value})}/></div>) : (<div className="relative"><span className="absolute -top-2 left-2 bg-white px-1 text-[10px] text-gray-500">收物日期</span><input type="date" className="border p-2 rounded w-full" value={formData.date} onKeyDown={handleKeyDown} onChange={e=>setFormData({...formData,date:e.target.value})}/></div>)}</div><textarea className="w-full border p-2 rounded h-20 mt-2" placeholder="備註..." value={formData.note} onChange={e=>setFormData({...formData,note:e.target.value})}/></>)}<div className="flex gap-2 mt-4">{editingItem && modalMode === 'collection' && (<button onClick={async () => {if(confirm('確定要刪除此收藏嗎？')) {await deleteFromCollection(editingItem.id);setIsModalOpen(false);}}} className="bg-red-50 text-red-500 border border-red-200 px-4 rounded hover:bg-red-100"><Icon name="Trash2" size={18} /></button>)}<button onClick={handleSave} className="flex-1 bg-slate-900 text-white py-3 rounded hover:bg-slate-800">{modalMode === 'catalog' ? '更新圖鑑 (公開)' : '儲存收藏'}</button></div></div></div>)}
+
                     {isTradeModalOpen && <TradeModal isOpen={isTradeModalOpen} onClose={()=>setIsTradeModalOpen(false)} tradeItem={editingTrade} onSave={handleSaveTrade} catalogItems={catalogItems} collectionItems={items} customTypes={appSettings.customTypes} />}
 
                     <div className="md:hidden fixed bottom-0 w-full bg-white border-t p-2 flex justify-around z-40">
@@ -2005,7 +1851,3 @@
     </script>
 </body>
 </html>
-
-
-
-

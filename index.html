@@ -229,7 +229,6 @@
             const handleCardClick = (e) => {
                 if (isBatchMode && onToggleSelect) {
                     e.stopPropagation();
-                    // Pass all instance IDs for batch selection
                     onToggleSelect(stack.instances.map(i => i.id));
                 }
             };
@@ -1360,7 +1359,7 @@
             const availableSeries = useMemo(() => { const source = activeTab === 'collection' ? items : catalogItems; const series = new Set(source.map(i => i.series).filter(Boolean)); return (appSettings.customSeries || []).filter(s => series.has(s)).concat(Array.from(series).filter(s => !(appSettings.customSeries || []).includes(s))); }, [items, catalogItems, appSettings.customSeries, activeTab]);
             const availableDates = useMemo(() => { const dates = new Set(items.map(i => getEffectiveDate(i)).filter(Boolean)); return Array.from(dates).sort((a, b) => { return dateSortOrder === 'desc' ? new Date(b) - new Date(a) : new Date(a) - new Date(b); }); }, [items, dateSortOrder]);
             const preorderDates = useMemo(() => { const set = new Set(); items.forEach(i => { if (i.isPreorder && i.shippingDate) set.add(i.shippingDate); }); return set; }, [items]);
-            
+
             // --- UPDATED: Grouped Data Logic for Trade History ---
             const getTradeGroupedData = (tradeList) => {
                 const grouped = {};
@@ -1638,7 +1637,7 @@
                                                             </h3>
                                                             <div className="flex items-center gap-2">
                                                                 <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                                                                    <Icon name="Banknote" size={14}/>NT$ {Math.round(total).toLocaleString()}
+                                                                        <Icon name="Banknote" size={14}/>NT$ {Math.round(total).toLocaleString()}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -1649,17 +1648,17 @@
                                                                 const setTotal = setItems.reduce((sum, i) => sum + ((Number(i.salePrice) || 0) * (i.quantity || 1)), 0);
                                                                 return (
                                                                     <div key={setName} className="col-span-full bg-green-50/50 rounded-2xl border-2 border-dashed border-green-200 p-4 relative mt-2 mb-2">
-                                                                        <div className="absolute -top-3 left-4 flex items-center gap-2 flex-wrap">
-                                                                            <div className="bg-green-100 text-green-700 px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm border border-green-200">
-                                                                                <Icon name="Package" size={12} /> {setName} 
-                                                                                <span className="ml-1 text-green-600 border-l border-green-200 pl-1">NT${Math.round(setTotal).toLocaleString()}</span>
+                                                                            <div className="absolute -top-3 left-4 flex items-center gap-2 flex-wrap">
+                                                                                <div className="bg-green-100 text-green-700 px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm border border-green-200">
+                                                                                    <Icon name="Package" size={12} /> {setName} 
+                                                                                    <span className="ml-1 text-green-600 border-l border-green-200 pl-1">NT${Math.round(setTotal).toLocaleString()}</span>
+                                                                                </div>
                                                                             </div>
-                                                                        </div>
-                                                                        <div style={gridStyle} className="mt-2">
-                                                                            {setItems.map((trade) => (
-                                                                                <TradeCard key={trade.id} trade={trade} openModal={openTradeModal} deleteTrade={handleDeleteTrade} markAsSold={markAsSold} isBatchMode={isTradeBatchMode} isSelected={tradeBatchSelection.has(trade.id)} onToggleSelect={handleTradeBatchSelect} />
-                                                                            ))}
-                                                                        </div>
+                                                                            <div style={gridStyle} className="mt-2">
+                                                                                {setItems.map((trade) => (
+                                                                                    <TradeCard key={trade.id} trade={trade} openModal={openTradeModal} deleteTrade={handleDeleteTrade} markAsSold={markAsSold} isBatchMode={isTradeBatchMode} isSelected={tradeBatchSelection.has(trade.id)} onToggleSelect={handleTradeBatchSelect} />
+                                                                                ))}
+                                                                            </div>
                                                                     </div>
                                                                 );
                                                             })}
@@ -1793,5 +1792,3 @@
     </script>
 </body>
 </html>
-
-

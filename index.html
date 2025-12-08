@@ -1597,7 +1597,7 @@
                                             }, 0);
 
                                             const total = itemsTotalNT + genericFees + setFeesTotal;
-
+/*
                                             // NEW: Calculate Total of All Sets
                                             const allSetsTotal = Object.entries(sets).reduce((grandSum, [setName, setItems]) => {
                                                 const setKey = `${gName}_${setName}`;
@@ -1613,7 +1613,7 @@
                                                 
                                                 return grandSum + setItemTotal + (Number(setFee.shipping)||0) + (Number(setFee.handling)||0);
                                             }, 0);
-                                            
+*/                                            
                                             // 運費包手按鈕 (Generic for day)
                                             const feeControls = (setKey) => (
                                                 <div className="flex items-center gap-2">
@@ -1999,3 +1999,4 @@
     </script>
 </body>
 </html>
+

@@ -1597,7 +1597,7 @@
                                             }, 0);
 
                                             const total = itemsTotalNT + genericFees + setFeesTotal;
-/*
+
                                             // NEW: Calculate Total of All Sets
                                             const allSetsTotal = Object.entries(sets).reduce((grandSum, [setName, setItems]) => {
                                                 const setKey = `${gName}_${setName}`;
@@ -1613,7 +1613,7 @@
                                                 
                                                 return grandSum + setItemTotal + (Number(setFee.shipping)||0) + (Number(setFee.handling)||0);
                                             }, 0);
-*/                                            
+                                            
                                             // 運費包手按鈕 (Generic for day)
                                             const feeControls = (setKey) => (
                                                 <div className="flex items-center gap-2">
@@ -1652,13 +1652,15 @@
                                             dayTotalDisplay = (
                                                 <div className="flex items-center gap-2">
                                                     <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100"><Icon name="Banknote" size={14}/>NT$ {Math.round(total).toLocaleString()}</span>
-                                                    
+
+
                                                     {/* Sets Total (if sets exist) */}
                                                     {Object.keys(sets).length > 0 && (
                                                          <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100" title="所有組合總額">
                                                             <Icon name="Package" size={12}/> Sets: ${Math.round(allSetsTotal).toLocaleString()}
                                                         </span>
                                                     )}
+
 
                                                     {/* Only show generic day fee controls if there are loose items */}
                                                     {loose.length > 0 && feeControls(gName)} 
@@ -1999,4 +2001,5 @@
     </script>
 </body>
 </html>
+
 

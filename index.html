@@ -230,6 +230,10 @@
                 if (isBatchMode && onToggleSelect) {
                     e.stopPropagation();
                     onToggleSelect(stack.instances.map(i => i.id));
+                } else if (!isBatchMode) {
+                    // FIX 1: Allow clicking the card to edit the first instance if not batch mode
+                    // This improves UX especially on mobile where the small button might be hard to hit
+                    openModal(stack.instances[0], null, 'collection');
                 }
             };
 
@@ -243,7 +247,7 @@
                     onDragOver={(e) => e.preventDefault()} 
                     className={`bg-white rounded-2xl shadow-sm border overflow-hidden flex flex-col group relative 
                         ${isDraggable && !isBatchMode ? 'cursor-move active:cursor-grabbing hover:shadow-md transition-shadow' : ''}
-                        ${isBatchMode ? 'cursor-pointer hover:border-blue-400' : 'border-gray-100'}
+                        ${isBatchMode ? 'cursor-pointer hover:border-blue-400' : 'border-gray-100 cursor-pointer'} 
                         ${isSelected ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50' : ''}
                     `}
                 >
@@ -261,14 +265,23 @@
                     <div className="p-3 flex-1 flex flex-col bg-white">
                         <h3 className="font-bold text-gray-800 text-sm line-clamp-1">{stack.name}</h3>
                         {showAmount && (<div className="flex-1 mt-1 space-y-2 overflow-y-auto max-h-[120px] thin-scrollbar pr-1">{consolidated.map((inst, idx) => (
-                            <div key={idx} className="bg-gray-50 rounded p-2 text-xs border border-gray-100 flex justify-between items-center">
+                            <div key={idx} className="bg-gray-50 rounded p-2 text-xs border border-gray-100 flex justify-between items-center" onClick={(e)=>e.stopPropagation() /* Prevent card click when clicking details */}>
                                 <div>
                                     <div className="flex gap-1 text-[10px] text-gray-500 items-center">{inst.isPreorder ? <span className="text-orange-500 font-bold flex items-center gap-0.5"><Icon name="Package" size={10}/> 預購 {inst.shippingDate}</span> : <span className="flex items-center gap-0.5"><Icon name="Calendar" size={10}/> {inst.date}</span>}</div>
                                     <div className="flex items-baseline gap-1"><span className="font-bold text-base text-slate-800">{inst.currency === 'r' ? `${inst.acquiredPrice}r` : `NT$ ${inst.acquiredPrice}`}</span>{inst.officialPrice && <span className="text-[11px] text-gray-500 font-medium ml-1">({inst.officialPrice}{!isNaN(Number(inst.officialPrice)) && 'r'})</span>}</div>
                                 </div>
                                 <div className="flex items-center gap-1 ml-auto pl-2 border-l border-gray-100">
                                     {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">x{inst.count}</span>}
-                                    {!isBatchMode && <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all"><Icon name="Edit3" size={12}/></button>}
+                                    {/* FIX 1: Enhanced Edit Button - added z-10, relative and onMouseDown to prevent drag start */}
+                                    {!isBatchMode && (
+                                        <button 
+                                            onMouseDown={(e)=>e.stopPropagation()} 
+                                            onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} 
+                                            className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all relative z-10 cursor-pointer"
+                                        >
+                                            <Icon name="Edit3" size={12}/>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}</div>)}
@@ -1563,7 +1576,20 @@
                         {/* Templates Tab */}
                         {activeTab === 'templates' && (
                             <div className="space-y-6 animate-fade-in pb-20 md:pb-0">
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4"><div><h2 className="text-2xl font-bold text-gray-800">週邊圖鑑</h2></div><div className="flex gap-2 items-center"><button onClick={toggleBatchMode} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${isBatchMode ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}><Icon name={isBatchMode ? "CheckSquare" : "Square"} size={16}/> 批次新增</button><div className="h-6 w-px bg-gray-300 mx-2"></div>{[{id:'none',l:'全部'},{id:'series',l:'依系列'},{id:'type',l:'依類型'},{id:'character',l:'依角色'}].map(m=><button key={m.id} onClick={()=>setGroupingMode(m.id)} className={`px-3 py-1.5 text-xs border rounded-lg ${groupingMode===m.id?'bg-slate-900 text-white':'bg-white text-gray-500'}`}>{m.l}</button>)}</div></div>
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div><h2 className="text-2xl font-bold text-gray-800">週邊圖鑑</h2></div>
+                                    <div className="flex gap-2 items-center">
+                                        <button onClick={toggleBatchMode} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${isBatchMode ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                                            <Icon name={isBatchMode ? "CheckSquare" : "Square"} size={16}/> 批次新增
+                                        </button>
+                                        {/* FIX: Re-added Add Button */}
+                                        <button onClick={() => openModal(null, null, 'catalog')} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-md font-bold hover:bg-slate-800 transition-colors">
+                                            <Icon name="Plus" size={16}/> 新增
+                                        </button>
+                                        <div className="h-6 w-px bg-gray-300 mx-2"></div>
+                                        {[{id:'none',l:'全部'},{id:'series',l:'依系列'},{id:'type',l:'依類型'},{id:'character',l:'依角色'}].map(m=><button key={m.id} onClick={()=>setGroupingMode(m.id)} className={`px-3 py-1.5 text-xs border rounded-lg ${groupingMode===m.id?'bg-slate-900 text-white':'bg-white text-gray-500'}`}>{m.l}</button>)}
+                                    </div>
+                                </div>
                                 {groupingMode === 'series' && <FilterBar options={availableSeries} selected={selectedSeriesFilters} toggle={(val)=>toggleFilter(selectedSeriesFilters, setSelectedSeriesFilters, val, appSettings.multiSelect.series)} multi={appSettings.multiSelect.series} />}
                                 {groupingMode === 'type' && <FilterBar options={availableTypes} selected={selectedTypeFilters} toggle={(val)=>toggleFilter(selectedTypeFilters, setSelectedTypeFilters, val, appSettings.multiSelect.type)} multi={appSettings.multiSelect.type} />}
                                 {groupingMode === 'character' && <FilterBar options={appSettings.customCharacters} selected={selectedCharFilters} toggle={(val)=>toggleFilter(selectedCharFilters, setSelectedCharFilters, val, appSettings.multiSelect.character)} multi={appSettings.multiSelect.character} />}
@@ -1792,3 +1818,4 @@
     </script>
 </body>
 </html>
+

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>深空收藏艙 | 獵人週邊管理</title>
+    <title>深空收藏艙 | 獵人週邊管理 (修復版)</title>
     
     <!-- 設定網頁小圖示 (Favicon) - 黃色星星深色背景 -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f172a%22/><path d=%22M50 20 L59 42 L82 42 L64 57 L71 80 L50 67 L29 80 L36 57 L18 42 L41 42 Z%22 fill=%22%23facc15%22 stroke=%22%23facc15%22 stroke-width=%222%22 stroke-linejoin=%22round%22/></svg>">
@@ -151,41 +151,6 @@
             return <span ref={containerRef} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}></span>;
         };
 
-        const ScrollableTags = ({ items, selected, onToggle, labelAll }) => {
-            const scrollRef = useRef(null);
-            const scrollInterval = useRef(null);
-
-            const startScroll = (direction) => {
-                stopScroll();
-                scrollInterval.current = setInterval(() => {
-                    if (scrollRef.current) {
-                        scrollRef.current.scrollLeft += (direction === 'right' ? 5 : -5);
-                    }
-                }, 16);
-            };
-
-            const stopScroll = () => {
-                if (scrollInterval.current) clearInterval(scrollInterval.current);
-            };
-
-            return (
-                <div className="relative group" onMouseLeave={stopScroll}>
-                    <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center cursor-pointer" onMouseEnter={() => startScroll('left')} onMouseLeave={stopScroll}>
-                        <Icon name="ChevronLeft" size={16} className="text-gray-400"/>
-                    </div>
-                    <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent z-20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end cursor-pointer" onMouseEnter={() => startScroll('right')} onMouseLeave={stopScroll}>
-                        <Icon name="ChevronRight" size={16} className="text-gray-400"/>
-                    </div>
-                    <div className="overflow-x-auto pb-1 scrollbar-hide flex gap-2 relative" ref={scrollRef}>
-                        <button onClick={() => onToggle('all')} className={`px-3 py-1 text-xs rounded-full border whitespace-nowrap flex-shrink-0 ${selected === 'all' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600'}`}>{labelAll}</button>
-                        {items.map(c => (
-                            <button key={c} onClick={() => onToggle(c)} className={`px-3 py-1 text-xs rounded-full border whitespace-nowrap flex-shrink-0 ${selected === c ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-600'}`}>{c}</button>
-                        ))}
-                    </div>
-                </div>
-            );
-        };
-
         const FilterBar = memo(({ options, selected, toggle, multi, highlightSet }) => {
             const [isExpanded, setIsExpanded] = useState(false);
             const hasManyOptions = options.length > 5;
@@ -268,7 +233,7 @@
                                 </div>
                                 <div className="flex items-center gap-1 ml-auto pl-2 border-l border-gray-100">
                                     {inst.count > 1 && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full mr-1">x{inst.count}</span>}
-                                    {!isBatchMode && <button onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all"><Icon name="Edit3" size={12}/></button>}
+                                    {!isBatchMode && <button onMouseDown={(e) => e.stopPropagation()} onClick={(e)=>{e.stopPropagation(); openModal(inst, null, 'collection');}} className="p-1.5 bg-white border border-gray-200 rounded-md hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all"><Icon name="Edit3" size={12}/></button>}
                                 </div>
                             </div>
                         ))}</div>)}
@@ -435,7 +400,7 @@
             );
         };
 
-        // --- NEW: Set Name Modal (Moved here to ensure visibility) ---
+        // --- NEW: Set Name Modal ---
         const SetNameModal = ({ isOpen, onClose, onConfirm }) => {
             const [name, setName] = useState('');
             if (!isOpen) return null;
@@ -472,41 +437,39 @@
             return (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"><div className="bg-white rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl"><div className="flex justify-between items-center border-b pb-3"><h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Icon name="Settings" /> 設定</h3><button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><Icon name="X" size={20}/></button></div><div className="flex gap-2 border-b pb-2 overflow-x-auto">{['layout', 'filter', 'filters_config', 'types', 'series', 'data'].map(t => (<button key={t} onClick={()=>setSettingsTab(t)} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${settingsTab===t ? 'bg-slate-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}>{t==='layout' ? '版面' : t==='filter' ? '角色' : t==='filters_config' ? '篩選' : t==='types' ? '類型' : t==='series' ? '系列' : '資料'}</button>))}</div>
                 <div className="mt-2">
-                {settingsTab === 'layout' && (
-                    <div className="space-y-6 animate-fade-in">
+                {settingsTab === 'layout' && (<div className="space-y-6 animate-fade-in">
+                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                        <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><Icon name="Grid" size={16}/> 每行顯示數量</label>
+                        <div className="flex gap-2">{[2,3,4,5,6].map(cols => (<button key={cols} onClick={()=>setAppSettings(prev=>({...prev, layoutCols: cols}))} className={`flex-1 py-2 rounded-xl border text-sm font-bold transition-all ${appSettings.layoutCols===cols ? 'bg-blue-500 text-white border-blue-500 shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}>{cols}</button>))}</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
                         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                            <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><Icon name="Grid" size={16}/> 每行顯示數量</label>
-                            <div className="flex gap-2">{[2,3,4,5,6].map(cols => (<button key={cols} onClick={()=>setAppSettings(prev=>({...prev, layoutCols: cols}))} className={`flex-1 py-2 rounded-xl border text-sm font-bold transition-all ${appSettings.layoutCols===cols ? 'bg-blue-500 text-white border-blue-500 shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}>{cols}</button>))}</div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                                <label className="block text-sm font-bold text-gray-700 mb-3">一般商品幣值</label>
-                                <div className="flex gap-2">{['NT$', 'r'].map(curr => (<button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold transition-all ${appSettings.defaultCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}>{curr}</button>))}</div>
-                            </div>
-                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                                <label className="block text-sm font-bold text-gray-700 mb-3">預購商品幣值</label>
-                                <div className="flex gap-2">{['NT$', 'r'].map(curr => (<button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultPreorderCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold transition-all ${appSettings.defaultPreorderCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}>{curr}</button>))}</div>
-                            </div>
+                            <label className="block text-sm font-bold text-gray-700 mb-3">一般商品幣值</label>
+                            <div className="flex gap-2">{['NT$', 'r'].map(curr => (<button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold transition-all ${appSettings.defaultCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}>{curr}</button>))}</div>
                         </div>
                         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                            <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><Icon name="Eye" size={16}/> 顯示選項</h4>
-                            <div className="space-y-3">
-                                <label className="flex items-center justify-between cursor-pointer p-2 hover:bg-white rounded-lg transition-colors">
-                                    <span className="text-sm font-medium text-gray-700">顯示分類大標題 (全部模式)</span>
-                                    <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked={appSettings.groupAllInFilterMode} onChange={(e) => setAppSettings(prev => ({...prev, groupAllInFilterMode: e.target.checked}))}/>
-                                </label>
-                                <div className="border-t border-gray-200"></div>
-                                <label className="flex items-center justify-between cursor-pointer p-2 hover:bg-white rounded-lg transition-colors">
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-medium text-gray-700">顯示詳細資訊 (金額與日期)</span>
-                                        <span className="text-xs text-gray-400">隱藏後僅顯示圖片與名稱</span>
-                                    </div>
-                                    <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked={appSettings.showAmount !== false} onChange={(e) => setAppSettings(prev => ({...prev, showAmount: e.target.checked}))}/>
-                                </label>
-                            </div>
+                            <label className="block text-sm font-bold text-gray-700 mb-3">預購商品幣值</label>
+                            <div className="flex gap-2">{['NT$', 'r'].map(curr => (<button key={curr} onClick={()=>setAppSettings(prev=>({...prev, defaultPreorderCurrency: curr}))} className={`flex-1 py-2 rounded-lg border text-sm font-bold transition-all ${appSettings.defaultPreorderCurrency===curr ? 'bg-blue-500 text-white border-blue-500' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}>{curr}</button>))}</div>
                         </div>
                     </div>
-                )}
+                    <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                        <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><Icon name="Eye" size={16}/> 顯示選項</h4>
+                        <div className="space-y-3">
+                             <label className="flex items-center justify-between cursor-pointer p-2 hover:bg-white rounded-lg transition-colors">
+                                <span className="text-sm font-medium text-gray-700">顯示分類大標題 (全部模式)</span>
+                                <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked={appSettings.groupAllInFilterMode} onChange={(e) => setAppSettings(prev => ({...prev, groupAllInFilterMode: e.target.checked}))}/>
+                             </label>
+                             <div className="border-t border-gray-200"></div>
+                             <label className="flex items-center justify-between cursor-pointer p-2 hover:bg-white rounded-lg transition-colors">
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-medium text-gray-700">顯示詳細資訊 (金額與日期)</span>
+                                    <span className="text-xs text-gray-400">隱藏後僅顯示圖片與名稱</span>
+                                </div>
+                                <input type="checkbox" className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" checked={appSettings.showAmount !== false} onChange={(e) => setAppSettings(prev => ({...prev, showAmount: e.target.checked}))}/>
+                             </label>
+                        </div>
+                    </div>
+                </div>)}
                 {settingsTab === 'filter' && (<div className="space-y-4 animate-fade-in"><div className="flex justify-between items-center"><p className="text-sm text-gray-500">勾選角色以顯示週邊。</p><button onClick={() => toggleCharacterVisibility('ALL')} className="text-xs bg-slate-800 text-white px-3 py-1 rounded-full hover:bg-slate-700">我全都要</button></div><div className="grid grid-cols-2 gap-2">{customCharacters.map((char, index) => { const isChecked = (appSettings.visibleCharacters || []).includes(char); return (<div key={char} className={`flex items-center justify-between p-3 border rounded-xl transition-colors ${isChecked ? 'bg-blue-50 border-blue-200' : 'bg-white hover:bg-gray-50'}`} onClick={() => toggleCharacterVisibility(char)}><div className="flex items-center gap-3"><span className={`text-sm font-medium ${CHARACTER_THEMES[char]?.text || 'text-gray-700'}`}>{char}</span></div><div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isChecked ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>{isChecked && <Icon name="Check" size={12} className="text-white"/>}</div></div>); })}</div></div>)}
                 {settingsTab === 'filters_config' && (<div className="space-y-4 animate-fade-in"><p className="text-sm text-gray-500">設定各篩選模式是否啟用多選功能。</p><div className="space-y-3">{['series', 'type', 'character', 'date'].map(key => (<label key={key} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors"><input type="checkbox" className="w-5 h-5 text-blue-600 rounded" checked={appSettings.multiSelect?.[key]} onChange={() => toggleMultiSelect(key)} /><span className="text-sm font-medium">依{key==='series'?'系列':key==='type'?'類型':key==='character'?'角色':'收物日'} - 多選</span></label>))}</div></div>)}
                 {settingsTab === 'types' && (<div className="space-y-4 animate-fade-in"><div><label className="block text-sm font-medium text-gray-700 mb-2">新增類型</label><div className="flex gap-2"><input className="border p-2 rounded flex-1" placeholder="輸入新類型名稱..." value={newTypeInput} onKeyDown={(e) => e.key === 'Enter' && handleAddType()} onChange={e=>setNewTypeInput(e.target.value)} /><button onClick={handleAddType} className="bg-green-500 text-white px-4 rounded hover:bg-green-600">新增</button></div></div><div className="flex justify-between items-end"><label className="block text-sm font-medium text-gray-700">目前類型列表 (拖曳可排序)</label><button onClick={handleManualSyncTypes} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 flex items-center gap-1"><Icon name="RefreshCw" size={10}/> 同步類型</button></div><div><div className="flex flex-wrap gap-2 p-2 bg-gray-50 rounded-xl border border-gray-100">{customTypes.map((t, index) => (<div key={t} draggable onDragStart={(e) => { dragTypeItem.current = index; e.target.classList.add('opacity-50'); }} onDragEnter={(e) => { dragTypeOverItem.current = index; }} onDragEnd={(e) => { e.target.classList.remove('opacity-50'); handleTypeSort(); }} onDragOver={(e) => e.preventDefault()} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm cursor-move hover:border-blue-400 hover:text-blue-600 transition-all select-none"><span className="text-sm font-medium">{t}</span><button onClick={(e)=>{e.stopPropagation(); handleDeleteType(t);}} className="text-gray-400 hover:text-red-500 p-0.5 rounded-full"><Icon name="X" size={12}/></button></div>))}</div></div></div>)}
@@ -538,7 +501,7 @@
             );
         };
         
-        // --- Trade Edit Modal with Enhanced Selection & Filters ---
+        // --- Trade Edit Modal with Enhanced Selection & Filters (UPDATED) ---
         const TradeModal = ({ isOpen, onClose, tradeItem, onSave, catalogItems, customTypes, collectionItems }) => {
             const [data, setData] = useState({
                 id: Date.now().toString(),
@@ -1792,4 +1755,3 @@
     </script>
 </body>
 </html>
-

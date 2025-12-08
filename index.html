@@ -825,12 +825,20 @@
                         </div>
 
                         {!tradeItem && !searchMode && (
-                            <div className="flex flex-col gap-2 mb-2 flex-shrink-0">
-                                <button type="button" onClick={()=>{setSelectionSource('catalog'); setSearchMode(true);}} className="w-1/2 text-sm py-3 rounded-lg border border-dashed border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center gap-2 font-bold">
-                                    <Icon name="Search" size={16}/> 從圖鑑選擇物品 (僅名稱/圖片)
+                            <div className="flex flex-row gap-2 mb-2 flex-shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => { setSelectionSource('catalog'); setSearchMode(true); }}
+                                    className="w-1/2 text-sm py-3 rounded-lg border border-dashed border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-blue-400 hover:text-blue-600 transition-colors flex items-center justify-center gap-2 font-bold"
+                                >
+                                    <Icon name="Search" size={16}/> 從圖鑑選擇物品
                                 </button>
-                                <button type="button" onClick={()=>{setSelectionSource('collection'); setSearchMode(true);}} className="w-1/2 text-sm py-3 rounded-lg border border-dashed border-purple-300 text-purple-600 bg-purple-50 hover:bg-purple-100 hover:border-purple-400 transition-colors flex items-center justify-center gap-2 font-bold">
-                                    <Icon name="Package" size={16}/> 從我的收藏庫選擇 (繼承價格/日期)
+                                <button
+                                    type="button"
+                                    onClick={() => { setSelectionSource('collection'); setSearchMode(true); }}
+                                    className="w-1/2 text-sm py-3 rounded-lg border border-dashed border-purple-300 text-purple-600 bg-purple-50 hover:bg-purple-100 hover:border-purple-400 transition-colors flex items-center justify-center gap-2 font-bold"
+                                >
+                                    <Icon name="Package" size={16}/> 從我的收藏庫選擇
                                 </button>
                             </div>
                         )}
@@ -2049,4 +2057,5 @@
     </script>
 </body>
 </html>
+
 

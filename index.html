@@ -236,6 +236,7 @@
                                     {!isBatchMode && (
                                         <button 
                                             type="button"
+                                            // FIX: Stop propagation to prevent drag start
                                             onMouseDown={(e) => e.stopPropagation()} 
                                             onClick={(e)=>{
                                                 e.preventDefault();
@@ -265,7 +266,8 @@
                         {isBatchMode && (<div className={`absolute inset-0 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500/20' : 'bg-black/0 group-hover:bg-black/5'}`}><div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white/80 border-gray-300'}`}>{isSelected && <Icon name="Check" size={18} />}</div></div>)}
                         {!isBatchMode && (
                             <>
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                {/* FIX: Add pointer-events-none to overlay to prevent it blocking clicks */}
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none" />
                                 <button 
                                     type="button"
                                     onMouseDown={(e) => e.stopPropagation()} 
@@ -359,6 +361,7 @@
                                     type="button"
                                     onMouseDown={(e) => e.stopPropagation()} 
                                     onClick={(e)=>{
+                                        e.preventDefault();
                                         e.stopPropagation(); 
                                         openModal(trade)
                                     }} 
@@ -370,6 +373,7 @@
                                     type="button"
                                     onMouseDown={(e) => e.stopPropagation()} 
                                     onClick={(e)=>{
+                                        e.preventDefault();
                                         e.stopPropagation(); 
                                         deleteTrade(trade.id)
                                     }} 
@@ -404,6 +408,7 @@
                                 type="button"
                                 onMouseDown={(e) => e.stopPropagation()} 
                                 onClick={(e)=>{
+                                    e.preventDefault();
                                     e.stopPropagation(); 
                                     markAsSold(trade)
                                 }} 
@@ -721,10 +726,11 @@
                     sellDate: batchCommonData.sellDate,
                     note: batchCommonData.note,
                     quantity: item.quantity,
-                    setName: batchCommonData.setName
+                    setName: batchCommonData.setName,
+                    originalCollectionId: selectionSource === 'collection' ? item.id : null
                 }));
 
-                onSave(tradesToAdd);
+                onSave(tradesToAdd, selectionSource === 'collection');
             };
 
             const toggleChar = (val) => setFilterChar(val === filterChar && val !== 'all' ? 'all' : val);
@@ -1263,72 +1269,7 @@
             };
             
             const openModal = (item = null, template = null, mode = 'collection') => { setModalMode(mode); const defaultData = { id: Date.now().toString(), name: '', character: '沈星回', type: '徽章', series: '', officialPrice: '', acquiredPrice: '', date: new Date().toISOString().split('T')[0], image: null, note: '', quantity: 1, isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency }; if (mode === 'catalog' && item) { setEditingItem(item); setFormData({ ...item }); } else if (mode === 'collection') { if (item) { setEditingItem(item); setFormData({ ...item, quantity: (item.quantity || 1), isPreorder: item.isPreorder || false, shippingDate: item.shippingDate || '', currency: item.currency || (item.isPreorder ? appSettings.defaultPreorderCurrency : appSettings.defaultCurrency), setName: item.setName || '' }); } else if (template) { setEditingItem(null); setFormData({ ...defaultData, ...template, quantity: 1, id: Date.now().toString(), isPreorder: false, shippingDate: '', currency: appSettings.defaultCurrency, acquiredPrice: '', setName: '' }); } else { setEditingItem(null); setFormData(defaultData); } } setIsModalOpen(true); };
-            const handleSave = async (customData = null, shouldDeduct = false) => { 
-                const dataToSave = customData || formData;
-                if (!dataToSave.name) return alert("請輸入名稱"); 
-                
-                const timestamp = Date.now(); 
-                
-                // Add new types/series to settings
-                setAppSettings(prev => { 
-                    let next = { ...prev }; 
-                    let changed = false; 
-                    if (dataToSave.type && !prev.customTypes.includes(dataToSave.type)) { next.customTypes = [...prev.customTypes, dataToSave.type]; changed = true; } 
-                    if (dataToSave.series && !prev.customSeries.includes(dataToSave.series)) { next.customSeries = [...prev.customSeries, dataToSave.series]; changed = true; } 
-                    return changed ? next : prev; 
-                }); 
-
-                const qty = Math.max(1, parseInt(dataToSave.quantity) || 1); 
-                const finalAcquiredPrice = dataToSave.acquiredPrice === '' || dataToSave.acquiredPrice === undefined || dataToSave.acquiredPrice === null ? 0 : dataToSave.acquiredPrice; 
-                
-                if (modalMode === 'catalog') { 
-                    const itemToSave = { ...dataToSave }; 
-                    // Clean up collection-specific fields for catalog
-                    delete itemToSave.quantity; delete itemToSave.acquiredPrice; delete itemToSave.date; delete itemToSave.note; delete itemToSave.isPreorder; delete itemToSave.shippingDate; delete itemToSave.currency; delete itemToSave.setName; 
-                    await saveToCatalog(itemToSave); 
-                } else if (isTradeModalOpen) {
-                    // Handling Trade Save
-                     const tradeToSave = {
-                        ...dataToSave,
-                        // Ensure trade specific fields are correct if needed
-                     };
-                     await handleSaveTrade(tradeToSave); // Use existing handleSaveTrade
-                     
-                     // Handle Collection Deduction
-                     if (shouldDeduct && dataToSave.originalCollectionId) {
-                         const originalItem = items.find(i => i.id === dataToSave.originalCollectionId);
-                         if (originalItem) {
-                             const newQty = (originalItem.quantity || 1) - (dataToSave.quantity || 1);
-                             if (newQty > 0) {
-                                 // Update quantity
-                                 if(user && isFirebaseInitialized) {
-                                      await setDoc(doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/items`, originalItem.id), { ...originalItem, quantity: newQty });
-                                 } else {
-                                     setItems(prev => prev.map(i => i.id === originalItem.id ? { ...i, quantity: newQty } : i));
-                                 }
-                             } else {
-                                 // Remove item if quantity becomes 0 or less
-                                 if(confirm(`收藏庫中的「${originalItem.name}」數量將歸零，是否同時刪除該收藏？`)) {
-                                     await deleteFromCollection(originalItem.id);
-                                 }
-                             }
-                         }
-                     }
-                     return; // Exit early as handleSaveTrade handles closing
-                } else { 
-                    // Collection Save
-                    const itemToSave = { ...dataToSave, acquiredPrice: finalAcquiredPrice, quantity: qty }; 
-                    if (editingItem) { 
-                        await saveToCollection(itemToSave); 
-                    } else { 
-                        const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0; 
-                        const newItem = { ...itemToSave, id: timestamp.toString(), order: maxOrder + 1 }; 
-                        await saveToCollection(newItem); 
-                    } 
-                } 
-                setIsModalOpen(false); 
-            };
-            
+            const handleSave = async () => { if (!formData.name) return alert("請輸入名稱"); const timestamp = Date.now(); setAppSettings(prev => { let next = { ...prev }; let changed = false; if (formData.type && !prev.customTypes.includes(formData.type)) { next.customTypes = [...prev.customTypes, formData.type]; changed = true; } if (formData.series && !prev.customSeries.includes(formData.series)) { next.customSeries = [...prev.customSeries, formData.series]; changed = true; } return changed ? next : prev; }); const qty = Math.max(1, parseInt(formData.quantity) || 1); const finalAcquiredPrice = formData.acquiredPrice === '' || formData.acquiredPrice === undefined || formData.acquiredPrice === null ? 0 : formData.acquiredPrice; if (modalMode === 'catalog') { const itemToSave = { ...formData }; delete itemToSave.quantity; delete itemToSave.acquiredPrice; delete itemToSave.date; delete itemToSave.note; delete itemToSave.isPreorder; delete itemToSave.shippingDate; delete itemToSave.currency; delete itemToSave.setName; await saveToCatalog(itemToSave); } else { const itemToSave = { ...formData, acquiredPrice: finalAcquiredPrice, quantity: qty }; if (editingItem) { await saveToCollection(itemToSave); } else { const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0; const newItem = { ...itemToSave, id: timestamp.toString(), order: maxOrder + 1 }; await saveToCollection(newItem); } } setIsModalOpen(false); };
             const handleKeyDown = (e) => { if (e.key === 'Enter') { e.preventDefault(); handleSave(); } };
             const handleDragStart = (e, position) => { dragItem.current = position; };
             const handleDragEnter = (e, position) => { dragOverItem.current = position; };
@@ -1345,24 +1286,10 @@
                 if (!tradesToProcess[0].name) return alert("請輸入物品名稱");
                 if (user && isFirebaseInitialized) {
                     const batch = writeBatch(db);
-                    tradesToProcess.forEach(t => { 
-                        // Remove temporary fields not needed in DB
-                        const { originalCollectionId, ...cleanTrade } = t;
-                        const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, t.id); 
-                        batch.set(ref, cleanTrade); 
-                    });
+                    tradesToProcess.forEach(t => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, t.id); batch.set(ref, t); });
                     await batch.commit();
                 } else {
-                    setTrades(prev => { 
-                        const ids = new Set(tradesToProcess.map(t => t.id)); 
-                        const filtered = prev.filter(t => !ids.has(t.id)); 
-                        // Clean locally too
-                        const cleanTrades = tradesToProcess.map(t => {
-                             const { originalCollectionId, ...rest } = t;
-                             return rest;
-                        });
-                        return [...cleanTrades, ...filtered]; 
-                    });
+                    setTrades(prev => { const ids = new Set(tradesToProcess.map(t => t.id)); const filtered = prev.filter(t => !ids.has(t.id)); return [...tradesToProcess, ...filtered]; });
                 }
                 setIsTradeModalOpen(false);
             };
@@ -1570,37 +1497,22 @@
                                             // 運費包手按鈕 (Generic for day)
                                             const feeControls = (setKey) => (
                                                 <div className="flex items-center gap-2">
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); 
-                                                        let val = dailyFees[setKey];
-                                                        if (typeof val === 'number') val = { shipping: val };
-                                                        setEditingFeeValue(val?.shipping || ''); 
-                                                    }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${(() => {
-                                                        let val = dailyFees[setKey];
-                                                        if (typeof val === 'number') val = { shipping: val };
-                                                        return (val?.shipping || 0) > 0;
-                                                    })() ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{(() => {
-                                                        let val = dailyFees[setKey];
-                                                        if (typeof val === 'number') val = { shipping: val };
-                                                        const s = val?.shipping || 0;
-                                                        return s > 0 ? `運費 ${s}` : '+ 運費';
-                                                    })()} <Icon name="Truck" size={10} /></button>)}
-                                                    
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); 
-                                                        let val = dailyFees[setKey];
-                                                        if (typeof val === 'number') val = { shipping: val, handling: 0 };
-                                                        setEditingFeeValue(val?.handling || ''); 
-                                                    }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${(() => {
-                                                        let val = dailyFees[setKey];
-                                                        if (typeof val === 'number') val = { shipping: val, handling: 0 };
-                                                        return (val?.handling || 0) > 0;
-                                                    })() ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{(() => {
-                                                        let val = dailyFees[setKey];
-                                                        if (typeof val === 'number') val = { shipping: val, handling: 0 };
-                                                        const h = val?.handling || 0;
-                                                        return h > 0 ? `包手 ${h}` : '+ 包手';
-                                                    })()} <Icon name="Package" size={10} /></button>)}
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); setEditingFeeValue(dailyFees[setKey]?.shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.shipping > 0 ? `運費 ${dailyFees[setKey].shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); setEditingFeeValue(dailyFees[setKey]?.handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.handling > 0 ? `包手 ${dailyFees[setKey].handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
                                                 </div>
                                             );
+
+                                            // Group by 'setName'
+                                            const sets = {};
+                                            const loose = [];
+                                            gItems.forEach(i => {
+                                                if (i.setName && i.setName.trim() !== '') {
+                                                    if (!sets[i.setName]) sets[i.setName] = [];
+                                                    sets[i.setName].push(i);
+                                                } else {
+                                                    loose.push(i);
+                                                }
+                                            });
 
                                             dayTotalDisplay = (
                                                 <div className="flex items-center gap-2">
@@ -1614,9 +1526,7 @@
                                                 <React.Fragment>
                                                     {Object.entries(sets).map(([setName, setItems], idx) => {
                                                         const setKey = `${gName}_${setName}`;
-                                                        let setFee = dailyFees[setKey];
-                                                        if (typeof setFee === 'number') setFee = { shipping: setFee, handling: 0 };
-                                                        setFee = setFee || { shipping: 0, handling: 0 };
+                                                        const setFee = dailyFees[setKey] || { shipping: 0, handling: 0 };
                                                         
                                                         // Calculate Set Total (Items + Fees)
                                                         const setItemTotal = setItems.reduce((sum, item) => {
@@ -1941,5 +1851,6 @@
     </script>
 </body>
 </html>
+
 
 

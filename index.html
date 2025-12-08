@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>深空收藏艙 | 獵人週邊管理 (修復 ScrollableTags)</title>
+    <title>深空收藏艙 | 獵人週邊管理 (穩定修復版)</title>
     
     <!-- 設定網頁小圖示 (Favicon) - 黃色星星深色背景 -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%230f172a%22/><path d=%22M50 20 L59 42 L82 42 L64 57 L71 80 L50 67 L29 80 L36 57 L18 42 L41 42 Z%22 fill=%22%23facc15%22 stroke=%22%23facc15%22 stroke-width=%222%22 stroke-linejoin=%22round%22/></svg>">
@@ -12,10 +12,10 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    <!-- Prop Types (Recharts 依賴項) -->
-    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
-    <!-- Recharts -->
-    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+    <!-- Prop Types (Recharts 依賴項) - 指定版本以確保穩定 -->
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    <!-- Recharts - 調整為 2.10.3 以解決 UMD 環境下的 TypeError -->
+    <script src="https://unpkg.com/recharts@2.10.3/umd/Recharts.js"></script>
     
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -271,7 +271,6 @@
                                     {!isBatchMode && (
                                         <button 
                                             type="button"
-                                            onMouseDown={(e) => e.stopPropagation()} 
                                             onClick={(e)=>{
                                                 e.preventDefault();
                                                 e.stopPropagation(); 
@@ -1561,19 +1560,7 @@
                                         // Logic for Small Sets (only in Date view)
                                         let renderItems = [];
                                         if (collectionGroupingMode === 'date' && gName !== '全部') {
-                                            const dayStats = gItems.reduce((acc, item) => { const p = Number(item.acquiredPrice || 0); if (item.currency === 'r') acc.r += p; else acc.nt += p; return acc; }, { nt: 0, r: 0 });
-                                            const dayFee = dailyFees[gName]; const shipping = (typeof dayFee === 'object' ? dayFee.shipping : dayFee) || 0; const handling = (typeof dayFee === 'object' ? dayFee.handling : 0) || 0;
-                                            const total = dayStats.nt + (dayStats.r * exchangeRate) + shipping + handling;
-                                            
-                                            // 運費包手按鈕 (Generic for day)
-                                            const feeControls = (setKey) => (
-                                                <div className="flex items-center gap-2">
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button type="button" onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button type="button" onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button type="button" onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); setEditingFeeValue(dailyFees[setKey]?.shipping || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.shipping > 0 ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.shipping > 0 ? `運費 ${dailyFees[setKey].shipping}` : '+ 運費'} <Icon name="Truck" size={10} /></button>)}
-                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button type="button" onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button type="button" onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button type="button" onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); setEditingFeeValue(dailyFees[setKey]?.handling || ''); }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${dailyFees[setKey]?.handling > 0 ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{dailyFees[setKey]?.handling > 0 ? `包手 ${dailyFees[setKey].handling}` : '+ 包手'} <Icon name="Package" size={10} /></button>)}
-                                                </div>
-                                            );
-
-                                            // Group by 'setName'
+                                            // Group by 'setName' FIRST to calculate set fees
                                             const sets = {};
                                             const loose = [];
                                             gItems.forEach(i => {
@@ -1585,9 +1572,94 @@
                                                 }
                                             });
 
+                                            // Calculate Items Total (Price * Qty)
+                                            const itemsTotalNT = gItems.reduce((sum, item) => {
+                                                const p = Number(item.acquiredPrice || 0);
+                                                const q = item.quantity || 1;
+                                                return sum + (item.currency === 'r' ? p * exchangeRate * q : p * q);
+                                            }, 0);
+
+                                            // Calculate Generic Day Fees (Only if there are loose items)
+                                            let dayFee = dailyFees[gName];
+                                            if (typeof dayFee === 'number') dayFee = { shipping: dayFee, handling: 0 };
+                                            dayFee = dayFee || { shipping: 0, handling: 0 };
+                                            
+                                            // FIX: Only apply generic day fees if there are loose items to attribute them to
+                                            const genericFees = loose.length > 0 ? ((Number(dayFee.shipping) || 0) + (Number(dayFee.handling) || 0)) : 0;
+
+                                            // Calculate Set Specific Fees
+                                            const setFeesTotal = Object.keys(sets).reduce((sum, setName) => {
+                                                const setKey = `${gName}_${setName}`;
+                                                let sFee = dailyFees[setKey];
+                                                if (typeof sFee === 'number') sFee = { shipping: sFee, handling: 0 };
+                                                sFee = sFee || { shipping: 0, handling: 0 };
+                                                return sum + (Number(sFee.shipping) || 0) + (Number(sFee.handling) || 0);
+                                            }, 0);
+
+                                            const total = itemsTotalNT + genericFees + setFeesTotal;
+
+                                            // NEW: Calculate Total of All Sets
+                                            const allSetsTotal = Object.entries(sets).reduce((grandSum, [setName, setItems]) => {
+                                                const setKey = `${gName}_${setName}`;
+                                                let setFee = dailyFees[setKey];
+                                                if (typeof setFee === 'number') setFee = { shipping: setFee, handling: 0 };
+                                                setFee = setFee || { shipping: 0, handling: 0 };
+                                                
+                                                const setItemTotal = setItems.reduce((sum, item) => {
+                                                    const p = Number(item.acquiredPrice || 0);
+                                                    const q = item.quantity || 1;
+                                                    return sum + (item.currency === 'r' ? p * exchangeRate * q : p * q);
+                                                }, 0);
+                                                
+                                                return grandSum + setItemTotal + (Number(setFee.shipping)||0) + (Number(setFee.handling)||0);
+                                            }, 0);
+                                            
+                                            // 運費包手按鈕 (Generic for day)
+                                            const feeControls = (setKey) => (
+                                                <div className="flex items-center gap-2">
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'shipping' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'shipping', editingFeeValue)} autoFocus placeholder="運費"/><button type="button" onClick={() => handleSaveFee(setKey, 'shipping', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button type="button" onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button type="button" onClick={() => { setEditingFeeTarget({date: setKey, type: 'shipping'}); 
+                                                        let val = dailyFees[setKey];
+                                                        if (typeof val === 'number') val = { shipping: val };
+                                                        setEditingFeeValue(val?.shipping || ''); 
+                                                    }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${(() => {
+                                                        let val = dailyFees[setKey];
+                                                        if (typeof val === 'number') val = { shipping: val };
+                                                        return (val?.shipping || 0) > 0;
+                                                    })() ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{(() => {
+                                                        let val = dailyFees[setKey];
+                                                        if (typeof val === 'number') val = { shipping: val };
+                                                        const s = val?.shipping || 0;
+                                                        return s > 0 ? `運費 ${s}` : '+ 運費';
+                                                    })()} <Icon name="Truck" size={10} /></button>)}
+                                                    
+                                                    {editingFeeTarget.date === setKey && editingFeeTarget.type === 'handling' ? (<div className="flex items-center gap-1"><input ref={feeInputRef} type="number" className="w-16 px-1 py-0.5 text-sm border rounded" value={editingFeeValue} onChange={(e) => setEditingFeeValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSaveFee(setKey, 'handling', editingFeeValue)} autoFocus placeholder="包手"/><button type="button" onClick={() => handleSaveFee(setKey, 'handling', editingFeeValue)} className="text-green-600"><Icon name="Check" size={14}/></button><button type="button" onClick={() => setEditingFeeTarget({date: null, type: null})} className="text-gray-400"><Icon name="X" size={14}/></button></div>) : (<button type="button" onClick={() => { setEditingFeeTarget({date: setKey, type: 'handling'}); 
+                                                        let val = dailyFees[setKey];
+                                                        if (typeof val === 'number') val = { shipping: val, handling: 0 };
+                                                        setEditingFeeValue(val?.handling || ''); 
+                                                    }} className={`text-xs px-2 py-0.5 rounded border flex items-center gap-1 transition-colors ${(() => {
+                                                        let val = dailyFees[setKey];
+                                                        if (typeof val === 'number') val = { shipping: val, handling: 0 };
+                                                        return (val?.handling || 0) > 0;
+                                                    })() ? 'bg-purple-50 text-purple-600 border-purple-200' : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'}`}>{(() => {
+                                                        let val = dailyFees[setKey];
+                                                        if (typeof val === 'number') val = { shipping: val, handling: 0 };
+                                                        const h = val?.handling || 0;
+                                                        return h > 0 ? `包手 ${h}` : '+ 包手';
+                                                    })()} <Icon name="Package" size={10} /></button>)}
+                                                </div>
+                                            );
+
                                             dayTotalDisplay = (
                                                 <div className="flex items-center gap-2">
                                                     <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100"><Icon name="Banknote" size={14}/>NT$ {Math.round(total).toLocaleString()}</span>
+                                                    
+                                                    {/* Sets Total (if sets exist) */}
+                                                    {Object.keys(sets).length > 0 && (
+                                                         <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100" title="所有組合總額">
+                                                            <Icon name="Package" size={12}/> Sets: ${Math.round(allSetsTotal).toLocaleString()}
+                                                        </span>
+                                                    )}
+
                                                     {/* Only show generic day fee controls if there are loose items */}
                                                     {loose.length > 0 && feeControls(gName)} 
                                                 </div>
@@ -1597,7 +1669,9 @@
                                                 <React.Fragment>
                                                     {Object.entries(sets).map(([setName, setItems], idx) => {
                                                         const setKey = `${gName}_${setName}`;
-                                                        const setFee = dailyFees[setKey] || { shipping: 0, handling: 0 };
+                                                        let setFee = dailyFees[setKey];
+                                                        if (typeof setFee === 'number') setFee = { shipping: setFee, handling: 0 };
+                                                        setFee = setFee || { shipping: 0, handling: 0 };
                                                         
                                                         // Calculate Set Total (Items + Fees)
                                                         const setItemTotal = setItems.reduce((sum, item) => {

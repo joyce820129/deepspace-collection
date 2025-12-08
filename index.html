@@ -151,6 +151,19 @@
             return <span ref={containerRef} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}></span>;
         };
 
+        // --- FIX: Added Missing ScrollableTags Component ---
+        const ScrollableTags = memo(({ items, selected, onToggle, labelAll }) => {
+            return (
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                    {labelAll && <button type="button" onClick={() => onToggle('all')} className={`px-3 py-1 text-xs rounded-full whitespace-nowrap border transition-colors flex-shrink-0 ${selected === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-600 border-gray-200'}`}>{labelAll}</button>}
+                    {items.map(item => {
+                        const isSelected = selected === item;
+                        return <button key={item} type="button" onClick={() => onToggle(item)} className={`px-3 py-1 text-xs rounded-full whitespace-nowrap border transition-colors flex-shrink-0 ${isSelected ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{item}</button>;
+                    })}
+                </div>
+            );
+        });
+
         const FilterBar = memo(({ options, selected, toggle, multi, highlightSet }) => {
             const [isExpanded, setIsExpanded] = useState(false);
             const hasManyOptions = options.length > 5;
@@ -1186,14 +1199,18 @@
 
             const handleSaveTrade = async (tradeData) => {
                 const tradesToProcess = Array.isArray(tradeData) ? tradeData : [tradeData];
-                if (tradesToProcess.length === 0) return;
-                if (!tradesToProcess[0].name) return alert("請輸入物品名稱");
+                const tradesToProcessFiltered = tradesToProcess.filter(t => t);
+                if (tradesToProcessFiltered.length === 0) return;
+                
+                // Only check name for single edits or if it's the first item in batch
+                if (tradesToProcessFiltered.length === 1 && !tradesToProcessFiltered[0].name) return alert("請輸入物品名稱");
+                
                 if (user && isFirebaseInitialized) {
                     const batch = writeBatch(db);
-                    tradesToProcess.forEach(t => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, t.id); batch.set(ref, t); });
+                    tradesToProcessFiltered.forEach(t => { const ref = doc(db, `artifacts/${GLOBAL_APP_ID}/users/${user.uid}/trades`, t.id); batch.set(ref, t); });
                     await batch.commit();
                 } else {
-                    setTrades(prev => { const ids = new Set(tradesToProcess.map(t => t.id)); const filtered = prev.filter(t => !ids.has(t.id)); return [...tradesToProcess, ...filtered]; });
+                    setTrades(prev => { const ids = new Set(tradesToProcessFiltered.map(t => t.id)); const filtered = prev.filter(t => !ids.has(t.id)); return [...tradesToProcessFiltered, ...filtered]; });
                 }
                 setIsTradeModalOpen(false);
             };
@@ -1442,23 +1459,23 @@
 
                                                         return (
                                                             <div key={setName} className="col-span-full bg-blue-50/50 rounded-2xl border-2 border-dashed border-blue-200 p-4 relative mt-6 mb-2">
-                                                                <div className="absolute -top-3 left-4 flex items-center gap-2 flex-wrap">
-                                                                    <div className="bg-blue-100 text-blue-700 px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm border border-blue-200">
-                                                                        <Icon name="Package" size={12} /> {setName} 
-                                                                        <span className="ml-1 text-blue-500 border-l border-blue-200 pl-1">NT${Math.round(setGrandTotal).toLocaleString()}</span>
+                                                                    <div className="absolute -top-3 left-4 flex items-center gap-2 flex-wrap">
+                                                                        <div className="bg-blue-100 text-blue-700 px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm border border-blue-200">
+                                                                            <Icon name="Package" size={12} /> {setName} 
+                                                                            <span className="ml-1 text-blue-500 border-l border-blue-200 pl-1">NT${Math.round(setGrandTotal).toLocaleString()}</span>
+                                                                        </div>
+                                                                        {/* Fee controls for this specific set */}
+                                                                        {feeControls(setKey)}
                                                                     </div>
-                                                                    {/* Fee controls for this specific set */}
-                                                                    {feeControls(setKey)}
+                                                                    <div style={gridStyle} className="mt-2">
+                                                                        {getStackedItems(setItems, 'none').map((s, i) => (
+                                                                            <StackCard 
+                                                                                key={s.id} stack={s} index={i} isDraggable={false} openModal={openModal} deleteFromCollection={deleteFromCollection} 
+                                                                                showAmount={appSettings.showAmount} isBatchMode={isCollectionBatchMode} isSelected={collectionBatchSelection.has(s.id)} onToggleSelect={handleCollectionBatchSelect} 
+                                                                            />
+                                                                        ))}
+                                                                    </div>
                                                                 </div>
-                                                                <div style={gridStyle} className="mt-2">
-                                                                    {getStackedItems(setItems, 'none').map((s, i) => (
-                                                                        <StackCard 
-                                                                            key={s.id} stack={s} index={i} isDraggable={false} openModal={openModal} deleteFromCollection={deleteFromCollection} 
-                                                                            showAmount={appSettings.showAmount} isBatchMode={isCollectionBatchMode} isSelected={collectionBatchSelection.has(s.id)} onToggleSelect={handleCollectionBatchSelect} 
-                                                                        />
-                                                                    ))}
-                                                                </div>
-                                                            </div>
                                                         );
                                                     })}
                                                     
@@ -1600,7 +1617,7 @@
                                                             </h3>
                                                             <div className="flex items-center gap-2">
                                                                 <span className="ml-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                                                                        <Icon name="Banknote" size={14}/>NT$ {Math.round(total).toLocaleString()}
+                                                                            <Icon name="Banknote" size={14}/>NT$ {Math.round(total).toLocaleString()}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -1611,17 +1628,17 @@
                                                                 const setTotal = setItems.reduce((sum, i) => sum + ((Number(i.salePrice) || 0) * (i.quantity || 1)), 0);
                                                                 return (
                                                                     <div key={setName} className="col-span-full bg-green-50/50 rounded-2xl border-2 border-dashed border-green-200 p-4 relative mt-2 mb-2">
-                                                                            <div className="absolute -top-3 left-4 flex items-center gap-2 flex-wrap">
-                                                                                <div className="bg-green-100 text-green-700 px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm border border-green-200">
-                                                                                    <Icon name="Package" size={12} /> {setName} 
-                                                                                    <span className="ml-1 text-green-600 border-l border-green-200 pl-1">NT${Math.round(setTotal).toLocaleString()}</span>
+                                                                                <div className="absolute -top-3 left-4 flex items-center gap-2 flex-wrap">
+                                                                                    <div className="bg-green-100 text-green-700 px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-sm border border-green-200">
+                                                                                        <Icon name="Package" size={12} /> {setName} 
+                                                                                        <span className="ml-1 text-green-600 border-l border-green-200 pl-1">NT${Math.round(setTotal).toLocaleString()}</span>
+                                                                                    </div>
                                                                                 </div>
-                                                                            </div>
-                                                                            <div style={gridStyle} className="mt-2">
-                                                                                {setItems.map((trade) => (
-                                                                                    <TradeCard key={trade.id} trade={trade} openModal={openTradeModal} deleteTrade={handleDeleteTrade} markAsSold={markAsSold} isBatchMode={isTradeBatchMode} isSelected={tradeBatchSelection.has(trade.id)} onToggleSelect={handleTradeBatchSelect} />
-                                                                                ))}
-                                                                            </div>
+                                                                                <div style={gridStyle} className="mt-2">
+                                                                                    {setItems.map((trade) => (
+                                                                                        <TradeCard key={trade.id} trade={trade} openModal={openTradeModal} deleteTrade={handleDeleteTrade} markAsSold={markAsSold} isBatchMode={isTradeBatchMode} isSelected={tradeBatchSelection.has(trade.id)} onToggleSelect={handleTradeBatchSelect} />
+                                                                                    ))}
+                                                                                </div>
                                                                     </div>
                                                                 );
                                                             })}
@@ -1755,3 +1772,4 @@
     </script>
 </body>
 </html>
+
